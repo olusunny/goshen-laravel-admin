@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\GoshenQuizController;
 use App\Http\Controllers\Api\GoshenRetreatController;
 use App\Http\Controllers\Api\GoshenWalletController;
 use App\Http\Controllers\Api\DonationStripeController;
+use App\Http\Controllers\Api\DynamicFormController;
 use App\Http\Controllers\Api\RetiredFeatureController;
 use App\Http\Controllers\Api\V1\AdminCommunityPrayerRequestController;
 use App\Http\Controllers\Api\V1\CommunityPrayerRequestController;
@@ -143,6 +144,15 @@ Route::controller(GoshenExperienceController::class)
         Route::post('surveys/{survey}/settings', 'updateSurveySettings')->whereNumber('survey');
         Route::post('surveys/{survey}', 'store')->whereNumber('survey');
         Route::post('events/{event}/stats', 'stats');
+    });
+
+Route::controller(DynamicFormController::class)
+    ->prefix('dynamic-forms')
+    ->group(function () {
+        Route::match(['get', 'post'], '/', 'index');
+        Route::post('stripe/webhook', 'webhook');
+        Route::match(['get', 'post'], '{form}', 'show');
+        Route::post('{form}/submit', 'submit')->middleware('throttle:8,1');
     });
 
 Route::controller(GoshenQuizController::class)

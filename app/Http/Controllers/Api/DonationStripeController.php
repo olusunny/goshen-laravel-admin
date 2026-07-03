@@ -8,6 +8,7 @@ use App\Models\DonationCategory;
 use App\Models\GoshenWallet;
 use App\Models\MobileUser;
 use App\Services\GoshenWalletService;
+use App\Services\DynamicFormService;
 use App\Services\StripePaymentSettings;
 use App\Services\WalletSecurityResetService;
 use Illuminate\Http\JsonResponse;
@@ -480,6 +481,21 @@ class DonationStripeController extends Controller
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Fundraising webhook settlement failed.',
+                ], 500);
+            }
+
+            return response()->json(['status' => 'ok']);
+        }
+
+        if (str_starts_with($reference, 'dfs_') || filled(data_get($object, 'metadata.dynamic_form_reference'))) {
+            try {
+                app(DynamicFormService::class)->settleStripeWebhook($eventPayload);
+            } catch (Throwable $exception) {
+                report($exception);
+
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Dynamic form webhook settlement failed.',
                 ], 500);
             }
 
