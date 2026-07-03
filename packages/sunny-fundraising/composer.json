@@ -1,0 +1,33 @@
+{
+  "name": "sunny/fundraising",
+  "description": "Wallet-funded fundraising campaign add-on for Laravel and Flutter apps.",
+  "type": "library",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.2",
+    "illuminate/contracts": "^10.0|^11.0|^12.0",
+    "illuminate/database": "^10.0|^11.0|^12.0",
+    "illuminate/http": "^10.0|^11.0|^12.0",
+    "illuminate/routing": "^10.0|^11.0|^12.0",
+    "illuminate/support": "^10.0|^11.0|^12.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Sunny\\Fundraising\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Sunny\\Fundraising\\Tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Sunny\\Fundraising\\FundraisingServiceProvider"
+      ]
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

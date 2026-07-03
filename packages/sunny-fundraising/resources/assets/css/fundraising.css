@@ -1,0 +1,13 @@
+.fundraising-progress {
+    display: block;
+    height: 0.5rem;
+    overflow: hidden;
+    background: #e5e7eb;
+    border-radius: 999px;
+}
+
+.fundraising-progress > span {
+    display: block;
+    height: 100%;
+    background: #f7b31c;
+}

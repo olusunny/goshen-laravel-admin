@@ -1,0 +1,1 @@
+window.SunnyFundraising = window.SunnyFundraising || {};

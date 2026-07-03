@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "package_key": "sunny.fundraising",
+  "composer_name": "sunny/fundraising",
+  "name": "Fundraising Campaigns",
+  "description": "Premium wallet-funded fundraising campaign module for Laravel web and Flutter mobile apps.",
+  "version": "1.0.0",
+  "minimum_php": "8.2",
+  "minimum_laravel": "10.0",
+  "maximum_laravel": null,
+  "provider": "Sunny\\Fundraising\\FundraisingServiceProvider",
+  "namespace": "Sunny\\Fundraising\\",
+  "autoload_psr4": {
+    "Sunny\\Fundraising\\": "src/"
+  },
+  "admin_route_prefix": "admin/fundraising",
+  "api_route_prefix": "api/fundraising",
+  "web_route_prefix": "fundraising",
+  "config_key": "fundraising",
+  "commands": {
+    "install": "fundraising:install",
+    "update": "fundraising:update",
+    "health": "fundraising:health",
+    "uninstall": "fundraising:uninstall"
+  },
+  "migrations_path": "database/migrations",
+  "seeders": [],
+  "publish_tags": [
+    "fundraising-config",
+    "fundraising-assets",
+    "fundraising-views",
+    "fundraising-translations"
+  ],
+  "permissions": [
+    "fundraising.view",
+    "fundraising.manage",
+    "fundraising.contribute",
+    "fundraising.media.manage"
+  ],
+  "requires_wallet_gateway": true,
+  "supports_disable": true,
+  "supports_uninstall": true,
+  "supports_update": true
+}

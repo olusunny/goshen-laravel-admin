@@ -1,0 +1,35 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('user_comments', function (Blueprint $table) {
+            $table->id();
+            $table->morphs('commentable');
+            $table->foreignId('parent_id')->nullable()->constrained('user_comments')->cascadeOnDelete();
+            $table->string('email')->nullable()->index();
+            $table->longText('content');
+            $table->boolean('is_published')->default(true);
+            $table->boolean('is_reported')->default(false);
+            $table->string('report_reason')->nullable();
+            $table->unsignedBigInteger('legacy_id')->nullable()->index();
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('user_comments');
+    }
+};
