@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\PrayerCommunityController;
 use App\Http\Controllers\Api\TestimonyController;
 use App\Http\Controllers\Api\RetiredFeatureController;
+use App\Http\Controllers\DynamicFormSubmissionFileController;
 use App\Http\Controllers\DynamicFormWebController;
 use App\Http\Controllers\MemberAppController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -24,6 +25,9 @@ Route::redirect('donate', '/admin/donations');
 Route::get('forms', [DynamicFormWebController::class, 'index'])->name('dynamic-forms.index');
 Route::get('forms/{form}', [DynamicFormWebController::class, 'show'])->name('dynamic-forms.show');
 Route::post('forms/{form}', [DynamicFormWebController::class, 'store'])->name('dynamic-forms.submit');
+Route::get('admin/dynamic-form-submissions/{submission}/files/{field}', [DynamicFormSubmissionFileController::class, 'show'])
+    ->middleware('auth')
+    ->name('dynamic-form-submissions.files.show');
 
 Route::withoutMiddleware([VerifyCsrfToken::class])->group(function () {
     Route::match(['get', 'post'], 'saveDonation', [RetiredFeatureController::class, 'manualDonation']);

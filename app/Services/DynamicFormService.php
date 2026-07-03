@@ -772,11 +772,15 @@ class DynamicFormService
             throw ValidationException::withMessages([$field->key => "{$field->label} must be one of: {$allowed->implode(', ')}."]);
         }
 
-        $path = $file->store("dynamic-forms/{$form->id}", 'public');
+        $path = $file->storeAs(
+            "dynamic-forms/{$form->id}",
+            Str::uuid()->toString() . '.' . $extension,
+            'local',
+        );
 
         return [
+            'disk' => 'local',
             'file_path' => $path,
-            'file_url' => $this->publicStorageUrl($path),
             'original_name' => $file->getClientOriginalName(),
             'mime_type' => $file->getClientMimeType(),
             'size' => $file->getSize(),

@@ -8,6 +8,8 @@ use App\Models\DynamicFormSubmission;
 use App\Models\GoshenWallet;
 use App\Models\MobileUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -187,6 +189,37 @@ class DynamicFormApiTest extends TestCase
                 ],
             ],
         ])->save();
+    }
+
+    public function test_file_upload_answers_are_stored_privately(): void
+    {
+        Storage::fake('local');
+
+        $form = $this->form('proof-upload');
+        $this->field($form, 'proof', 'Upload proof', DynamicFormField::TYPE_FILE, [
+            'is_required' => true,
+            'settings' => [
+                'allowed_extensions' => ['pdf'],
+                'max_kb' => 512,
+            ],
+        ]);
+
+        $this->post('/api/dynamic-forms/proof-upload/submit', [
+            'data' => json_encode(['answers' => []]),
+            'files' => [
+                'proof' => UploadedFile::fake()->create('proof.pdf', 12, 'application/pdf'),
+            ],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('status', 'ok');
+
+        $submission = DynamicFormSubmission::query()->firstOrFail();
+        $answer = $submission->answers['proof']['answer'];
+
+        $this->assertSame('local', $answer['disk']);
+        $this->assertArrayHasKey('file_path', $answer);
+        $this->assertArrayNotHasKey('file_url', $answer);
+        Storage::disk('local')->assertExists($answer['file_path']);
     }
 
     private function form(string $slug, array $overrides = []): DynamicForm

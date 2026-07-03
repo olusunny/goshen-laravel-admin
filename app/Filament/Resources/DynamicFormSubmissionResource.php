@@ -143,10 +143,15 @@ class DynamicFormSubmissionResource extends Resource
                     ];
                 }
 
+                $rawAnswer = $answer['answer'] ?? null;
+                if (is_array($rawAnswer) && ! array_key_exists('key', $rawAnswer)) {
+                    $rawAnswer['key'] = (string) ($answer['key'] ?? $key);
+                }
+
                 return [
                     'field' => (string) ($answer['label'] ?? $answer['key'] ?? 'Field'),
-                    'answer' => self::formatAnswer($answer['answer'] ?? null),
-                    'raw_answer' => $answer['answer'] ?? null,
+                    'answer' => self::formatAnswer($rawAnswer),
+                    'raw_answer' => $rawAnswer,
                 ];
             })
             ->values()
@@ -172,7 +177,7 @@ class DynamicFormSubmissionResource extends Resource
             return (string) $answer['label'];
         }
 
-        if (is_array($answer) && array_key_exists('file_url', $answer)) {
+        if (is_array($answer) && array_key_exists('file_path', $answer)) {
             return (string) ($answer['original_name'] ?? 'Uploaded file');
         }
 
@@ -203,14 +208,14 @@ class DynamicFormSubmissionResource extends Resource
         foreach ($rows as $row) {
             $html .= '<tr>'
                 . '<td style="vertical-align:top;padding:.55rem;border-bottom:1px solid #eef2f5;font-weight:700;">' . e($row['field']) . '</td>'
-                . '<td style="vertical-align:top;padding:.55rem;border-bottom:1px solid #eef2f5;">' . self::formatAnswerHtml($row['raw_answer']) . '</td>'
+                . '<td style="vertical-align:top;padding:.55rem;border-bottom:1px solid #eef2f5;">' . self::formatAnswerHtml($row['raw_answer'], $record) . '</td>'
                 . '</tr>';
         }
 
         return new HtmlString($html . '</tbody></table>');
     }
 
-    private static function formatAnswerHtml(mixed $answer): string
+    private static function formatAnswerHtml(mixed $answer, DynamicFormSubmission $record): string
     {
         if (is_array($answer) && array_key_exists('image_url', $answer)) {
             $label = e((string) ($answer['label'] ?? 'Selected image'));
@@ -232,9 +237,13 @@ class DynamicFormSubmissionResource extends Resource
                 . '</span>';
         }
 
-        if (is_array($answer) && array_key_exists('file_url', $answer)) {
+        if (is_array($answer) && array_key_exists('file_path', $answer)) {
             $label = e((string) ($answer['original_name'] ?? 'Uploaded file'));
-            $url = e((string) $answer['file_url']);
+            $fieldKey = e((string) ($answer['key'] ?? ''));
+            $url = e(route('dynamic-form-submissions.files.show', [
+                'submission' => $record,
+                'field' => $fieldKey,
+            ]));
 
             return '<a href="' . $url . '" target="_blank" rel="noopener noreferrer">' . $label . '</a>';
         }
