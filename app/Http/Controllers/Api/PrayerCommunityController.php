@@ -85,7 +85,7 @@ class PrayerCommunityController extends Controller
             return $this->authError();
         }
         if (! $user->canManagePropheticDecree()) {
-            return response()->json(['status' => 'error', 'msg' => 'Only the G.O can add Prophetic Decree.'], 403);
+            return response()->json(['status' => 'error', 'msg' => 'Only the G.O or Triumphant Main pastor can add Prophetic Decree.'], 403);
         }
         if ($this->limited($request, "prophetic-decree:{$user->id}", 6)) {
             return $this->rateError();
@@ -577,7 +577,8 @@ class PrayerCommunityController extends Controller
             'avatar' => $user->avatar ? MediaUrl::resolve($user->avatar) : '',
             'cover_photo' => $user->cover_photo ? MediaUrl::resolve($user->cover_photo) : '',
             'roles' => $user->roles()->pluck('name')->values(),
-            'is_go' => $user->hasPropheticDecreeRole(),
+            'is_go' => $user->hasGeneralOverseerRole(),
+            'can_manage_prophetic_decree' => $user->canManagePropheticDecree(),
             'activated' => $user->canUseCommunity() ? 0 : 1,
         ];
     }

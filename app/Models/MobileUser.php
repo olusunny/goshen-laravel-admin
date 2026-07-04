@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
+use App\Services\TriumphantIdService;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
-use App\Services\TriumphantIdService;
 use Spatie\Permission\Traits\HasRoles;
 
 class MobileUser extends Authenticatable
@@ -271,6 +271,21 @@ class MobileUser extends Authenticatable
     }
 
     public function hasPropheticDecreeRole(): bool
+    {
+        if ($this->hasGeneralOverseerRole() || $this->hasAnyRole(['Triumphant Main pastor', 'Triumphant main pastor'])) {
+            return true;
+        }
+
+        return $this->roles()
+            ->pluck('name')
+            ->contains(fn ($role) => in_array(
+                str($role)->lower()->replaceMatches('/[^a-z]/', '')->toString(),
+                ['go', 'gorole', 'generaloverseer', 'generaloverseerrole', 'propheticdecreego', 'propheticdecreegorole', 'triumphantmainpastor'],
+                true,
+            ));
+    }
+
+    public function hasGeneralOverseerRole(): bool
     {
         if ($this->hasAnyRole(['G.O', 'GO', 'General Overseer'])) {
             return true;

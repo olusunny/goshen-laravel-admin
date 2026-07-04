@@ -1602,7 +1602,8 @@ class CompatibilityController extends Controller
             'can_manage_dynamic_forms' => $this->canManageDynamicForms($user),
             'can_manage_mobile_users' => $this->canManageMobileUsers($user),
             'can_send_admin_messages' => $this->canSendAdminMessages($user),
-            'is_go' => $user->hasPropheticDecreeRole(),
+            'is_go' => $user->hasGeneralOverseerRole(),
+            'can_manage_prophetic_decree' => $user->canManagePropheticDecree(),
             'activated' => $user->canUseCommunity() ? 0 : 1,
         ];
     }

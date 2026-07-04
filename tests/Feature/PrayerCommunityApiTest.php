@@ -5,8 +5,8 @@ namespace Tests\Feature;
 use App\Models\CommunityPrayerRequest;
 use App\Models\MobileUser;
 use App\Models\PropheticDecree;
-use App\Services\PrayerModerationNotifier;
 use App\Models\User;
+use App\Services\PrayerModerationNotifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -195,6 +195,28 @@ class PrayerCommunityApiTest extends TestCase
         $this->assertDatabaseCount('prophetic_decrees', 2);
         $this->assertSame(1, PropheticDecree::where('is_active', true)->count());
         Storage::disk('public')->assertMissing($firstPath);
+    }
+
+    public function test_triumphant_main_pastor_can_create_prophetic_decree(): void
+    {
+        Storage::fake('public');
+        $pastor = MobileUser::create(['name' => 'Main Pastor', 'email' => 'main-pastor@example.test', 'password' => 'secret', 'is_verified' => true]);
+        Role::firstOrCreate(['name' => 'Triumphant Main pastor', 'guard_name' => 'mobile']);
+        $pastor->assignRole('Triumphant Main pastor');
+        $token = $pastor->issueApiToken();
+
+        $this->assertFalse($pastor->refresh()->hasGeneralOverseerRole());
+        $this->assertTrue($pastor->canManagePropheticDecree());
+
+        $this->post('/prayer-community/prophetic-decree', [
+            'data' => json_encode(['api_token' => $token, 'duration' => 45]),
+            'audio' => UploadedFile::fake()->create('main-pastor.mp3', 100, 'audio/mpeg'),
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('prophetic_decree.go.name', 'Main Pastor');
+
+        $this->assertDatabaseCount('prophetic_decrees', 1);
     }
 
     public function test_can_get_active_prophetic_decree(): void
