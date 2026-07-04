@@ -151,6 +151,14 @@ Route::controller(DynamicFormController::class)
     ->group(function () {
         Route::match(['get', 'post'], '/', 'index');
         Route::post('stripe/webhook', 'webhook');
+        Route::match(['get', 'post'], 'management', 'managementIndex')->middleware('throttle:20,1');
+        Route::post('management/forms', 'managementStore')->middleware('throttle:12,1');
+        Route::match(['get', 'post'], 'management/forms/{form}', 'managementShow');
+        Route::post('management/forms/{form}/save', 'managementUpdate')->middleware('throttle:12,1');
+        Route::post('management/forms/{form}/status', 'managementStatus')->middleware('throttle:20,1');
+        Route::delete('management/forms/{form}', 'managementDestroy')->middleware('throttle:12,1');
+        Route::post('management/forms/{form}/delete', 'managementDestroy')->middleware('throttle:12,1');
+        Route::match(['get', 'post'], 'management/forms/{form}/submissions', 'managementSubmissions')->middleware('throttle:20,1');
         Route::match(['get', 'post'], '{form}', 'show');
         Route::post('{form}/submit', 'submit')->middleware('throttle:8,1');
     });

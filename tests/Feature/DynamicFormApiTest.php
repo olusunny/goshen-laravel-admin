@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class DynamicFormApiTest extends TestCase
@@ -224,7 +225,7 @@ class DynamicFormApiTest extends TestCase
         $this->field($form, 'proof', 'Upload proof', DynamicFormField::TYPE_FILE, [
             'is_required' => true,
             'settings' => [
-                'allowed_extensions' => ['pdf'],
+                'allowed_extensions' => ['.pdf,.png,.jpg,.jpeg'],
                 'max_kb' => 512,
             ],
         ]);
@@ -245,6 +246,77 @@ class DynamicFormApiTest extends TestCase
         $this->assertArrayHasKey('file_path', $answer);
         $this->assertArrayNotHasKey('file_url', $answer);
         Storage::disk('local')->assertExists($answer['file_path']);
+    }
+
+    public function test_dynamic_form_manager_can_manage_forms_and_view_submissions(): void
+    {
+        $member = $this->member();
+
+        $this->postJson('/api/dynamic-forms/management', [
+            'data' => ['api_token' => $member->issueApiToken()],
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('status', 'error');
+
+        $manager = $this->member('forms-manager@example.test');
+        Role::findOrCreate('event_manager', 'mobile');
+        $manager->assignRole('event_manager');
+        $token = $manager->issueApiToken();
+
+        $create = $this->postJson('/api/dynamic-forms/management/forms', [
+            'data' => [
+                'api_token' => $token,
+                'title' => 'Choir Audition',
+                'description' => 'Register for an audition.',
+                'is_active' => true,
+                'visibility' => DynamicForm::VISIBILITY_PUBLIC,
+                'payment_type' => DynamicForm::PAYMENT_FREE,
+                'currency' => 'GBP',
+                'fields' => [
+                    [
+                        'label' => 'Voice part',
+                        'key' => 'voice_part',
+                        'type' => DynamicFormField::TYPE_CHOICE,
+                        'options' => ['Soprano', 'Alto'],
+                        'is_required' => true,
+                        'sort_order' => 1,
+                    ],
+                ],
+            ],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('data.title', 'Choir Audition')
+            ->assertJsonPath('data.fields.0.key', 'voice_part');
+
+        $slug = $create->json('data.slug');
+
+        $this->postJson("/api/dynamic-forms/{$slug}/submit", [
+            'data' => [
+                'answers' => ['voice_part' => 'Soprano'],
+            ],
+        ])->assertCreated();
+
+        $this->postJson("/api/dynamic-forms/management/forms/{$slug}/status", [
+            'data' => [
+                'api_token' => $manager->fresh()->issueApiToken(),
+                'is_active' => false,
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.is_active', false);
+
+        $this->postJson("/api/dynamic-forms/management/forms/{$slug}/submissions", [
+            'data' => ['api_token' => $manager->fresh()->issueApiToken()],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.submissions.0.answers.voice_part.answer', 'Soprano');
+
+        $this->postJson("/api/dynamic-forms/management/forms/{$slug}/delete", [
+            'data' => ['api_token' => $manager->fresh()->issueApiToken()],
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('status', 'error');
     }
 
     private function form(string $slug, array $overrides = []): DynamicForm
@@ -272,12 +344,12 @@ class DynamicFormApiTest extends TestCase
         ], $overrides));
     }
 
-    private function member(): MobileUser
+    private function member(string $email = 'member@example.test'): MobileUser
     {
         return MobileUser::query()->create([
             'name' => 'Grace Member',
-            'email' => 'member@example.test',
-            'phone' => '+447700900123',
+            'email' => $email,
+            'phone' => '+447700'.str_pad((string) abs(crc32($email) % 1000000), 6, '0', STR_PAD_LEFT),
             'password' => 'secret',
             'login_type' => 'email',
             'member_type' => 'church_member',

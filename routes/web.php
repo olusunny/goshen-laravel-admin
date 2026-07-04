@@ -28,6 +28,9 @@ Route::post('forms/{form}', [DynamicFormWebController::class, 'store'])->name('d
 Route::get('admin/dynamic-form-submissions/{submission}/files/{field}', [DynamicFormSubmissionFileController::class, 'show'])
     ->middleware('auth')
     ->name('dynamic-form-submissions.files.show');
+Route::get('forms/submissions/{submission}/files/{field}', [DynamicFormSubmissionFileController::class, 'show'])
+    ->middleware('signed')
+    ->name('dynamic-form-submissions.files.signed');
 
 Route::withoutMiddleware([VerifyCsrfToken::class])->group(function () {
     Route::match(['get', 'post'], 'saveDonation', [RetiredFeatureController::class, 'manualDonation']);

@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -71,6 +72,13 @@ class DynamicFormService
 
     public function fieldPayload(DynamicFormField $field): array
     {
+        $settings = is_array($field->settings) ? $field->settings : [];
+        if ($field->type === DynamicFormField::TYPE_FILE) {
+            $settings['allowed_extensions'] = $this->normalizeAllowedExtensions(
+                $settings['allowed_extensions'] ?? ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+            );
+        }
+
         return [
             'id' => $field->id,
             'key' => $field->key,
@@ -79,14 +87,14 @@ class DynamicFormService
             'placeholder' => $field->placeholder,
             'help_text' => $field->help_text,
             'options' => $this->fieldOptions($field),
-            'settings' => $field->settings ?: (object) [],
+            'settings' => $settings ?: (object) [],
             'conditional_logic' => $field->conditional_logic ?: (object) [],
             'is_required' => (bool) $field->is_required,
             'sort_order' => (int) $field->sort_order,
         ];
     }
 
-    public function submissionPayload(DynamicFormSubmission $submission): array
+    public function submissionPayload(DynamicFormSubmission $submission, bool $includeFileLinks = false): array
     {
         $submission->loadMissing('dynamicForm');
 
@@ -99,7 +107,9 @@ class DynamicFormService
             'name' => $submission->name,
             'email' => $submission->email,
             'phone' => $submission->phone,
-            'answers' => $submission->answers ?: (object) [],
+            'answers' => $includeFileLinks
+                ? $this->answersWithTemporaryFileLinks($submission)
+                : ($submission->answers ?: (object) []),
             'status' => $submission->status,
             'payment_status' => $submission->payment_status,
             'payment_provider' => $submission->payment_provider,
@@ -108,6 +118,25 @@ class DynamicFormService
             'submitted_at' => $submission->submitted_at?->toIso8601String(),
             'paid_at' => $submission->paid_at?->toIso8601String(),
         ];
+    }
+
+    public function normalizeAllowedExtensions(mixed $extensions): array
+    {
+        $items = is_array($extensions) ? $extensions : [$extensions];
+
+        return collect($items)
+            ->flatMap(function (mixed $extension): array {
+                if (is_array($extension)) {
+                    return $extension;
+                }
+
+                return preg_split('/[\s,;|]+/', (string) $extension) ?: [];
+            })
+            ->map(fn (mixed $extension): string => strtolower(ltrim(trim((string) $extension), '.')))
+            ->filter(fn (string $extension): bool => $extension !== '' && preg_match('/^[a-z0-9]+$/', $extension) === 1)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function submit(DynamicForm $form, Request $request, ?MobileUser $user = null, string $source = 'api'): array
@@ -784,10 +813,9 @@ class DynamicFormService
             throw ValidationException::withMessages([$field->key => "{$field->label} must not be larger than {$maxKb}KB."]);
         }
 
-        $allowed = collect(data_get($field->settings, 'allowed_extensions', ['pdf', 'jpg', 'jpeg', 'png', 'webp']))
-            ->map(fn ($extension): string => strtolower(trim((string) $extension)))
-            ->filter()
-            ->values();
+        $allowed = collect($this->normalizeAllowedExtensions(
+            data_get($field->settings, 'allowed_extensions', ['pdf', 'jpg', 'jpeg', 'png', 'webp']),
+        ));
         $extension = strtolower((string) $file->getClientOriginalExtension());
         if ($allowed->isNotEmpty() && ! $allowed->contains($extension)) {
             throw ValidationException::withMessages([$field->key => "{$field->label} must be one of: {$allowed->implode(', ')}."]);
@@ -806,6 +834,31 @@ class DynamicFormService
             'mime_type' => $file->getClientMimeType(),
             'size' => $file->getSize(),
         ];
+    }
+
+    private function answersWithTemporaryFileLinks(DynamicFormSubmission $submission): array|object
+    {
+        $answers = $submission->answers;
+        if (! is_array($answers)) {
+            return (object) [];
+        }
+
+        foreach ($answers as $key => $answer) {
+            $payload = data_get($answer, 'answer');
+            if (! is_array($payload) || blank($payload['file_path'] ?? null)) {
+                continue;
+            }
+
+            $payload['download_url'] = URL::temporarySignedRoute(
+                'dynamic-form-submissions.files.signed',
+                now()->addMinutes(30),
+                ['submission' => $submission->id, 'field' => (string) $key],
+            );
+            $answer['answer'] = $payload;
+            $answers[$key] = $answer;
+        }
+
+        return $answers;
     }
 
     private function payload(Request $request): array

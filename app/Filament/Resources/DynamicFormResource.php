@@ -216,6 +216,8 @@ class DynamicFormResource extends Resource
                             Forms\Components\TagsInput::make('settings.allowed_extensions')
                                 ->label('Allowed file extensions')
                                 ->placeholder('pdf')
+                                ->helperText('Use one extension per tag, with or without the dot. Commas are accepted and will be split automatically.')
+                                ->dehydrateStateUsing(fn ($state): array => app(\App\Services\DynamicFormService::class)->normalizeAllowedExtensions($state))
                                 ->visible(fn ($get): bool => $get('type') === DynamicFormField::TYPE_FILE),
                             Forms\Components\Toggle::make('is_required')
                                 ->label('Required'),

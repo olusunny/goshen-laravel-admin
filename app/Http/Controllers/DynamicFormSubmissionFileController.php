@@ -3,15 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\DynamicFormSubmission;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DynamicFormSubmissionFileController extends Controller
 {
-    public function show(DynamicFormSubmission $submission, string $field): StreamedResponse|Response
+    public function show(Request $request, DynamicFormSubmission $submission, string $field): StreamedResponse|Response
     {
-        abort_unless(auth()->check(), 403);
+        abort_unless(auth()->check() || $request->hasValidSignature(), 403);
 
         $answer = data_get($submission->answers, "{$field}.answer");
         abort_unless(is_array($answer), 404);

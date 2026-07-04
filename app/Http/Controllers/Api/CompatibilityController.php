@@ -1599,6 +1599,7 @@ class CompatibilityController extends Controller
             'can_manage_goshen_quiz' => $this->canManageGoshenQuiz($user),
             'can_manage_fundraising' => $this->canManageFundraising($user),
             'can_manage_wallet_withdrawals' => $this->canManageWalletWithdrawals($user),
+            'can_manage_dynamic_forms' => $this->canManageDynamicForms($user),
             'can_manage_mobile_users' => $this->canManageMobileUsers($user),
             'can_send_admin_messages' => $this->canSendAdminMessages($user),
             'is_go' => $user->hasPropheticDecreeRole(),
@@ -1787,6 +1788,25 @@ class CompatibilityController extends Controller
             ->contains(fn ($role): bool => in_array(
                 str($role)->lower()->replaceMatches('/[^a-z]/', '')->toString(),
                 ['admin', 'superadmin', 'eventmanager', 'goshenmanager', 'retreatmanager', 'walletmanager', 'goshenwalletmanager', 'triumphantitmanager'],
+                true,
+            ));
+    }
+
+    private function canManageDynamicForms(MobileUser $user): bool
+    {
+        if (! $user->canUseCommunity()) {
+            return false;
+        }
+
+        if ($user->can('manage_dynamic_forms') || $user->can('manage_on_demand_forms') || $user->can('manage_forms')) {
+            return true;
+        }
+
+        return $user->roles()
+            ->pluck('name')
+            ->contains(fn ($role): bool => in_array(
+                str($role)->lower()->replaceMatches('/[^a-z]/', '')->toString(),
+                ['admin', 'superadmin', 'eventmanager', 'goshenmanager', 'retreatmanager', 'formsmanager', 'dynamicformsmanager', 'ondemandformsmanager', 'triumphantitmanager'],
                 true,
             ));
     }
