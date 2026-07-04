@@ -107,6 +107,63 @@ class AdminAccessTest extends TestCase
         $this->assertTrue($webRole->refresh()->hasPermissionTo($permission));
     }
 
+    public function test_role_permission_edit_allows_unchanged_role_name(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@church.local')->firstOrFail();
+        $permission = Permission::firstOrCreate([
+            'name' => AdminPermissions::FUNDRAISING_MANAGE,
+            'guard_name' => 'web',
+        ]);
+
+        $role = Role::firstOrCreate([
+            'name' => 'Triumphant IT Manager',
+            'guard_name' => 'web',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(EditRole::class, ['record' => $role->getKey()])
+            ->fillForm([
+                'name' => 'Triumphant IT Manager',
+                'guard_name' => 'web',
+                'permissions' => [$permission->id],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors(['name']);
+
+        $this->assertSame(1, Role::query()
+            ->where('name', 'Triumphant IT Manager')
+            ->where('guard_name', 'web')
+            ->count());
+        $this->assertTrue($role->refresh()->hasPermissionTo($permission));
+    }
+
+    public function test_role_permission_edit_rejects_duplicate_name_in_same_role_type(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@church.local')->firstOrFail();
+        Role::firstOrCreate([
+            'name' => 'Triumphant IT Manager',
+            'guard_name' => 'web',
+        ]);
+        $role = Role::firstOrCreate([
+            'name' => 'Content Manager',
+            'guard_name' => 'web',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(EditRole::class, ['record' => $role->getKey()])
+            ->fillForm([
+                'name' => 'Triumphant IT Manager',
+                'guard_name' => 'web',
+                'permissions' => [],
+            ])
+            ->call('save')
+            ->assertHasFormErrors(['name' => 'unique']);
+    }
+
     public function test_role_permission_editor_manages_mobile_roles(): void
     {
         $this->seed();
