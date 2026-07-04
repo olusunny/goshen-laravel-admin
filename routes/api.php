@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\CompatibilityController;
+use App\Http\Controllers\Api\ControlHubChurchEventController;
 use App\Http\Controllers\Api\ControlHubMessagingController;
 use App\Http\Controllers\Api\ControlHubMobileUserController;
 use App\Http\Controllers\Api\DonationStripeController;
@@ -227,6 +228,18 @@ Route::controller(ControlHubMobileUserController::class)
         Route::post('{mobileUser}', 'update')->whereNumber('mobileUser')->middleware('throttle:20,1');
         Route::delete('{mobileUser}', 'destroy')->whereNumber('mobileUser')->middleware('throttle:10,1');
         Route::post('{mobileUser}/delete', 'destroy')->whereNumber('mobileUser')->middleware('throttle:10,1');
+    });
+
+Route::controller(ControlHubChurchEventController::class)
+    ->prefix('control-hub/church-events')
+    ->group(function () {
+        Route::get('/', 'index')->middleware('throttle:20,1');
+        Route::post('search', 'index')->middleware('throttle:20,1');
+        Route::post('/', 'store')->middleware('throttle:12,1');
+        Route::post('{churchEvent}', 'update')->whereNumber('churchEvent')->middleware('throttle:12,1');
+        Route::post('{churchEvent}/status', 'status')->whereNumber('churchEvent')->middleware('throttle:20,1');
+        Route::delete('{churchEvent}', 'destroy')->whereNumber('churchEvent')->middleware('throttle:12,1');
+        Route::post('{churchEvent}/delete', 'destroy')->whereNumber('churchEvent')->middleware('throttle:12,1');
     });
 
 Route::controller(DonationStripeController::class)
