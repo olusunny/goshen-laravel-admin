@@ -35,6 +35,7 @@ use App\Services\AutomaticNotificationService;
 use App\Services\DynamicSmtpMailer;
 use App\Services\MergedAccountCredentialService;
 use App\Services\MessagePersonalizationService;
+use App\Services\RecurringChurchEventService;
 use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -90,7 +91,9 @@ class CompatibilityController extends Controller
                 ? Testimony::approved()->count()
                 : 0,
             'donation_accounts' => [],
-            'events' => ChurchEvent::where('is_published', true)->whereDate('starts_at', '>=', now()->toDateString())->count(),
+            'events' => app(RecurringChurchEventService::class)
+                ->upcomingOccurrences($this->publishedChurchEventsForExpansion()->get(), 50)
+                ->count(),
             'inbox' => (clone $inboxQuery)->count(),
             'inbox_latest_ids' => (clone $inboxQuery)
                 ->latest('published_at')
@@ -205,15 +208,12 @@ class CompatibilityController extends Controller
     {
         $data = $this->payload($request);
         $date = $data['date'] ?? $request->input('date');
-        $query = ChurchEvent::where('is_published', true);
-
-        if ($date) {
-            $query->whereDate('starts_at', $date);
-        }
+        $events = app(RecurringChurchEventService::class)
+            ->expandForRequest($this->publishedChurchEventsForExpansion()->get(), $date);
 
         return response()->json([
             'status' => 'ok',
-            'events' => $query->orderBy('starts_at')->get()->map(fn (ChurchEvent $event) => $this->eventPayload($event)),
+            'events' => $events->map(fn (ChurchEvent $event) => $this->eventPayload($event)),
         ]);
     }
 
@@ -1448,11 +1448,8 @@ class CompatibilityController extends Controller
 
     private function homeSliderPayload()
     {
-        $events = ChurchEvent::where('is_published', true)
-            ->whereDate('starts_at', '>=', now()->toDateString())
-            ->orderBy('starts_at')
-            ->limit(5)
-            ->get()
+        $events = app(RecurringChurchEventService::class)
+            ->upcomingOccurrences($this->publishedChurchEventsForExpansion()->get(), 5)
             ->map(fn (ChurchEvent $event) => $this->eventAsMediaPayload($event));
 
         $media = $this->orderedMediaQuery(MediaItem::with(['category', 'subCategory'])
@@ -1467,6 +1464,11 @@ class CompatibilityController extends Controller
             ->concat($media)
             ->take(12)
             ->values();
+    }
+
+    private function publishedChurchEventsForExpansion()
+    {
+        return ChurchEvent::where('is_published', true)->orderBy('starts_at');
     }
 
     private function orderedMediaQuery($query)
@@ -2115,6 +2117,10 @@ class CompatibilityController extends Controller
             'time' => optional($event->starts_at)->format('g:i A'),
             'starts_at' => optional($event->starts_at)->toDateTimeString(),
             'ends_at' => optional($event->ends_at)->toDateTimeString(),
+            'recurrence_type' => $event->recurrence_type ?? ChurchEvent::RECURRENCE_NONE,
+            'recurrence_label' => $event->recurrenceLabel(),
+            'recurring_parent_id' => $event->recurring_parent_id ?? null,
+            'recurrence_occurrence_date' => $event->recurrence_occurrence_date ?? null,
             'registration_url' => $event->registration_url,
             'registration_availability' => $event->registration_availability ?? 'everywhere',
             'registration_label' => $this->registrationAvailabilityLabel($event->registration_availability ?? 'everywhere'),

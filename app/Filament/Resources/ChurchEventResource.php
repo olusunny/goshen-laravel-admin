@@ -3,8 +3,8 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\ChurchEventResource\Pages;
-use App\Models\ChurchEvent;
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
+use App\Models\ChurchEvent;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -18,6 +18,7 @@ use Filament\Tables\Table;
 class ChurchEventResource extends Resource
 {
     use AuthorizesResourceAccess;
+
     protected static ?string $model = ChurchEvent::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-calendar-days';
@@ -186,6 +187,60 @@ class ChurchEventResource extends Resource
                             ->required(),
                         Forms\Components\Hidden::make('legacy_id'),
                     ]),
+                Section::make('Programme recurrence')
+                    ->description('Schedule weekly or monthly church programmes from one event record.')
+                    ->columns(2)
+                    ->schema([
+                        Forms\Components\Select::make('recurrence_type')
+                            ->label('Repeat schedule')
+                            ->options(ChurchEvent::recurrenceOptions())
+                            ->default(ChurchEvent::RECURRENCE_NONE)
+                            ->required()
+                            ->native(false)
+                            ->live()
+                            ->afterStateUpdated(function (?string $state, Set $set, Get $get): void {
+                                if ($state === ChurchEvent::RECURRENCE_NONE) {
+                                    $set('recurrence_weekday', null);
+                                    $set('recurrence_week_of_month', null);
+                                    $set('recurrence_until', null);
+
+                                    return;
+                                }
+
+                                if ($get('recurrence_weekday') === null) {
+                                    $set('recurrence_weekday', 0);
+                                }
+
+                                if ($state === ChurchEvent::RECURRENCE_MONTHLY_NTH_WEEKDAY && $get('recurrence_week_of_month') === null) {
+                                    $set('recurrence_week_of_month', 1);
+                                }
+                            }),
+                        Forms\Components\TextInput::make('recurrence_interval')
+                            ->label('Repeat every')
+                            ->numeric()
+                            ->minValue(1)
+                            ->maxValue(12)
+                            ->default(1)
+                            ->required()
+                            ->suffix(fn (Get $get): string => $get('recurrence_type') === ChurchEvent::RECURRENCE_MONTHLY_NTH_WEEKDAY ? 'month(s)' : 'week(s)')
+                            ->visible(fn (Get $get): bool => $get('recurrence_type') !== ChurchEvent::RECURRENCE_NONE),
+                        Forms\Components\Select::make('recurrence_weekday')
+                            ->label('Day of week')
+                            ->options(ChurchEvent::weekdayOptions())
+                            ->native(false)
+                            ->required(fn (Get $get): bool => $get('recurrence_type') !== ChurchEvent::RECURRENCE_NONE)
+                            ->visible(fn (Get $get): bool => $get('recurrence_type') !== ChurchEvent::RECURRENCE_NONE),
+                        Forms\Components\Select::make('recurrence_week_of_month')
+                            ->label('Week of month')
+                            ->options(ChurchEvent::weekOfMonthOptions())
+                            ->native(false)
+                            ->required(fn (Get $get): bool => $get('recurrence_type') === ChurchEvent::RECURRENCE_MONTHLY_NTH_WEEKDAY)
+                            ->visible(fn (Get $get): bool => $get('recurrence_type') === ChurchEvent::RECURRENCE_MONTHLY_NTH_WEEKDAY),
+                        Forms\Components\DatePicker::make('recurrence_until')
+                            ->label('Repeat until')
+                            ->helperText('Optional. Leave empty to keep generating future occurrences for the app calendar.')
+                            ->visible(fn (Get $get): bool => $get('recurrence_type') !== ChurchEvent::RECURRENCE_NONE),
+                    ]),
                 Section::make('Pilgrimage details')
                     ->description('Shown only when this event is marked as a Pilgrimage event.')
                     ->visible(fn (Get $get): bool => (bool) $get('is_pilgrimage'))
@@ -294,6 +349,15 @@ class ChurchEventResource extends Resource
                 Tables\Columns\TextColumn::make('starts_at')
                     ->dateTime()
                     ->sortable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('recurrence_type')
+                    ->label('Programme')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        ChurchEvent::RECURRENCE_WEEKLY => 'Weekly',
+                        ChurchEvent::RECURRENCE_MONTHLY_NTH_WEEKDAY => 'Monthly',
+                        default => 'One-time',
+                    })
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('registration_availability')
                     ->label('Registration')

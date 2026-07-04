@@ -2,9 +2,20 @@
 
 namespace Tests\Feature;
 
+use App\Models\BibleVersion;
+use App\Models\Branch;
+use App\Models\Category;
+use App\Models\ChurchEvent;
 use App\Models\ChurchGroup;
+use App\Models\ContactRecipient;
+use App\Models\ContentPage;
+use App\Models\GalleryImage;
+use App\Models\InboxMessage;
+use App\Models\MediaItem;
 use App\Models\MobileUser;
+use App\Models\TransportationArrangement;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -127,7 +138,7 @@ class CompatibilityApiTest extends TestCase
 
     public function test_bible_versions_endpoint_exposes_downloadable_json_sources(): void
     {
-        \App\Models\BibleVersion::create([
+        BibleVersion::create([
             'name' => 'King James Version',
             'shortcode' => 'KJV',
             'description' => 'Classic English Bible translation.',
@@ -135,7 +146,7 @@ class CompatibilityApiTest extends TestCase
             'is_active' => true,
         ]);
 
-        \App\Models\BibleVersion::create([
+        BibleVersion::create([
             'name' => 'Hidden Version',
             'shortcode' => 'HID',
             'json_path' => 'bibles/hidden.json',
@@ -180,8 +191,8 @@ class CompatibilityApiTest extends TestCase
     {
         $this->seed();
 
-        \App\Models\MediaItem::create([
-            'category_id' => \App\Models\Category::where('slug', 'videos')->value('id'),
+        MediaItem::create([
+            'category_id' => Category::where('slug', 'videos')->value('id'),
             'type' => 'video',
             'title' => 'Uploaded Service',
             'source_type' => 'upload',
@@ -203,7 +214,7 @@ class CompatibilityApiTest extends TestCase
     {
         $this->seed();
 
-        \App\Models\MediaItem::create([
+        MediaItem::create([
             'type' => 'banner',
             'title' => 'Conference Banner',
             'description' => 'Home updates banner',
@@ -225,7 +236,7 @@ class CompatibilityApiTest extends TestCase
     {
         $this->seed();
 
-        \App\Models\ChurchEvent::create([
+        ChurchEvent::create([
             'title' => 'Upcoming Visitation',
             'details' => '<p>Join us.</p>',
             'thumbnail' => 'reference/header.jpg',
@@ -233,7 +244,7 @@ class CompatibilityApiTest extends TestCase
             'is_published' => true,
         ]);
 
-        \App\Models\MediaItem::create([
+        MediaItem::create([
             'type' => 'video',
             'title' => 'Featured Video',
             'source_type' => 'youtube_video',
@@ -253,7 +264,7 @@ class CompatibilityApiTest extends TestCase
 
     public function test_gallery_endpoint_exposes_active_images_by_category(): void
     {
-        \App\Models\GalleryImage::create([
+        GalleryImage::create([
             'title' => 'Sunday Service',
             'category' => 'Services',
             'image_path' => 'gallery/sunday.jpg',
@@ -262,7 +273,7 @@ class CompatibilityApiTest extends TestCase
             'published_at' => now(),
         ]);
 
-        \App\Models\GalleryImage::create([
+        GalleryImage::create([
             'title' => 'Hidden',
             'category' => 'Services',
             'image_path' => 'gallery/hidden.jpg',
@@ -282,7 +293,7 @@ class CompatibilityApiTest extends TestCase
     {
         $this->seed();
 
-        \App\Models\ChurchEvent::create([
+        ChurchEvent::create([
             'title' => 'Midweek Mercy Service',
             'details' => '<p>Prayer and teaching.</p>',
             'venue' => 'Main Auditorium',
@@ -292,7 +303,7 @@ class CompatibilityApiTest extends TestCase
             'is_published' => true,
         ]);
 
-        \App\Models\ChurchEvent::create([
+        ChurchEvent::create([
             'title' => 'Different Day Service',
             'starts_at' => '2026-05-20 18:00:00',
             'is_published' => true,
@@ -309,9 +320,66 @@ class CompatibilityApiTest extends TestCase
             ->assertJsonMissing(['title' => 'Different Day Service']);
     }
 
+    public function test_events_endpoint_expands_weekly_programmes_for_selected_date(): void
+    {
+        $event = ChurchEvent::create([
+            'title' => 'Sunday Celebration Service',
+            'details' => '<p>Weekly worship service.</p>',
+            'venue' => 'Main Auditorium',
+            'thumbnail' => 'reference/header.jpg',
+            'starts_at' => '2026-01-04 09:00:00',
+            'ends_at' => '2026-01-04 11:30:00',
+            'recurrence_type' => ChurchEvent::RECURRENCE_WEEKLY,
+            'recurrence_interval' => 1,
+            'recurrence_weekday' => 0,
+            'recurrence_until' => '2026-12-31',
+            'is_published' => true,
+        ]);
+
+        $this->postJson('/fetch_events', ['data' => ['date' => '2026-07-05']])
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('events.0.title', 'Sunday Celebration Service')
+            ->assertJsonPath('events.0.date', '2026-07-05')
+            ->assertJsonPath('events.0.time', '9:00 AM')
+            ->assertJsonPath('events.0.starts_at', '2026-07-05 09:00:00')
+            ->assertJsonPath('events.0.ends_at', '2026-07-05 11:30:00')
+            ->assertJsonPath('events.0.recurring_parent_id', $event->id)
+            ->assertJsonPath('events.0.recurrence_label', 'Every Sunday');
+
+        $this->postJson('/fetch_events', ['data' => ['date' => '2026-07-06']])
+            ->assertOk()
+            ->assertJsonPath('events', []);
+    }
+
+    public function test_events_endpoint_expands_monthly_last_weekday_programmes(): void
+    {
+        $event = ChurchEvent::create([
+            'title' => 'Last Sunday Thanksgiving',
+            'details' => '<p>Monthly thanksgiving service.</p>',
+            'venue' => 'Main Auditorium',
+            'thumbnail' => 'reference/header.jpg',
+            'starts_at' => '2026-01-25 17:00:00',
+            'ends_at' => '2026-01-25 19:00:00',
+            'recurrence_type' => ChurchEvent::RECURRENCE_MONTHLY_NTH_WEEKDAY,
+            'recurrence_interval' => 1,
+            'recurrence_weekday' => 0,
+            'recurrence_week_of_month' => -1,
+            'is_published' => true,
+        ]);
+
+        $this->postJson('/fetch_events', ['data' => ['date' => '2026-07-26']])
+            ->assertOk()
+            ->assertJsonPath('events.0.title', 'Last Sunday Thanksgiving')
+            ->assertJsonPath('events.0.date', '2026-07-26')
+            ->assertJsonPath('events.0.starts_at', '2026-07-26 17:00:00')
+            ->assertJsonPath('events.0.recurring_parent_id', $event->id)
+            ->assertJsonPath('events.0.recurrence_label', 'Last Sunday of the month');
+    }
+
     public function test_branches_endpoint_uses_flutter_safe_shape(): void
     {
-        \App\Models\Branch::create([
+        Branch::create([
             'name' => 'Lagos Branch',
             'pastor' => null,
             'phone' => null,
@@ -334,20 +402,20 @@ class CompatibilityApiTest extends TestCase
 
     public function test_pastors_endpoint_lists_only_pastor_role_users_with_profile_images(): void
     {
-        $pastorRole = \Spatie\Permission\Models\Role::firstOrCreate([
+        $pastorRole = Role::firstOrCreate([
             'name' => 'Pastor',
             'guard_name' => 'mobile',
         ]);
-        $discipleRole = \Spatie\Permission\Models\Role::firstOrCreate([
+        $discipleRole = Role::firstOrCreate([
             'name' => 'Disciple',
             'guard_name' => 'mobile',
         ]);
 
-        $pastor = \App\Models\MobileUser::create([
+        $pastor = MobileUser::create([
             'name' => 'Pastor John Ade',
             'email' => 'pastor@example.com',
             'phone' => '+2348012345678',
-            'password' => \Illuminate\Support\Facades\Hash::make('Passw0rd!234'),
+            'password' => Hash::make('Passw0rd!234'),
             'avatar' => 'mobile-users/avatars/pastor.jpg',
             'role_title' => 'Resident Pastor',
             'sort_order' => 1,
@@ -356,19 +424,19 @@ class CompatibilityApiTest extends TestCase
         ]);
         $pastor->assignRole($pastorRole);
 
-        $hiddenPastor = \App\Models\MobileUser::create([
+        $hiddenPastor = MobileUser::create([
             'name' => 'Pastor No Image',
             'email' => 'pastor-no-image@example.com',
-            'password' => \Illuminate\Support\Facades\Hash::make('Passw0rd!234'),
+            'password' => Hash::make('Passw0rd!234'),
             'is_verified' => true,
             'email_verified_at' => now(),
         ]);
         $hiddenPastor->assignRole($pastorRole);
 
-        $disciple = \App\Models\MobileUser::create([
+        $disciple = MobileUser::create([
             'name' => 'Disciple With Image',
             'email' => 'disciple@example.com',
-            'password' => \Illuminate\Support\Facades\Hash::make('Passw0rd!234'),
+            'password' => Hash::make('Passw0rd!234'),
             'avatar' => 'mobile-users/avatars/disciple.jpg',
             'is_verified' => true,
             'email_verified_at' => now(),
@@ -388,7 +456,7 @@ class CompatibilityApiTest extends TestCase
 
     public function test_contact_form_stores_message_for_admin_and_returns_success(): void
     {
-        \App\Models\ContactRecipient::create([
+        ContactRecipient::create([
             'name' => 'Church Office',
             'email' => 'office@example.com',
             'is_active' => true,
@@ -415,7 +483,7 @@ class CompatibilityApiTest extends TestCase
 
     public function test_transportation_arrangements_endpoint_exposes_active_72hours_pickup_details(): void
     {
-        \App\Models\TransportationArrangement::create([
+        TransportationArrangement::create([
             'program_name' => '72Hours',
             'city_town' => 'Ibadan',
             'state' => 'Oyo State',
@@ -429,7 +497,7 @@ class CompatibilityApiTest extends TestCase
             'is_active' => true,
         ]);
 
-        \App\Models\TransportationArrangement::create([
+        TransportationArrangement::create([
             'program_name' => '72Hours',
             'city_town' => 'Hidden City',
             'bus_location' => 'Inactive pickup',
@@ -448,33 +516,33 @@ class CompatibilityApiTest extends TestCase
 
     public function test_church_groups_endpoint_exposes_leaders_assistants_and_members(): void
     {
-        $leader = \App\Models\MobileUser::create([
+        $leader = MobileUser::create([
             'name' => 'Choir Leader',
             'email' => 'leader@example.com',
             'avatar' => 'mobile-users/avatars/leader.jpg',
-            'password' => \Illuminate\Support\Facades\Hash::make('Passw0rd!234'),
+            'password' => Hash::make('Passw0rd!234'),
             'is_verified' => true,
             'email_verified_at' => now(),
         ]);
-        $assistant = \App\Models\MobileUser::create([
+        $assistant = MobileUser::create([
             'name' => 'Assistant Leader',
             'email' => 'assistant@example.com',
             'avatar' => 'mobile-users/avatars/assistant.jpg',
-            'password' => \Illuminate\Support\Facades\Hash::make('Passw0rd!234'),
+            'password' => Hash::make('Passw0rd!234'),
             'is_verified' => true,
             'email_verified_at' => now(),
         ]);
-        $group = \App\Models\ChurchGroup::updateOrCreate(['name' => 'Choir'], [
+        $group = ChurchGroup::updateOrCreate(['name' => 'Choir'], [
             'functions' => 'Worship and special ministrations.',
             'leader_id' => $leader->id,
             'assistant_id' => $assistant->id,
             'is_active' => true,
             'sort_order' => 10,
         ]);
-        \App\Models\MobileUser::create([
+        MobileUser::create([
             'name' => 'Choir Member',
             'email' => 'member@example.com',
-            'password' => \Illuminate\Support\Facades\Hash::make('Passw0rd!234'),
+            'password' => Hash::make('Passw0rd!234'),
             'group_id' => $group->id,
             'is_verified' => true,
             'email_verified_at' => now(),
@@ -496,7 +564,7 @@ class CompatibilityApiTest extends TestCase
 
     public function test_inbox_endpoint_exposes_app_messages_without_firebase(): void
     {
-        \App\Models\InboxMessage::create([
+        InboxMessage::create([
             'title' => 'Service Notice',
             'content' => '<p>Join us tonight.</p>',
             'thumbnail' => 'inbox/notice.jpg',
@@ -515,7 +583,7 @@ class CompatibilityApiTest extends TestCase
 
     public function test_mobile_registration_and_profile_payload_include_group(): void
     {
-        $group = \App\Models\ChurchGroup::updateOrCreate(['name' => 'Ushering'], [
+        $group = ChurchGroup::updateOrCreate(['name' => 'Ushering'], [
             'functions' => 'Service flow support.',
             'is_active' => true,
         ]);
@@ -549,7 +617,7 @@ class CompatibilityApiTest extends TestCase
 
     public function test_content_page_endpoint_exposes_structured_about_page(): void
     {
-        \App\Models\ContentPage::create([
+        ContentPage::create([
             'type' => 'about',
             'title' => 'About MFM Triumphant Church',
             'slug' => 'about-covenant-of-mercy',
@@ -571,10 +639,10 @@ class CompatibilityApiTest extends TestCase
 
     public function test_verified_mobile_user_can_submit_app_suggestion(): void
     {
-        $user = \App\Models\MobileUser::create([
+        $user = MobileUser::create([
             'name' => 'Verified Member',
             'email' => 'verified@example.com',
-            'password' => \Illuminate\Support\Facades\Hash::make('Passw0rd!234'),
+            'password' => Hash::make('Passw0rd!234'),
             'is_verified' => true,
         ]);
         $token = $user->issueApiToken();
@@ -600,8 +668,8 @@ class CompatibilityApiTest extends TestCase
     {
         $this->seed();
 
-        \App\Models\MediaItem::create([
-            'category_id' => \App\Models\Category::where('slug', 'videos')->value('id'),
+        MediaItem::create([
+            'category_id' => Category::where('slug', 'videos')->value('id'),
             'type' => 'video',
             'title' => 'YouTube Full URL',
             'source_type' => 'external_url',
@@ -628,7 +696,7 @@ class CompatibilityApiTest extends TestCase
 
     public function test_mobile_registration_and_login_return_flutter_friendly_messages(): void
     {
-        $group = \App\Models\ChurchGroup::updateOrCreate(['name' => 'No group'], [
+        $group = ChurchGroup::updateOrCreate(['name' => 'No group'], [
             'functions' => 'Default registration option.',
             'is_active' => true,
         ]);
@@ -675,7 +743,7 @@ class CompatibilityApiTest extends TestCase
             ->assertJsonPath('status', 'error')
             ->assertJsonPath('needs_verification', true);
 
-        \App\Models\MobileUser::where('email', 'member@example.com')->update([
+        MobileUser::where('email', 'member@example.com')->update([
             'is_verified' => true,
             'email_verified_at' => now(),
         ]);
@@ -703,12 +771,12 @@ class CompatibilityApiTest extends TestCase
 
     public function test_mobile_user_can_update_profile_without_required_images_or_social_fields(): void
     {
-        $group = \App\Models\ChurchGroup::updateOrCreate(['name' => 'Choir'], [
+        $group = ChurchGroup::updateOrCreate(['name' => 'Choir'], [
             'functions' => 'Worship ministry.',
             'is_active' => true,
         ]);
 
-        $user = \App\Models\MobileUser::create([
+        $user = MobileUser::create([
             'name' => 'Profile User',
             'email' => 'profile@example.com',
             'phone' => '+2348000000000',
@@ -718,7 +786,7 @@ class CompatibilityApiTest extends TestCase
             'country_of_residence' => 'Nigeria',
             'state_county_province' => 'Lagos',
             'address' => '1 Mercy Road, Lagos',
-            'password' => \Illuminate\Support\Facades\Hash::make('Passw0rd!234'),
+            'password' => Hash::make('Passw0rd!234'),
             'is_verified' => true,
             'email_verified_at' => now(),
         ]);
@@ -757,16 +825,16 @@ class CompatibilityApiTest extends TestCase
 
     public function test_mobile_email_verification_and_password_reset_flow(): void
     {
-        $user = \App\Models\MobileUser::create([
+        $user = MobileUser::create([
             'name' => 'Pending User',
             'email' => 'pending@example.com',
-            'password' => \Illuminate\Support\Facades\Hash::make('Passw0rd!234'),
+            'password' => Hash::make('Passw0rd!234'),
             'is_verified' => false,
         ]);
 
         $verificationCode = 'ABC123';
         $user->forceFill([
-            'email_verification_code_hash' => \Illuminate\Support\Facades\Hash::make($verificationCode),
+            'email_verification_code_hash' => Hash::make($verificationCode),
             'email_verification_expires_at' => now()->addMinutes(10),
         ])->save();
 
@@ -779,7 +847,7 @@ class CompatibilityApiTest extends TestCase
 
         $resetCode = 'RST123';
         $user->refresh()->forceFill([
-            'password_reset_code_hash' => \Illuminate\Support\Facades\Hash::make($resetCode),
+            'password_reset_code_hash' => Hash::make($resetCode),
             'password_reset_expires_at' => now()->addMinutes(10),
         ])->save();
 
