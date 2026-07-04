@@ -614,11 +614,32 @@ class DynamicFormService
         }
 
         if (is_string($value)) {
-            $max = max(1, min(10000, (int) data_get($field->settings, 'max_length', $field->type === DynamicFormField::TYPE_TEXTAREA ? 5000 : 255)));
+            $max = $this->textMaxLength($field);
             if (mb_strlen($value) > $max) {
                 throw ValidationException::withMessages([$key => "{$field->label} must not be longer than {$max} characters."]);
             }
         }
+    }
+
+    private function textMaxLength(DynamicFormField $field): int
+    {
+        $fallback = $field->type === DynamicFormField::TYPE_TEXTAREA ? 5000 : 255;
+        $configured = data_get($field->settings, 'max_length');
+
+        if ($configured === null || $configured === '') {
+            return $fallback;
+        }
+
+        if (! is_numeric($configured)) {
+            return $fallback;
+        }
+
+        $max = (int) $configured;
+        if ($max < 1) {
+            return $fallback;
+        }
+
+        return min(10000, $max);
     }
 
     private function fieldIsVisible(DynamicFormField $field, array $answers): bool

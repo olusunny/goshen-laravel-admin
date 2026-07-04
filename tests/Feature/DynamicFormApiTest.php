@@ -72,6 +72,31 @@ class DynamicFormApiTest extends TestCase
         $this->assertSame('Church office', $submission->answers['pickup_location']['answer']);
     }
 
+    public function test_blank_text_max_length_setting_uses_default_limit(): void
+    {
+        $form = $this->form('blank-max-length');
+        $this->field($form, 'your_name', 'Your Name', DynamicFormField::TYPE_TEXT, [
+            'is_required' => true,
+            'settings' => [
+                'max_length' => '',
+            ],
+        ]);
+
+        $this->postJson('/api/dynamic-forms/blank-max-length/submit', [
+            'data' => [
+                'answers' => [
+                    'your_name' => 'Great Emmanuella Grace',
+                ],
+            ],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('status', 'ok');
+
+        $submission = DynamicFormSubmission::query()->firstOrFail();
+
+        $this->assertSame('Great Emmanuella Grace', $submission->answers['your_name']['answer']);
+    }
+
     public function test_authenticated_form_requires_mobile_user_token(): void
     {
         $form = $this->form('members-only', [

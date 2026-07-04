@@ -196,8 +196,10 @@ class DynamicFormResource extends Resource
                             Forms\Components\TextInput::make('settings.max_length')
                                 ->label('Maximum text length')
                                 ->numeric()
+                                ->nullable()
                                 ->minValue(1)
                                 ->maxValue(10000)
+                                ->dehydrateStateUsing(fn ($state): ?int => blank($state) ? null : (int) $state)
                                 ->visible(fn ($get): bool => in_array($get('type'), [
                                     DynamicFormField::TYPE_TEXT,
                                     DynamicFormField::TYPE_TEXTAREA,
