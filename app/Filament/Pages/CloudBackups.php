@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
 use BackedEnum;
 use ChurchTools\CloudBackup\Models\CloudBackupConnection;
@@ -25,6 +26,12 @@ class CloudBackups extends Page
     protected static ?string $slug = 'cloud-backup-console';
 
     protected string $view = 'filament.pages.cloud-backups';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::canAccess()
+            && AdminMenuRegistry::visibleForPage(static::class);
+    }
 
     public static function canAccess(): bool
     {

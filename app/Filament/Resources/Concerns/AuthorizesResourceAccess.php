@@ -2,12 +2,19 @@
 
 namespace App\Filament\Resources\Concerns;
 
+use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 trait AuthorizesResourceAccess
 {
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::adminCanManageResource()
+            && AdminMenuRegistry::visibleForResource(static::class);
+    }
+
     public static function canViewAny(): bool
     {
         return static::adminCanManageResource();

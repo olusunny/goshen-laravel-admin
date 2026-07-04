@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\UserResource\Pages;
 use App\Models\User;
-use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Services\TriumphantIdService;
 use App\Support\AdminPermissions;
 use Closure;
@@ -15,6 +15,9 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -22,9 +25,42 @@ use Spatie\Permission\Models\Role;
 class UserResource extends Resource
 {
     use AuthorizesResourceAccess;
+
     protected static ?string $model = User::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->when(
+                ! static::currentAdminIsSuperAdmin(),
+                fn (Builder $query) => $query->whereDoesntHave(
+                    'roles',
+                    fn (Builder $roles) => $roles
+                        ->where('guard_name', 'web')
+                        ->where('name', 'super_admin'),
+                ),
+            );
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return static::adminCanManageResource()
+            && ! static::isProtectedSuperAdminUser($record);
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return static::adminCanManageResource()
+            && ! static::isProtectedSuperAdminUser($record);
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return static::adminCanManageResource()
+            && ! static::isProtectedSuperAdminUser($record);
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -44,7 +80,7 @@ class UserResource extends Resource
                     ->relationship('roles', 'name')
                     ->multiple()
                     ->preload()
-                    ->options(fn () => Role::where('guard_name', 'web')->orderBy('name')->pluck('name', 'id'))
+                    ->options(fn (): array => static::webRoleOptions())
                     ->required()
                     ->rules([
                         fn (?User $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
@@ -57,6 +93,15 @@ class UserResource extends Resource
                                 app(TriumphantIdService::class)->assertReservedWebRolesAvailable($roleIds, $record);
                             } catch (ValidationException $exception) {
                                 $fail(collect($exception->errors())->flatten()->first() ?: 'This reserved role is already assigned.');
+                            }
+
+                            if (! static::currentAdminIsSuperAdmin()
+                                && Role::query()
+                                    ->whereIn('id', $roleIds)
+                                    ->where('guard_name', 'web')
+                                    ->where('name', 'super_admin')
+                                    ->exists()) {
+                                $fail('Only a Super Admin can assign the Super Admin role.');
                             }
                         },
                     ]),
@@ -149,5 +194,30 @@ class UserResource extends Resource
             'create' => Pages\CreateUser::route('/create'),
             'edit' => Pages\EditUser::route('/{record}/edit'),
         ];
+    }
+
+    private static function webRoleOptions(): array
+    {
+        return Role::query()
+            ->where('guard_name', 'web')
+            ->when(
+                ! static::currentAdminIsSuperAdmin(),
+                fn (Builder $query) => $query->where('name', '!=', 'super_admin'),
+            )
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    private static function currentAdminIsSuperAdmin(): bool
+    {
+        return (bool) Auth::user()?->hasRole('super_admin');
+    }
+
+    private static function isProtectedSuperAdminUser(Model $record): bool
+    {
+        return $record instanceof User
+            && ! static::currentAdminIsSuperAdmin()
+            && $record->hasRole('super_admin');
     }
 }

@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\AppSettingResource;
 use App\Filament\Resources\GoshenReferralPointEntryResource;
 use App\Models\AppSetting;
+use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
 use BackedEnum;
 use Filament\Notifications\Notification;
@@ -35,6 +36,12 @@ class GoshenReferralSettings extends Page
     public string $walletAmountPerPoint = '0';
 
     public int $minConvertiblePoints = 1;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::canAccess()
+            && AdminMenuRegistry::visibleForPage(static::class);
+    }
 
     public function mount(): void
     {

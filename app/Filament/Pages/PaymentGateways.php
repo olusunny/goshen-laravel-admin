@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Services\StripePaymentSettings;
+use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
 use BackedEnum;
 use Filament\Notifications\Notification;
@@ -64,6 +65,12 @@ class PaymentGateways extends Page
     public string $liveEventWebhookSecret = '';
 
     public string $liveWalletWebhookSecret = '';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::canAccess()
+            && AdminMenuRegistry::visibleForPage(static::class);
+    }
 
     public function mount(StripePaymentSettings $settings): void
     {

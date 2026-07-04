@@ -2,6 +2,7 @@
 
 namespace Sunny\Fundraising\Filament\Resources\Concerns;
 
+use App\Support\AdminMenuRegistry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +14,8 @@ trait AuthorizesFundraisingAdmin
 {
     public static function shouldRegisterNavigation(): bool
     {
-        return static::fundraisingAdminCanManage();
+        return static::fundraisingAdminCanManage()
+            && AdminMenuRegistry::visibleForResource(static::class);
     }
 
     public static function canViewAny(): bool

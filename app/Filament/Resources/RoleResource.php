@@ -14,6 +14,9 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -34,6 +37,37 @@ class RoleResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Role Permissions';
 
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->when(
+                ! static::currentAdminIsSuperAdmin(),
+                fn (Builder $query) => $query->where(function (Builder $roles): void {
+                    $roles
+                        ->where('guard_name', '!=', 'web')
+                        ->orWhere('name', '!=', 'super_admin');
+                }),
+            );
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return static::adminCanManageResource()
+            && ! static::isProtectedSuperAdminRole($record);
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return static::adminCanManageResource()
+            && ! static::isProtectedSuperAdminRole($record);
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return static::adminCanManageResource()
+            && ! static::isProtectedSuperAdminRole($record);
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
@@ -48,6 +82,13 @@ class RoleResource extends Resource
                                 Rule::unique('roles', 'name')
                                     ->where('guard_name', $get('guard_name') ?: 'web')
                                     ->ignore($record?->id),
+                                function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
+                                    if (! static::currentAdminIsSuperAdmin()
+                                        && ($get('guard_name') ?: 'web') === 'web'
+                                        && (string) $value === 'super_admin') {
+                                        $fail('Only a Super Admin can create or edit the Super Admin role.');
+                                    }
+                                },
                             ],
                         ),
                     Forms\Components\Select::make('guard_name')
@@ -156,5 +197,18 @@ class RoleResource extends Resource
             'create' => Pages\CreateRole::route('/create'),
             'edit' => Pages\EditRole::route('/{record}/edit'),
         ];
+    }
+
+    private static function isProtectedSuperAdminRole(Model $record): bool
+    {
+        return $record instanceof Role
+            && ! static::currentAdminIsSuperAdmin()
+            && $record->guard_name === 'web'
+            && $record->name === 'super_admin';
+    }
+
+    private static function currentAdminIsSuperAdmin(): bool
+    {
+        return (bool) Auth::user()?->hasRole('super_admin');
     }
 }

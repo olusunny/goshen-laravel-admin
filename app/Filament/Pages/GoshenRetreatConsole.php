@@ -4,12 +4,13 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\GoshenAccommodationAllocationResource;
 use App\Filament\Resources\GoshenBookingResource;
-use App\Filament\Resources\GoshenRegistrationFieldResource;
 use App\Filament\Resources\GoshenReferralPointEntryResource;
+use App\Filament\Resources\GoshenRegistrationFieldResource;
 use App\Filament\Resources\GoshenRetreatEventResource;
 use App\Filament\Resources\GoshenScheduleResource;
 use App\Filament\Resources\GoshenTicketResource;
 use App\Filament\Resources\GoshenTicketTypeResource;
+use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
 use BackedEnum;
 use Filament\Pages\Page;
@@ -31,6 +32,12 @@ class GoshenRetreatConsole extends Page
     protected static ?int $navigationSort = 0;
 
     protected string $view = 'filament.pages.goshen-retreat-console';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::canAccess()
+            && AdminMenuRegistry::visibleForPage(static::class);
+    }
 
     public static function canAccess(): bool
     {
