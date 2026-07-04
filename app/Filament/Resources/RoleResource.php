@@ -17,7 +17,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rules\Unique;
+use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -77,22 +77,28 @@ class RoleResource extends Resource
                     Forms\Components\TextInput::make('name')
                         ->required()
                         ->maxLength(120)
-                        ->unique(
-                            table: 'roles',
-                            column: 'name',
-                            ignoreRecord: true,
-                            modifyRuleUsing: fn (Unique $rule, Get $get): Unique => $rule
-                                ->where('guard_name', $get('guard_name') ?: 'web'),
-                        )
-                        ->rules(fn (Get $get): array => [
-                            function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
-                                if (! static::currentAdminIsSuperAdmin()
-                                    && ($get('guard_name') ?: 'web') === 'web'
-                                    && (string) $value === 'super_admin') {
-                                    $fail('Only a Super Admin can create or edit the Super Admin role.');
-                                }
-                            },
-                        ]),
+                        ->rules(
+                            fn (Get $get, ?Role $record): array => [
+                                Rule::unique('roles', 'name')
+                                    ->where('guard_name', $get('guard_name') ?: $record?->guard_name ?: 'web')
+                                    ->ignore($record?->getKey()),
+                                function (string $attribute, mixed $value, \Closure $fail) use ($get, $record): void {
+                                    $guardName = $get('guard_name') ?: $record?->guard_name ?: 'web';
+
+                                    if ($record instanceof Role
+                                        && $record->name === (string) $value
+                                        && $record->guard_name === $guardName) {
+                                        return;
+                                    }
+
+                                    if (! static::currentAdminIsSuperAdmin()
+                                        && $guardName === 'web'
+                                        && (string) $value === 'super_admin') {
+                                        $fail('Only a Super Admin can create or edit the Super Admin role.');
+                                    }
+                                },
+                            ],
+                        ),
                     Forms\Components\Select::make('guard_name')
                         ->label('Role type')
                         ->options([

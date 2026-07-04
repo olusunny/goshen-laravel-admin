@@ -139,6 +139,37 @@ class AdminAccessTest extends TestCase
         $this->assertTrue($role->refresh()->hasPermissionTo($permission));
     }
 
+    public function test_role_permission_edit_allows_saving_permissions_when_mobile_role_has_same_name(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@church.local')->firstOrFail();
+        $permission = Permission::firstOrCreate([
+            'name' => AdminPermissions::FUNDRAISING_MANAGE,
+            'guard_name' => 'web',
+        ]);
+
+        Role::firstOrCreate([
+            'name' => 'Triumphant IT Manager',
+            'guard_name' => 'mobile',
+        ]);
+
+        $role = Role::firstOrCreate([
+            'name' => 'Triumphant IT Manager',
+            'guard_name' => 'web',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(EditRole::class, ['record' => $role->getKey()])
+            ->fillForm([
+                'permissions' => [$permission->id],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors(['name']);
+
+        $this->assertTrue($role->refresh()->hasPermissionTo($permission));
+    }
+
     public function test_role_permission_edit_rejects_duplicate_name_in_same_role_type(): void
     {
         $this->seed();
