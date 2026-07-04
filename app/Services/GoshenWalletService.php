@@ -8,6 +8,7 @@ use App\Models\GoshenWalletLedgerEntry;
 use App\Models\GoshenWalletSavingsPlan;
 use App\Models\GoshenWalletWithdrawalRequest;
 use App\Models\MobileUser;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -17,6 +18,9 @@ use Stripe\StripeClient;
 
 class GoshenWalletService
 {
+    private const AUTO_TOP_UP_RETRY_LIMIT = 3;
+    private const AUTO_TOP_UP_RETRY_DELAYS_MINUTES = [15, 60, 360];
+
     public function __construct(
         private readonly StripePaymentSettings $stripeSettings,
         private readonly WalletSecurityResetService $walletSecurityResets,
@@ -743,15 +747,15 @@ class GoshenWalletService
                 ],
             ], ['idempotency_key' => $reference]);
         } catch (ApiErrorException $exception) {
-            $plan->forceFill([
-                'status' => 'paused',
-                'metadata' => array_merge($plan->metadata ?? [], [
-                    'last_charge_error' => $exception->getMessage(),
-                    'last_charge_attempted_at' => now()->toIso8601String(),
-                ]),
-            ])->save();
-
-            return null;
+            return $this->recordScheduledTopUpFailure(
+                plan: $plan,
+                wallet: $wallet,
+                reference: $reference,
+                dueAt: $dueAt,
+                error: $exception->getMessage(),
+                stripeStatus: 'stripe_exception',
+                stripePaymentIntentId: null,
+            );
         }
 
         $payload = $intent->toArray();
@@ -809,19 +813,145 @@ class GoshenWalletService
                     'next_charge_at' => $remaining === 0 ? null : $this->nextChargeAt($lockedPlan->frequency, (int) $lockedPlan->interval_count),
                     'status' => $remaining === 0 ? 'completed' : 'active',
                 ])->save();
-            } elseif ($entry->status !== 'paid') {
                 $lockedPlan->forceFill([
-                    'status' => 'paused',
-                    'metadata' => array_merge($lockedPlan->metadata ?? [], [
-                        'last_charge_error' => 'Stripe did not return a succeeded payment intent.',
-                        'last_charge_status' => $entry->status,
-                        'last_charge_attempted_at' => now()->toIso8601String(),
+                    'metadata' => Arr::except($lockedPlan->metadata ?? [], [
+                        'last_charge_error',
+                        'last_charge_status',
+                        'last_charge_attempted_at',
+                        'last_charge_failed_attempts',
+                        'last_charge_next_retry_at',
+                        'last_charge_retries_remaining',
                     ]),
                 ])->save();
+            } elseif ($entry->status !== 'paid') {
+                $entry = $this->applyScheduledTopUpRetry(
+                    plan: $lockedPlan,
+                    entry: $entry,
+                    error: 'Stripe did not return a succeeded payment intent.',
+                    stripeStatus: $entry->status,
+                    dueAt: $dueAt,
+                    stripePaymentIntentId: $payload['id'] ?? null,
+                );
             }
 
             return $entry->fresh();
         });
+    }
+
+    private function recordScheduledTopUpFailure(
+        GoshenWalletSavingsPlan $plan,
+        GoshenWallet $wallet,
+        string $reference,
+        \Carbon\CarbonInterface $dueAt,
+        string $error,
+        string $stripeStatus,
+        ?string $stripePaymentIntentId,
+    ): ?GoshenWalletLedgerEntry {
+        return DB::transaction(function () use ($plan, $wallet, $reference, $dueAt, $error, $stripeStatus, $stripePaymentIntentId): ?GoshenWalletLedgerEntry {
+            $lockedPlan = GoshenWalletSavingsPlan::query()
+                ->whereKey($plan->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $lockedPlan || $lockedPlan->status !== 'active') {
+                return GoshenWalletLedgerEntry::query()->where('provider_reference', $reference)->first();
+            }
+
+            if (! $lockedPlan->next_charge_at || ! $lockedPlan->next_charge_at->equalTo($dueAt)) {
+                return GoshenWalletLedgerEntry::query()->where('provider_reference', $reference)->first();
+            }
+
+            $lockedWallet = GoshenWallet::query()
+                ->whereKey($wallet->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $entry = GoshenWalletLedgerEntry::query()->firstOrNew([
+                'provider_reference' => $reference,
+            ]);
+
+            $entry->fill([
+                'wallet_id' => $lockedWallet->id,
+                'type' => 'scheduled_top_up',
+                'status' => 'failed',
+                'currency' => strtoupper((string) $lockedPlan->currency),
+                'amount' => (float) $lockedPlan->amount,
+                'gateway' => 'stripe',
+                'metadata' => [
+                    'savings_plan_id' => $lockedPlan->id,
+                    'stripe_payment_intent_id' => $stripePaymentIntentId,
+                    'due_at' => $dueAt->toIso8601String(),
+                    'stripe_status' => $stripeStatus,
+                    'failure_reason' => $error,
+                ],
+                'settled_at' => null,
+            ])->save();
+
+            return $this->applyScheduledTopUpRetry(
+                plan: $lockedPlan,
+                entry: $entry,
+                error: $error,
+                stripeStatus: $stripeStatus,
+                dueAt: $dueAt,
+                stripePaymentIntentId: $stripePaymentIntentId,
+            )->fresh();
+        });
+    }
+
+    private function applyScheduledTopUpRetry(
+        GoshenWalletSavingsPlan $plan,
+        GoshenWalletLedgerEntry $entry,
+        string $error,
+        string $stripeStatus,
+        \Carbon\CarbonInterface $dueAt,
+        ?string $stripePaymentIntentId,
+    ): GoshenWalletLedgerEntry {
+        $metadata = $plan->metadata ?? [];
+        $failedAttempts = max(0, (int) ($metadata['last_charge_failed_attempts'] ?? 0)) + 1;
+        $retriesRemaining = max(0, (self::AUTO_TOP_UP_RETRY_LIMIT + 1) - $failedAttempts);
+        $willRetry = $failedAttempts <= self::AUTO_TOP_UP_RETRY_LIMIT;
+        $nextRetryAt = $willRetry ? now()->addMinutes($this->autoTopUpRetryDelayMinutes($failedAttempts)) : null;
+
+        $entry->forceFill([
+            'status' => 'failed',
+            'metadata' => array_merge($entry->metadata ?? [], [
+                'savings_plan_id' => $plan->id,
+                'stripe_payment_intent_id' => $stripePaymentIntentId,
+                'due_at' => $dueAt->toIso8601String(),
+                'stripe_status' => $stripeStatus,
+                'failure_reason' => $error,
+                'failed_attempt_number' => $failedAttempts,
+                'retry_limit' => self::AUTO_TOP_UP_RETRY_LIMIT,
+                'will_retry' => $willRetry,
+                'next_retry_at' => $nextRetryAt?->toIso8601String(),
+                'retries_remaining' => $willRetry ? $retriesRemaining : 0,
+            ]),
+        ])->save();
+
+        $plan->forceFill([
+            'status' => $willRetry ? 'active' : 'paused',
+            'next_charge_at' => $nextRetryAt,
+            'metadata' => array_merge($metadata, [
+                'last_charge_error' => $error,
+                'last_charge_status' => $stripeStatus,
+                'last_charge_attempted_at' => now()->toIso8601String(),
+                'last_charge_failed_attempts' => $failedAttempts,
+                'last_charge_next_retry_at' => $nextRetryAt?->toIso8601String(),
+                'last_charge_retries_remaining' => $willRetry ? $retriesRemaining : 0,
+            ]),
+        ])->save();
+
+        return $entry;
+    }
+
+    private function autoTopUpRetryDelayMinutes(int $failedAttempts): int
+    {
+        $index = min(
+            max(0, $failedAttempts - 1),
+            count(self::AUTO_TOP_UP_RETRY_DELAYS_MINUTES) - 1
+        );
+
+        return self::AUTO_TOP_UP_RETRY_DELAYS_MINUTES[$index];
     }
 
     private function reusablePaymentDetails(array $payload): array
@@ -967,6 +1097,7 @@ class GoshenWalletService
             'gateway' => $entry->gateway,
             'provider_reference' => $entry->provider_reference,
             'reference' => $entry->provider_reference,
+            'metadata' => $entry->metadata ?? [],
             'settled_at' => $entry->settled_at?->toIso8601String(),
             'created_at' => $entry->created_at?->toIso8601String(),
         ];
@@ -1027,6 +1158,15 @@ class GoshenWalletService
 
     private function ledgerDescription(GoshenWalletLedgerEntry $entry): string
     {
+        if ($entry->type === 'scheduled_top_up' && $entry->status !== 'paid') {
+            $attempt = (int) data_get($entry->metadata, 'failed_attempt_number', 0);
+            $limit = (int) data_get($entry->metadata, 'retry_limit', self::AUTO_TOP_UP_RETRY_LIMIT);
+
+            return $attempt > 0
+                ? "Automatic wallet top-up failed ({$attempt}/".($limit + 1).')'
+                : 'Automatic wallet top-up failed';
+        }
+
         return match ($entry->type) {
             'top_up' => 'Wallet top-up',
             'scheduled_top_up' => 'Automatic wallet top-up',

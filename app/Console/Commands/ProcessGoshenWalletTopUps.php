@@ -43,6 +43,23 @@ class ProcessGoshenWalletTopUps extends Command
                                 'events'
                             );
                         }
+                    } elseif ($entry->status !== 'paid') {
+                        $user = $plan->wallet?->user;
+                        if ($user) {
+                            $willRetry = (bool) data_get($entry->metadata, 'will_retry');
+                            $nextRetryAt = data_get($entry->metadata, 'next_retry_at');
+                            $retriesRemaining = (int) data_get($entry->metadata, 'retries_remaining', 0);
+                            $body = $willRetry
+                                ? "Your scheduled Goshen Retreat wallet top-up did not go through. We will retry automatically".($nextRetryAt ? " at {$nextRetryAt}" : ' soon').". Retries remaining: {$retriesRemaining}. You can also open My Wallet to check your saved payment method."
+                                : 'Your scheduled Goshen Retreat wallet top-up did not go through after the automatic retry attempts. The plan has been paused. Please open My Wallet to update your saved payment method or resume the plan.';
+
+                            $notifications->notifyUser(
+                                $user,
+                                'Goshen wallet top-up failed',
+                                $body,
+                                'wallet'
+                            );
+                        }
                     }
                 } catch (Throwable $exception) {
                     Log::error('Goshen wallet scheduled top-up failed', [
