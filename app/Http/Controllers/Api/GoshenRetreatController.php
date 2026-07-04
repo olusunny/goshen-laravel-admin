@@ -2,42 +2,46 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\MobileUser;
 use App\Models\AppSetting;
 use App\Models\GoshenAccommodationAllocation;
-use App\Support\MediaUrl;
+use App\Models\GoshenVoucherUsage;
+use App\Models\GoshenWallet;
+use App\Models\MobileUser;
 use App\Services\GoshenAccommodationEligibility;
-use App\Services\GoshenRegistrationFieldService;
-use App\Services\GoshenWalletService;
 use App\Services\GoshenBookingLifecycleService;
 use App\Services\GoshenReferralService;
+use App\Services\GoshenRegistrationFieldService;
 use App\Services\GoshenRetreatNotificationService;
 use App\Services\GoshenVoucherService;
+use App\Services\GoshenWalletService;
 use App\Services\WalletSecurityResetService;
-use App\Models\GoshenVoucherUsage;
+use App\Support\MediaUrl;
 use chillerlan\QRCode\Output\QROutputInterface;
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Response;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Personal\EventInstallments\Contracts\PaymentGateway;
 use Personal\EventInstallments\Enums\BookingStatus;
+use Personal\EventInstallments\Enums\EventType;
 use Personal\EventInstallments\Enums\InstallmentStatus;
 use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Models\Attendee;
 use Personal\EventInstallments\Models\Booking;
 use Personal\EventInstallments\Models\BookingLine;
 use Personal\EventInstallments\Models\Event;
+use Personal\EventInstallments\Models\EventAttendeeField;
+use Personal\EventInstallments\Models\EventSchedule;
 use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentTransaction;
@@ -48,6 +52,7 @@ use Personal\EventInstallments\Services\QrPayloadService;
 use Personal\EventInstallments\Services\TicketDocumentService;
 use Personal\EventInstallments\Services\TicketIssuer;
 use RuntimeException;
+use Sunny\Fundraising\Contracts\PermissionResolverContract;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -141,7 +146,7 @@ class GoshenRetreatController extends Controller
                 ? 'Registration has been reopened for this retreat edition.'
                 : 'Registration has been closed for this retreat edition.',
             'data' => [
-                'event' => $this->eventPayload($event->fresh(['schedules', 'ticketTypes', 'paymentPlans'])),
+                'event' => $this->eventPayload($event->fresh(['schedules', 'ticketTypes', 'paymentPlans', 'attendeeFields'])),
             ],
         ]);
     }
@@ -317,7 +322,7 @@ class GoshenRetreatController extends Controller
 
                         return [
                             'public_id' => $attendee->public_id,
-                            'name' => trim(($attendee->first_name ?? '') . ' ' . ($attendee->last_name ?? '')),
+                            'name' => trim(($attendee->first_name ?? '').' '.($attendee->last_name ?? '')),
                             'email' => $attendee->email,
                             'phone' => $attendee->phone,
                             'company' => $attendee->company,
@@ -339,6 +344,351 @@ class GoshenRetreatController extends Controller
                 'generated_at' => now()->toIso8601String(),
             ],
         ]);
+    }
+
+    public function retreatSetup(Request $request, string $event): JsonResponse
+    {
+        if ($response = $this->registrationManagerAccessError($request)) {
+            return $response;
+        }
+
+        $event = $this->eventFromKey($event);
+        abort_unless($event, 404);
+        abort_unless($this->isGoshenEvent($event), 404);
+
+        return $this->retreatSetupResponse($event, 'Retreat setup loaded.');
+    }
+
+    public function updateRetreatSetupOverview(Request $request, string $event): JsonResponse
+    {
+        if ($response = $this->registrationManagerAccessError($request)) {
+            return $response;
+        }
+
+        $event = $this->eventFromKey($event);
+        abort_unless($event, 404);
+        abort_unless($this->isGoshenEvent($event), 404);
+
+        $data = $this->payload($request);
+        $validator = Validator::make($data, [
+            'name' => ['required', 'string', 'max:255'],
+            'slug' => [
+                'nullable',
+                'string',
+                'max:255',
+                'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
+                Rule::unique('ei_events', 'slug')->ignore($event->id),
+            ],
+            'type' => ['nullable', Rule::in(array_column(EventType::cases(), 'value'))],
+            'description' => ['nullable', 'string', 'max:10000'],
+            'timezone' => ['required', 'string', 'max:80'],
+            'support_email' => ['nullable', 'email', 'max:255'],
+            'inquiry_phone' => ['nullable', 'string', 'max:50'],
+            'venue_name' => ['nullable', 'string', 'max:255'],
+            'venue_address' => ['nullable', 'string', 'max:1000'],
+            'sales_start_at' => ['nullable', 'date'],
+            'sales_end_at' => ['nullable', 'date', 'after_or_equal:sales_start_at'],
+            'registration_override' => ['required', 'string', Rule::in(['auto', 'open', 'closed'])],
+            'registration_close_reason' => ['nullable', 'string', 'max:500'],
+            'pay_in_full_discount' => ['nullable', 'array'],
+            'pay_in_full_discount.enabled' => ['nullable', 'boolean'],
+            'pay_in_full_discount.label' => ['nullable', 'string', 'max:120'],
+            'pay_in_full_discount.type' => ['nullable', Rule::in(['percentage', 'fixed'])],
+            'pay_in_full_discount.value' => ['nullable', 'numeric', 'min:0'],
+            'pay_in_full_discount.starts_at' => ['nullable', 'date'],
+            'pay_in_full_discount.ends_at' => ['nullable', 'date', 'after_or_equal:pay_in_full_discount.starts_at'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationError($validator);
+        }
+
+        $validated = $validator->validated();
+        $settings = is_array($event->settings) ? $event->settings : [];
+        $settings['module'] = $settings['module'] ?? 'goshen_retreat';
+        $settings['inquiry_phone'] = trim((string) ($validated['inquiry_phone'] ?? ''));
+
+        $registration = is_array($settings['registration'] ?? null) ? $settings['registration'] : [];
+        $registration['override'] = (string) $validated['registration_override'];
+        $registration['close_reason'] = trim((string) ($validated['registration_close_reason'] ?? ''));
+        if ($registration['override'] === 'closed') {
+            $registration['closed_at'] = $registration['closed_at'] ?? now()->toIso8601String();
+        } elseif ($registration['override'] === 'open') {
+            $registration['reopened_at'] = $registration['reopened_at'] ?? now()->toIso8601String();
+            $registration['closed_at'] = null;
+        } else {
+            $registration['closed_at'] = null;
+            $registration['reopened_at'] = null;
+        }
+        $settings['registration'] = $registration;
+
+        $discount = is_array($validated['pay_in_full_discount'] ?? null) ? $validated['pay_in_full_discount'] : [];
+        $settings['pay_in_full_discount'] = [
+            'enabled' => (bool) ($discount['enabled'] ?? false),
+            'label' => trim((string) ($discount['label'] ?? 'Pay in full discount')),
+            'type' => in_array(($discount['type'] ?? 'percentage'), ['percentage', 'fixed'], true)
+                ? $discount['type']
+                : 'percentage',
+            'value' => round(max(0, (float) ($discount['value'] ?? 0)), 2),
+            'starts_at' => $this->nullableIsoTimestamp($discount['starts_at'] ?? null),
+            'ends_at' => $this->nullableIsoTimestamp($discount['ends_at'] ?? null),
+        ];
+
+        $event->forceFill([
+            'name' => $validated['name'],
+            'slug' => trim((string) ($validated['slug'] ?? '')) !== ''
+                ? $validated['slug']
+                : Str::slug((string) $validated['name']),
+            'type' => $validated['type'] ?? ($event->type?->value ?? EventType::Sequential->value),
+            'description' => $validated['description'] ?? null,
+            'timezone' => $validated['timezone'],
+            'venue_name' => $validated['venue_name'] ?? null,
+            'venue_address' => $validated['venue_address'] ?? null,
+            'support_email' => $validated['support_email'] ?? null,
+            'sales_start_at' => $this->nullableCarbon($validated['sales_start_at'] ?? null),
+            'sales_end_at' => $this->nullableCarbon($validated['sales_end_at'] ?? null),
+            'settings' => $settings,
+        ])->save();
+
+        return $this->retreatSetupResponse($event, 'Retreat setup has been saved.');
+    }
+
+    public function saveRetreatSetupSchedule(Request $request, string $event): JsonResponse
+    {
+        if ($response = $this->registrationManagerAccessError($request)) {
+            return $response;
+        }
+
+        $event = $this->eventFromKey($event);
+        abort_unless($event, 404);
+        abort_unless($this->isGoshenEvent($event), 404);
+
+        $data = $this->payload($request);
+        $schedule = $this->scheduleFromEvent($event, $data['id'] ?? null);
+        $validator = Validator::make($data, [
+            'id' => ['nullable', 'integer'],
+            'day_number' => ['required', 'integer', 'min:1', 'max:366'],
+            'title' => ['nullable', 'string', 'max:160'],
+            'starts_at' => ['required', 'date'],
+            'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'capacity' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationError($validator);
+        }
+
+        if (($data['id'] ?? null) && ! $schedule) {
+            return response()->json(['status' => 'error', 'message' => 'Schedule could not be found for this retreat edition.'], 404);
+        }
+
+        $validated = $validator->validated();
+        $schedule ??= new EventSchedule(['event_id' => $event->id]);
+        $metadata = is_array($schedule->metadata) ? $schedule->metadata : [];
+        $metadata['title'] = trim((string) ($validated['title'] ?? ''));
+
+        $schedule->forceFill([
+            'event_id' => $event->id,
+            'day_number' => (int) $validated['day_number'],
+            'starts_at' => Carbon::parse((string) $validated['starts_at']),
+            'ends_at' => $this->nullableCarbon($validated['ends_at'] ?? null),
+            'capacity' => array_key_exists('capacity', $validated) ? $validated['capacity'] : null,
+            'metadata' => $metadata,
+        ])->save();
+
+        return $this->retreatSetupResponse($event, 'Schedule has been saved.');
+    }
+
+    public function deleteRetreatSetupSchedule(Request $request, string $event, int $schedule): JsonResponse
+    {
+        if ($response = $this->registrationManagerAccessError($request)) {
+            return $response;
+        }
+
+        $event = $this->eventFromKey($event);
+        abort_unless($event, 404);
+        abort_unless($this->isGoshenEvent($event), 404);
+
+        $schedule = $this->scheduleFromEvent($event, $schedule);
+        abort_unless($schedule, 404);
+        $schedule->delete();
+
+        return $this->retreatSetupResponse($event, 'Schedule has been deleted.');
+    }
+
+    public function saveRetreatSetupTicketType(Request $request, string $event): JsonResponse
+    {
+        if ($response = $this->registrationManagerAccessError($request)) {
+            return $response;
+        }
+
+        $event = $this->eventFromKey($event);
+        abort_unless($event, 404);
+        abort_unless($this->isGoshenEvent($event), 404);
+
+        $data = $this->payload($request);
+        $ticketType = $this->ticketTypeFromEvent($event, $data['id'] ?? $data['public_id'] ?? null);
+        $validator = Validator::make($data, [
+            'id' => ['nullable'],
+            'public_id' => ['nullable', 'string'],
+            'name' => ['required', 'string', 'max:255'],
+            'sku' => ['nullable', 'string', 'max:255'],
+            'currency' => ['required', 'string', 'size:3'],
+            'price' => ['required', 'numeric', 'min:0'],
+            'capacity' => ['nullable', 'integer', 'min:0'],
+            'min_per_booking' => ['required', 'integer', 'min:1'],
+            'max_per_booking' => ['nullable', 'integer', 'min:1'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationError($validator);
+        }
+
+        if (($data['id'] ?? $data['public_id'] ?? null) && ! $ticketType) {
+            return response()->json(['status' => 'error', 'message' => 'Ticket type could not be found for this retreat edition.'], 404);
+        }
+
+        $validated = $validator->validated();
+        $minPerBooking = (int) $validated['min_per_booking'];
+        $maxPerBooking = array_key_exists('max_per_booking', $validated) && $validated['max_per_booking'] !== null
+            ? (int) $validated['max_per_booking']
+            : $minPerBooking;
+        if ($maxPerBooking < $minPerBooking) {
+            return response()->json(['status' => 'error', 'message' => 'Maximum per booking must be greater than or equal to the minimum per booking.'], 422);
+        }
+
+        $ticketType ??= new EventTicketType(['event_id' => $event->id]);
+        $ticketType->forceFill([
+            'event_id' => $event->id,
+            'name' => $validated['name'],
+            'sku' => trim((string) ($validated['sku'] ?? '')),
+            'currency' => strtoupper((string) $validated['currency']),
+            'price' => round((float) $validated['price'], 2),
+            'capacity' => array_key_exists('capacity', $validated) ? $validated['capacity'] : null,
+            'min_per_booking' => $minPerBooking,
+            'max_per_booking' => $maxPerBooking,
+            'is_active' => (bool) ($validated['is_active'] ?? true),
+        ])->save();
+
+        return $this->retreatSetupResponse($event, 'Ticket type has been saved.');
+    }
+
+    public function deleteRetreatSetupTicketType(Request $request, string $event, string $ticketType): JsonResponse
+    {
+        if ($response = $this->registrationManagerAccessError($request)) {
+            return $response;
+        }
+
+        $event = $this->eventFromKey($event);
+        abort_unless($event, 404);
+        abort_unless($this->isGoshenEvent($event), 404);
+
+        $ticketType = $this->ticketTypeFromEvent($event, $ticketType);
+        abort_unless($ticketType, 404);
+
+        $isUsed = BookingLine::query()->where('ticket_type_id', $ticketType->id)->exists()
+            || Attendee::query()->where('ticket_type_id', $ticketType->id)->exists()
+            || Ticket::query()->where('ticket_type_id', $ticketType->id)->exists();
+        if ($isUsed) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'This ticket type already has registrations or tickets. Deactivate it instead so historic records remain intact.',
+            ], 422);
+        }
+
+        $ticketType->delete();
+
+        return $this->retreatSetupResponse($event, 'Ticket type has been deleted.');
+    }
+
+    public function saveRetreatSetupRegistrationField(Request $request, string $event): JsonResponse
+    {
+        if ($response = $this->registrationManagerAccessError($request)) {
+            return $response;
+        }
+
+        $event = $this->eventFromKey($event);
+        abort_unless($event, 404);
+        abort_unless($this->isGoshenEvent($event), 404);
+
+        $data = $this->payload($request);
+        $field = $this->registrationFieldFromEvent($event, $data['id'] ?? null);
+        $fieldId = $field?->id;
+        $validator = Validator::make($data, [
+            'id' => ['nullable', 'integer'],
+            'key' => [
+                'required',
+                'string',
+                'max:80',
+                'regex:/^[a-z][a-z0-9_]*$/',
+                Rule::unique('ei_event_attendee_fields', 'key')
+                    ->where('event_id', $event->id)
+                    ->ignore($fieldId),
+            ],
+            'label' => ['required', 'string', 'max:255'],
+            'type' => ['required', Rule::in(['text', 'textarea', 'select', 'single_select', 'image_select', 'color_select'])],
+            'is_required' => ['nullable', 'boolean'],
+            'is_unique' => ['nullable', 'boolean'],
+            'sort_order' => ['nullable', 'integer', 'min:0'],
+            'options' => ['nullable', 'array'],
+            'options.*.label' => ['nullable', 'string', 'max:120'],
+            'options.*.value' => ['nullable', 'string', 'max:120'],
+            'options.*.image_path' => ['nullable', 'string', 'max:255'],
+            'options.*.color_hex' => ['nullable', 'string', 'max:20'],
+            'options.*.fee_amount' => ['nullable', 'numeric', 'min:0'],
+            'options.*.fee_label' => ['nullable', 'string', 'max:120'],
+            'options.*.sort_order' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationError($validator);
+        }
+
+        if (($data['id'] ?? null) && ! $field) {
+            return response()->json(['status' => 'error', 'message' => 'Registration field could not be found for this retreat edition.'], 404);
+        }
+
+        $validated = $validator->validated();
+        $type = $this->normalizedSetupFieldType((string) $validated['type']);
+        $options = $this->normalizedSetupFieldOptions($validated['options'] ?? []);
+        if (in_array($type, GoshenRegistrationFieldService::OPTION_FIELD_TYPES, true) && $options === []) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Add at least one option for this registration field type.',
+            ], 422);
+        }
+
+        $field ??= new EventAttendeeField(['event_id' => $event->id]);
+        $field->forceFill([
+            'event_id' => $event->id,
+            'key' => $validated['key'],
+            'label' => $validated['label'],
+            'type' => $type,
+            'is_required' => (bool) ($validated['is_required'] ?? false),
+            'is_unique' => (bool) ($validated['is_unique'] ?? false),
+            'options' => $options,
+            'sort_order' => (int) ($validated['sort_order'] ?? 0),
+        ])->save();
+
+        return $this->retreatSetupResponse($event, 'Registration field has been saved.');
+    }
+
+    public function deleteRetreatSetupRegistrationField(Request $request, string $event, int $field): JsonResponse
+    {
+        if ($response = $this->registrationManagerAccessError($request)) {
+            return $response;
+        }
+
+        $event = $this->eventFromKey($event);
+        abort_unless($event, 404);
+        abort_unless($this->isGoshenEvent($event), 404);
+
+        $field = $this->registrationFieldFromEvent($event, $field);
+        abort_unless($field, 404);
+        $field->delete();
+
+        return $this->retreatSetupResponse($event, 'Registration field has been deleted.');
     }
 
     public function accommodationManagement(Request $request, string $event): JsonResponse
@@ -665,8 +1015,7 @@ class GoshenRetreatController extends Controller
         WalletSecurityResetService $walletSecurityResets,
         GoshenReferralService $referrals,
         GoshenVoucherService $vouchers,
-    ): JsonResponse
-    {
+    ): JsonResponse {
         abort_unless($this->enabled(), 404, 'Goshen Retreat is not currently available.');
 
         $actor = $this->mobileUserFromRequest($request);
@@ -742,357 +1091,357 @@ class GoshenRetreatController extends Controller
         if ($missingProfileFields !== []) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Please complete the member profile before registering for Goshen Retreat: ' . implode(', ', $missingProfileFields) . '.',
+                'message' => 'Please complete the member profile before registering for Goshen Retreat: '.implode(', ', $missingProfileFields).'.',
                 'missing_profile_fields' => $missingProfileFields,
             ], 422);
         }
 
         try {
             return DB::transaction(function () use ($validated, $actor, $user, $ticketIssuer, $wallets, $walletSecurityResets, $referrals, $vouchers): JsonResponse {
-            $event = $this->goshenEventsQuery()
-                ->where('public_id', $validated['event_id'])
-                ->where('status', 'published')
-                ->first();
+                $event = $this->goshenEventsQuery()
+                    ->where('public_id', $validated['event_id'])
+                    ->where('status', 'published')
+                    ->first();
 
-            if (! $event) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'This Goshen Retreat edition is no longer available.',
-                ], 404);
-            }
-
-            $event->loadMissing('attendeeFields');
-            if ($event->attendeeFields->isEmpty()) {
-                app(GoshenRegistrationFieldService::class)->ensureDefaultsForEvent($event);
-                $event->unsetRelation('attendeeFields');
-                $event->load('attendeeFields');
-            }
-
-            $registrationFields = app(GoshenRegistrationFieldService::class);
-            [$attendees, $fieldErrors] = $registrationFields->normalizeSubmittedAttendees($event, $validated['attendees'] ?? []);
-
-            if ($fieldErrors !== []) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => collect($fieldErrors)->first(),
-                    'errors' => $fieldErrors,
-                ], 422);
-            }
-
-            if (! $this->registrationIsOpen($event)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => $this->registrationClosedMessage($event),
-                    'registration' => $this->registrationPayload($event),
-                ], 422);
-            }
-
-            $ticketType = EventTicketType::query()
-                ->where('event_id', $event->id)
-                ->where('public_id', $validated['ticket_type_id'])
-                ->where('is_active', true)
-                ->first();
-
-            if (! $ticketType) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Please select a valid retreat ticket type.',
-                ], 422);
-            }
-
-            $quantity = (int) $validated['quantity'];
-            if ($ticketType->max_per_booking && $quantity > (int) $ticketType->max_per_booking) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "You can only register up to {$ticketType->max_per_booking} attendee(s) for this ticket type at once.",
-                ], 422);
-            }
-
-            if ($quantity < (int) $ticketType->min_per_booking) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "Please register at least {$ticketType->min_per_booking} attendee(s) for this ticket type.",
-                ], 422);
-            }
-
-            $paymentMode = in_array(($validated['payment_mode'] ?? ''), ['wallet', 'voucher'], true)
-                ? (string) $validated['payment_mode']
-                : 'outright';
-            $isManagerAssisted = (int) $actor->id !== (int) $user->id;
-            if ($isManagerAssisted && ! in_array($paymentMode, ['voucher'], true)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Manager-assisted registrations must be completed with a voucher code.',
-                ], 422);
-            }
-
-            try {
-                $referralCode = $referrals->acceptedCodeForReferee($user, $validated['referral_code'] ?? null);
-            } catch (\RuntimeException $exception) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => $exception->getMessage(),
-                ], 422);
-            }
-
-            if (count($attendees) < $quantity) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Please complete every required attendee field for every attendee.',
-                ], 422);
-            }
-
-            $freeChurchBusInterested = collect($attendees)
-                ->contains(fn (array $attendee): bool => ($attendee['free_church_bus_interest'] ?? 'no_thanks') === 'yes');
-
-            $ticketSubtotal = (float) $ticketType->price * $quantity;
-            $selectedOptionFees = $registrationFields->selectedOptionFees($event, $attendees, (string) $ticketType->currency);
-            $optionFeeTotal = (float) ($selectedOptionFees['total'] ?? 0);
-            $subtotal = round($ticketSubtotal + $optionFeeTotal, 2);
-            $discount = $this->payInFullDiscount($event, $ticketSubtotal, (bool) ($validated['apply_pay_in_full_discount'] ?? true));
-            $total = round(max(0, $subtotal - $discount['amount']), 2);
-            $isFreeRegistration = $total <= 0;
-
-            if (! $isFreeRegistration && $paymentMode === 'voucher') {
-                $voucherCode = trim((string) ($validated['voucher_code'] ?? ''));
-                if ($voucherCode === '') {
+                if (! $event) {
                     return response()->json([
                         'status' => 'error',
-                        'message' => 'Please enter a valid voucher code to complete this registration.',
+                        'message' => 'This Goshen Retreat edition is no longer available.',
+                    ], 404);
+                }
+
+                $event->loadMissing('attendeeFields');
+                if ($event->attendeeFields->isEmpty()) {
+                    app(GoshenRegistrationFieldService::class)->ensureDefaultsForEvent($event);
+                    $event->unsetRelation('attendeeFields');
+                    $event->load('attendeeFields');
+                }
+
+                $registrationFields = app(GoshenRegistrationFieldService::class);
+                [$attendees, $fieldErrors] = $registrationFields->normalizeSubmittedAttendees($event, $validated['attendees'] ?? []);
+
+                if ($fieldErrors !== []) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => collect($fieldErrors)->first(),
+                        'errors' => $fieldErrors,
                     ], 422);
                 }
 
-                $verification = $vouchers->verify($voucherCode, $event, $total, (string) $ticketType->currency);
-                if (! ($verification['valid'] ?? false)) {
+                if (! $this->registrationIsOpen($event)) {
                     return response()->json([
                         'status' => 'error',
-                        'message' => $verification['message'] ?? 'This voucher cannot be used for this registration.',
-                        'voucher' => $verification['voucher'] ?? null,
+                        'message' => $this->registrationClosedMessage($event),
+                        'registration' => $this->registrationPayload($event),
                     ], 422);
                 }
-            }
 
-            if (! $isFreeRegistration && $paymentMode === 'wallet') {
+                $ticketType = EventTicketType::query()
+                    ->where('event_id', $event->id)
+                    ->where('public_id', $validated['ticket_type_id'])
+                    ->where('is_active', true)
+                    ->first();
+
+                if (! $ticketType) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Please select a valid retreat ticket type.',
+                    ], 422);
+                }
+
+                $quantity = (int) $validated['quantity'];
+                if ($ticketType->max_per_booking && $quantity > (int) $ticketType->max_per_booking) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => "You can only register up to {$ticketType->max_per_booking} attendee(s) for this ticket type at once.",
+                    ], 422);
+                }
+
+                if ($quantity < (int) $ticketType->min_per_booking) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => "Please register at least {$ticketType->min_per_booking} attendee(s) for this ticket type.",
+                    ], 422);
+                }
+
+                $paymentMode = in_array(($validated['payment_mode'] ?? ''), ['wallet', 'voucher'], true)
+                    ? (string) $validated['payment_mode']
+                    : 'outright';
+                $isManagerAssisted = (int) $actor->id !== (int) $user->id;
+                if ($isManagerAssisted && ! in_array($paymentMode, ['voucher'], true)) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Manager-assisted registrations must be completed with a voucher code.',
+                    ], 422);
+                }
+
                 try {
-                    $walletSecurityResets->assertWalletActionsAllowed($user);
-                } catch (\RuntimeException $exception) {
+                    $referralCode = $referrals->acceptedCodeForReferee($user, $validated['referral_code'] ?? null);
+                } catch (RuntimeException $exception) {
                     return response()->json([
                         'status' => 'error',
                         'message' => $exception->getMessage(),
-                        'wallet_security_reset' => $walletSecurityResets->statusPayload($user),
-                    ], 423);
-                }
-
-                $wallet = $wallets->walletFor($user);
-                $walletCurrency = strtoupper((string) $wallet->currency);
-                $ticketCurrency = strtoupper((string) $ticketType->currency);
-
-                if ($walletCurrency !== $ticketCurrency) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => "Your wallet is in {$wallet->currency}, but this ticket is charged in {$ticketType->currency}. Please choose card payment or use a matching wallet currency.",
                     ], 422);
                 }
 
-                if ((float) $wallet->balance + 0.01 < $total) {
+                if (count($attendees) < $quantity) {
                     return response()->json([
                         'status' => 'error',
-                        'message' => 'Your wallet balance is not enough to complete this registration. Please top up your wallet or choose card payment.',
+                        'message' => 'Please complete every required attendee field for every attendee.',
                     ], 422);
                 }
-            }
 
-            $bookingMetadata = [
-                'source' => 'flutter_mobile',
-                'payment_mode' => $paymentMode,
-                'country_of_residence' => $user->country_of_residence,
-                'state_county_province' => $user->state_county_province,
-                'free_church_bus_interest' => $freeChurchBusInterested ? 'yes' : 'no_thanks',
-                'free_church_bus_interest_at' => now()->toIso8601String(),
-                'uk_privacy_consent' => true,
-                'uk_privacy_consent_at' => now()->toIso8601String(),
-                'privacy_policy_version' => $validated['privacy_policy_version'] ?? 'uk-gdpr-2026-06',
-                'privacy_jurisdiction' => 'UK',
-                'pay_in_full_discount' => $discount,
-                'ticket_subtotal' => round($ticketSubtotal, 2),
-                'selected_option_fees' => $selectedOptionFees['items'] ?? [],
-                'selected_option_fee_total' => $optionFeeTotal,
-                'registered_by_mobile_user_id' => $actor->id,
-                'manager_assisted' => $isManagerAssisted,
-            ];
+                $freeChurchBusInterested = collect($attendees)
+                    ->contains(fn (array $attendee): bool => ($attendee['free_church_bus_interest'] ?? 'no_thanks') === 'yes');
 
-            if ($referralCode) {
-                $bookingMetadata = array_merge($bookingMetadata, [
-                    'referral_code' => $referralCode->code,
-                    'referral_code_id' => $referralCode->id,
-                    'referrer_mobile_user_id' => $referralCode->mobile_user_id,
-                    'referral_status' => 'accepted_pending_payment',
-                ]);
-            }
+                $ticketSubtotal = (float) $ticketType->price * $quantity;
+                $selectedOptionFees = $registrationFields->selectedOptionFees($event, $attendees, (string) $ticketType->currency);
+                $optionFeeTotal = (float) ($selectedOptionFees['total'] ?? 0);
+                $subtotal = round($ticketSubtotal + $optionFeeTotal, 2);
+                $discount = $this->payInFullDiscount($event, $ticketSubtotal, (bool) ($validated['apply_pay_in_full_discount'] ?? true));
+                $total = round(max(0, $subtotal - $discount['amount']), 2);
+                $isFreeRegistration = $total <= 0;
 
-            $booking = Booking::query()->create([
-                'event_id' => $event->id,
-                'payment_plan_id' => null,
-                'customer_id' => $user->id,
-                'customer_name' => $user->name,
-                'customer_email' => $user->email,
-                'customer_phone' => $user->phone,
-                'currency' => $ticketType->currency,
-                'subtotal' => $subtotal,
-                'total' => $total,
-                'paid_total' => 0,
-                'status' => $isFreeRegistration ? BookingStatus::Paid : BookingStatus::Pending,
-                'payment_expires_at' => $isFreeRegistration ? null : now()->addDay(),
-                'metadata' => $bookingMetadata,
-            ]);
+                if (! $isFreeRegistration && $paymentMode === 'voucher') {
+                    $voucherCode = trim((string) ($validated['voucher_code'] ?? ''));
+                    if ($voucherCode === '') {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Please enter a valid voucher code to complete this registration.',
+                        ], 422);
+                    }
 
-            BookingLine::query()->create([
-                'booking_id' => $booking->id,
-                'ticket_type_id' => $ticketType->id,
-                'quantity' => $quantity,
-                'currency' => $booking->currency,
-                'unit_price' => $ticketType->price,
-                'line_total' => $ticketSubtotal,
-                'metadata' => ($discount['amount'] > 0 || $optionFeeTotal > 0) ? [
-                    'discount_amount' => $discount['amount'],
-                    'payable_total' => $total,
+                    $verification = $vouchers->verify($voucherCode, $event, $total, (string) $ticketType->currency);
+                    if (! ($verification['valid'] ?? false)) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => $verification['message'] ?? 'This voucher cannot be used for this registration.',
+                            'voucher' => $verification['voucher'] ?? null,
+                        ], 422);
+                    }
+                }
+
+                if (! $isFreeRegistration && $paymentMode === 'wallet') {
+                    try {
+                        $walletSecurityResets->assertWalletActionsAllowed($user);
+                    } catch (RuntimeException $exception) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => $exception->getMessage(),
+                            'wallet_security_reset' => $walletSecurityResets->statusPayload($user),
+                        ], 423);
+                    }
+
+                    $wallet = $wallets->walletFor($user);
+                    $walletCurrency = strtoupper((string) $wallet->currency);
+                    $ticketCurrency = strtoupper((string) $ticketType->currency);
+
+                    if ($walletCurrency !== $ticketCurrency) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => "Your wallet is in {$wallet->currency}, but this ticket is charged in {$ticketType->currency}. Please choose card payment or use a matching wallet currency.",
+                        ], 422);
+                    }
+
+                    if ((float) $wallet->balance + 0.01 < $total) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Your wallet balance is not enough to complete this registration. Please top up your wallet or choose card payment.',
+                        ], 422);
+                    }
+                }
+
+                $bookingMetadata = [
+                    'source' => 'flutter_mobile',
+                    'payment_mode' => $paymentMode,
+                    'country_of_residence' => $user->country_of_residence,
+                    'state_county_province' => $user->state_county_province,
+                    'free_church_bus_interest' => $freeChurchBusInterested ? 'yes' : 'no_thanks',
+                    'free_church_bus_interest_at' => now()->toIso8601String(),
+                    'uk_privacy_consent' => true,
+                    'uk_privacy_consent_at' => now()->toIso8601String(),
+                    'privacy_policy_version' => $validated['privacy_policy_version'] ?? 'uk-gdpr-2026-06',
+                    'privacy_jurisdiction' => 'UK',
+                    'pay_in_full_discount' => $discount,
+                    'ticket_subtotal' => round($ticketSubtotal, 2),
                     'selected_option_fees' => $selectedOptionFees['items'] ?? [],
                     'selected_option_fee_total' => $optionFeeTotal,
-                ] : null,
-            ]);
+                    'registered_by_mobile_user_id' => $actor->id,
+                    'manager_assisted' => $isManagerAssisted,
+                ];
 
-            for ($index = 0; $index < $quantity; $index++) {
-                $attendee = $attendees[$index] ?? $attendees[0];
-                $customFields = is_array($attendee['_registration_custom_fields'] ?? null)
-                    ? $attendee['_registration_custom_fields']
-                    : [];
-                Attendee::query()->create([
+                if ($referralCode) {
+                    $bookingMetadata = array_merge($bookingMetadata, [
+                        'referral_code' => $referralCode->code,
+                        'referral_code_id' => $referralCode->id,
+                        'referrer_mobile_user_id' => $referralCode->mobile_user_id,
+                        'referral_status' => 'accepted_pending_payment',
+                    ]);
+                }
+
+                $booking = Booking::query()->create([
+                    'event_id' => $event->id,
+                    'payment_plan_id' => null,
+                    'customer_id' => $user->id,
+                    'customer_name' => $user->name,
+                    'customer_email' => $user->email,
+                    'customer_phone' => $user->phone,
+                    'currency' => $ticketType->currency,
+                    'subtotal' => $subtotal,
+                    'total' => $total,
+                    'paid_total' => 0,
+                    'status' => $isFreeRegistration ? BookingStatus::Paid : BookingStatus::Pending,
+                    'payment_expires_at' => $isFreeRegistration ? null : now()->addDay(),
+                    'metadata' => $bookingMetadata,
+                ]);
+
+                BookingLine::query()->create([
                     'booking_id' => $booking->id,
                     'ticket_type_id' => $ticketType->id,
-                    'first_name' => $attendee['first_name'] ?? null,
-                    'last_name' => $attendee['last_name'] ?? null,
-                    'email' => $attendee['email'] ?? $user->email,
-                    'phone' => $attendee['phone'] ?? $user->phone,
-                    'company' => $attendee['company'] ?? null,
-                    'designation' => $attendee['designation'] ?? null,
-                    'custom_fields' => array_merge([
-                        'source' => 'flutter_mobile',
-                        'attendee_index' => $index + 1,
-                    ], $customFields),
-                ]);
-            }
-
-            if (! $isFreeRegistration) {
-                $installment = PaymentInstallment::query()->create([
-                    'booking_id' => $booking->id,
-                    'sequence' => 1,
+                    'quantity' => $quantity,
                     'currency' => $booking->currency,
-                    'amount' => $total,
-                    'paid_amount' => 0,
-                    'due_on' => now()->toDateString(),
-                    'status' => InstallmentStatus::Pending,
-                    'metadata' => [
-                        'payment_mode' => $paymentMode,
-                        'label' => $optionFeeTotal > 0
-                            ? 'Full ticket and selected option payment'
-                            : ($discount['amount'] > 0 ? 'Full ticket payment after discount' : 'Full ticket payment'),
+                    'unit_price' => $ticketType->price,
+                    'line_total' => $ticketSubtotal,
+                    'metadata' => ($discount['amount'] > 0 || $optionFeeTotal > 0) ? [
                         'discount_amount' => $discount['amount'],
+                        'payable_total' => $total,
+                        'selected_option_fees' => $selectedOptionFees['items'] ?? [],
                         'selected_option_fee_total' => $optionFeeTotal,
-                    ],
+                    ] : null,
                 ]);
-            }
 
-            if (! $isFreeRegistration && $paymentMode === 'wallet') {
-                $wallet = $wallets->walletFor($user);
-                $wallet = \App\Models\GoshenWallet::query()->whereKey($wallet->id)->lockForUpdate()->firstOrFail();
-
-                if (strtoupper((string) $wallet->currency) !== strtoupper((string) $booking->currency)) {
-                    throw new \RuntimeException('Your wallet currency does not match this registration.');
-                }
-
-                if ((float) $wallet->balance + 0.01 < $total) {
-                    throw new \RuntimeException('Your wallet balance is not enough to complete this registration.');
-                }
-
-                $reference = 'gw_retreat_' . Str::ulid();
-                $wallet->forceFill([
-                    'balance' => round(((float) $wallet->balance) - $total, 2),
-                ])->save();
-
-                $wallet->ledgerEntries()->create([
-                    'type' => 'retreat_payment',
-                    'status' => 'paid',
-                    'currency' => $booking->currency,
-                    'amount' => $total,
-                    'gateway' => 'wallet',
-                    'provider_reference' => $reference,
-                    'metadata' => [
+                for ($index = 0; $index < $quantity; $index++) {
+                    $attendee = $attendees[$index] ?? $attendees[0];
+                    $customFields = is_array($attendee['_registration_custom_fields'] ?? null)
+                        ? $attendee['_registration_custom_fields']
+                        : [];
+                    Attendee::query()->create([
                         'booking_id' => $booking->id,
-                        'booking_public_id' => $booking->public_id,
-                        'event_name' => $booking->event?->name,
-                    ],
-                    'settled_at' => now(),
+                        'ticket_type_id' => $ticketType->id,
+                        'first_name' => $attendee['first_name'] ?? null,
+                        'last_name' => $attendee['last_name'] ?? null,
+                        'email' => $attendee['email'] ?? $user->email,
+                        'phone' => $attendee['phone'] ?? $user->phone,
+                        'company' => $attendee['company'] ?? null,
+                        'designation' => $attendee['designation'] ?? null,
+                        'custom_fields' => array_merge([
+                            'source' => 'flutter_mobile',
+                            'attendee_index' => $index + 1,
+                        ], $customFields),
+                    ]);
+                }
+
+                if (! $isFreeRegistration) {
+                    $installment = PaymentInstallment::query()->create([
+                        'booking_id' => $booking->id,
+                        'sequence' => 1,
+                        'currency' => $booking->currency,
+                        'amount' => $total,
+                        'paid_amount' => 0,
+                        'due_on' => now()->toDateString(),
+                        'status' => InstallmentStatus::Pending,
+                        'metadata' => [
+                            'payment_mode' => $paymentMode,
+                            'label' => $optionFeeTotal > 0
+                                ? 'Full ticket and selected option payment'
+                                : ($discount['amount'] > 0 ? 'Full ticket payment after discount' : 'Full ticket payment'),
+                            'discount_amount' => $discount['amount'],
+                            'selected_option_fee_total' => $optionFeeTotal,
+                        ],
+                    ]);
+                }
+
+                if (! $isFreeRegistration && $paymentMode === 'wallet') {
+                    $wallet = $wallets->walletFor($user);
+                    $wallet = GoshenWallet::query()->whereKey($wallet->id)->lockForUpdate()->firstOrFail();
+
+                    if (strtoupper((string) $wallet->currency) !== strtoupper((string) $booking->currency)) {
+                        throw new RuntimeException('Your wallet currency does not match this registration.');
+                    }
+
+                    if ((float) $wallet->balance + 0.01 < $total) {
+                        throw new RuntimeException('Your wallet balance is not enough to complete this registration.');
+                    }
+
+                    $reference = 'gw_retreat_'.Str::ulid();
+                    $wallet->forceFill([
+                        'balance' => round(((float) $wallet->balance) - $total, 2),
+                    ])->save();
+
+                    $wallet->ledgerEntries()->create([
+                        'type' => 'retreat_payment',
+                        'status' => 'paid',
+                        'currency' => $booking->currency,
+                        'amount' => $total,
+                        'gateway' => 'wallet',
+                        'provider_reference' => $reference,
+                        'metadata' => [
+                            'booking_id' => $booking->id,
+                            'booking_public_id' => $booking->public_id,
+                            'event_name' => $booking->event?->name,
+                        ],
+                        'settled_at' => now(),
+                    ]);
+
+                    $installment->forceFill([
+                        'paid_amount' => (float) $installment->amount,
+                        'paid_at' => now(),
+                        'status' => InstallmentStatus::Paid,
+                        'metadata' => array_merge($installment->metadata ?? [], [
+                            'payment_mode' => 'wallet',
+                            'label' => 'Full ticket payment',
+                            'wallet_reference' => $reference,
+                        ]),
+                    ])->save();
+
+                    PaymentTransaction::query()->create([
+                        'booking_id' => $booking->id,
+                        'installment_id' => $installment->id,
+                        'gateway' => 'wallet',
+                        'provider_reference' => $reference,
+                        'currency' => $booking->currency,
+                        'amount' => $total,
+                        'status' => 'paid',
+                        'paid_at' => now(),
+                        'payload' => [
+                            'source' => 'goshen_wallet',
+                            'wallet_id' => $wallet->id,
+                            'ledger_reference' => $reference,
+                        ],
+                    ]);
+
+                    $booking->forceFill([
+                        'paid_total' => $total,
+                        'status' => BookingStatus::Paid,
+                        'payment_expires_at' => null,
+                        'metadata' => array_merge($booking->metadata ?? [], ['paid_from_wallet' => true]),
+                    ])->save();
+
+                    $ticketIssuer->issueForBooking($booking->refresh());
+                    $referrals->createPendingAwardForPaidBooking($booking->refresh());
+                } elseif (! $isFreeRegistration && $paymentMode === 'voucher') {
+                    $vouchers->redeemForBooking(
+                        $booking,
+                        $installment,
+                        (string) $validated['voucher_code'],
+                        $user,
+                        $actor,
+                        $isManagerAssisted ? 'control_hub_registration' : 'mobile_registration',
+                    );
+                } elseif ($isFreeRegistration) {
+                    $ticketIssuer->issueForBooking($booking->refresh());
+                    $referrals->createPendingAwardForPaidBooking($booking->refresh());
+                }
+
+                $booking = $booking->fresh(['event', 'lines.ticketType', 'attendees', 'installments', 'tickets.event', 'tickets.booking', 'tickets.attendee', 'tickets.ticketType']) ?? $booking;
+
+                return response()->json([
+                    'status' => 'ok',
+                    'message' => $isFreeRegistration || in_array($paymentMode, ['wallet', 'voucher'], true)
+                        ? 'Your Goshen Retreat registration is confirmed. Your ticket is ready.'
+                        : 'Your Goshen Retreat registration has been started. Please continue to payment when ready.',
+                    'booking' => $this->bookingPayload($booking),
                 ]);
-
-                $installment->forceFill([
-                    'paid_amount' => (float) $installment->amount,
-                    'paid_at' => now(),
-                    'status' => InstallmentStatus::Paid,
-                    'metadata' => array_merge($installment->metadata ?? [], [
-                        'payment_mode' => 'wallet',
-                        'label' => 'Full ticket payment',
-                        'wallet_reference' => $reference,
-                    ]),
-                ])->save();
-
-                PaymentTransaction::query()->create([
-                    'booking_id' => $booking->id,
-                    'installment_id' => $installment->id,
-                    'gateway' => 'wallet',
-                    'provider_reference' => $reference,
-                    'currency' => $booking->currency,
-                    'amount' => $total,
-                    'status' => 'paid',
-                    'paid_at' => now(),
-                    'payload' => [
-                        'source' => 'goshen_wallet',
-                        'wallet_id' => $wallet->id,
-                        'ledger_reference' => $reference,
-                    ],
-                ]);
-
-                $booking->forceFill([
-                    'paid_total' => $total,
-                    'status' => BookingStatus::Paid,
-                    'payment_expires_at' => null,
-                    'metadata' => array_merge($booking->metadata ?? [], ['paid_from_wallet' => true]),
-                ])->save();
-
-                $ticketIssuer->issueForBooking($booking->refresh());
-                $referrals->createPendingAwardForPaidBooking($booking->refresh());
-            } elseif (! $isFreeRegistration && $paymentMode === 'voucher') {
-                $vouchers->redeemForBooking(
-                    $booking,
-                    $installment,
-                    (string) $validated['voucher_code'],
-                    $user,
-                    $actor,
-                    $isManagerAssisted ? 'control_hub_registration' : 'mobile_registration',
-                );
-            } elseif ($isFreeRegistration) {
-                $ticketIssuer->issueForBooking($booking->refresh());
-                $referrals->createPendingAwardForPaidBooking($booking->refresh());
-            }
-
-            $booking = $booking->fresh(['event', 'lines.ticketType', 'attendees', 'installments', 'tickets.event', 'tickets.booking', 'tickets.attendee', 'tickets.ticketType']) ?? $booking;
-
-            return response()->json([
-                'status' => 'ok',
-                'message' => $isFreeRegistration || in_array($paymentMode, ['wallet', 'voucher'], true)
-                    ? 'Your Goshen Retreat registration is confirmed. Your ticket is ready.'
-                    : 'Your Goshen Retreat registration has been started. Please continue to payment when ready.',
-                'booking' => $this->bookingPayload($booking),
-            ]);
             });
         } catch (RuntimeException $exception) {
             if (($validated['payment_mode'] ?? null) === 'voucher') {
@@ -1211,7 +1560,7 @@ class GoshenRetreatController extends Controller
         }
 
         $validated = $validator->validated();
-        $name = trim($validated['first_name'] . ' ' . $validated['last_name']);
+        $name = trim($validated['first_name'].' '.$validated['last_name']);
         $member = MobileUser::query()->create([
             'name' => $name,
             'title' => $validated['title'],
@@ -1271,7 +1620,7 @@ class GoshenRetreatController extends Controller
 
         try {
             $walletSecurityResets->assertWalletActionsAllowed($user);
-        } catch (\RuntimeException $exception) {
+        } catch (RuntimeException $exception) {
             return response()->json([
                 'status' => 'error',
                 'message' => $exception->getMessage(),
@@ -1384,7 +1733,7 @@ class GoshenRetreatController extends Controller
 
         try {
             $walletSecurityResets->assertWalletActionsAllowed($user);
-        } catch (\RuntimeException $exception) {
+        } catch (RuntimeException $exception) {
             return response()->json([
                 'status' => 'error',
                 'message' => $exception->getMessage(),
@@ -1409,12 +1758,12 @@ class GoshenRetreatController extends Controller
                     ->firstOrFail();
 
                 if (! $booking->event || ! $this->isGoshenEvent($booking->event)) {
-                    throw new \RuntimeException('This payment does not belong to a Goshen Retreat registration.');
+                    throw new RuntimeException('This payment does not belong to a Goshen Retreat registration.');
                 }
 
                 $status = $booking->status?->value ?? (string) $booking->status;
                 if (in_array($status, [BookingStatus::Paid->value, BookingStatus::Cancelled->value, BookingStatus::Refunded->value], true)) {
-                    throw new \RuntimeException('This registration is not open for wallet payment.');
+                    throw new RuntimeException('This registration is not open for wallet payment.');
                 }
 
                 $total = (float) $booking->total;
@@ -1434,17 +1783,17 @@ class GoshenRetreatController extends Controller
                 }
 
                 $wallet = $wallets->walletFor($user);
-                $wallet = \App\Models\GoshenWallet::query()->whereKey($wallet->id)->lockForUpdate()->firstOrFail();
+                $wallet = GoshenWallet::query()->whereKey($wallet->id)->lockForUpdate()->firstOrFail();
 
                 if (strtoupper((string) $wallet->currency) !== strtoupper((string) $booking->currency)) {
-                    throw new \RuntimeException('Your wallet currency does not match this registration.');
+                    throw new RuntimeException('Your wallet currency does not match this registration.');
                 }
 
                 if ((float) $wallet->balance + 0.01 < $amountDue) {
-                    throw new \RuntimeException('Your wallet balance is not enough to complete this registration.');
+                    throw new RuntimeException('Your wallet balance is not enough to complete this registration.');
                 }
 
-                $reference = 'gw_retreat_' . Str::ulid();
+                $reference = 'gw_retreat_'.Str::ulid();
                 $wallet->forceFill([
                     'balance' => round(((float) $wallet->balance) - $amountDue, 2),
                 ])->save();
@@ -1782,7 +2131,7 @@ class GoshenRetreatController extends Controller
 
         return response()->json([
             'status' => 'ok',
-            'message' => count($created) . ' voucher code(s) generated.',
+            'message' => count($created).' voucher code(s) generated.',
             'data' => collect($created)
                 ->map(fn (array $item): array => [
                     'code' => $item['code'],
@@ -2186,7 +2535,7 @@ class GoshenRetreatController extends Controller
                 'status' => 'error',
                 'message' => $this->scannerTicketNotFoundMessage(),
             ], 404);
-        } catch (\RuntimeException $exception) {
+        } catch (RuntimeException $exception) {
             return $this->scannerJson([
                 'status' => 'error',
                 'message' => $this->scannerRuntimeMessage($exception),
@@ -2233,7 +2582,7 @@ class GoshenRetreatController extends Controller
                 'status' => 'error',
                 'message' => $this->scannerTicketNotFoundMessage(),
             ], 404);
-        } catch (\RuntimeException $exception) {
+        } catch (RuntimeException $exception) {
             return $this->scannerJson([
                 'status' => 'error',
                 'message' => $this->scannerRuntimeMessage($exception),
@@ -2341,6 +2690,7 @@ class GoshenRetreatController extends Controller
         foreach ($items as $index => $item) {
             if (! is_array($item)) {
                 $results[] = $this->scannerSyncResult($index, null, 'rejected', 'Invalid offline check-in item.');
+
                 continue;
             }
 
@@ -2353,6 +2703,7 @@ class GoshenRetreatController extends Controller
 
             if (! $identifier) {
                 $results[] = $this->scannerSyncResult($index, $localId, 'rejected', 'Missing ticket identifier.');
+
                 continue;
             }
 
@@ -2361,11 +2712,13 @@ class GoshenRetreatController extends Controller
                     ->load(['event.schedules', 'booking', 'attendee', 'ticketType', 'checkIns']);
             } catch (ModelNotFoundException) {
                 $results[] = $this->scannerSyncResult($index, $localId, 'rejected', 'Ticket was not found.');
+
                 continue;
             }
 
             if (! $this->ticketBelongsToPublishedGoshenEvent($ticket)) {
                 $results[] = $this->scannerSyncResult($index, $localId, 'rejected', 'Ticket was not found.');
+
                 continue;
             }
 
@@ -2378,6 +2731,7 @@ class GoshenRetreatController extends Controller
                     'Ticket is not eligible for check-in.',
                     $ticket,
                 );
+
                 continue;
             }
 
@@ -2406,6 +2760,7 @@ class GoshenRetreatController extends Controller
                     $ticket->refresh()->load(['event.schedules', 'booking', 'attendee', 'ticketType', 'checkIns']),
                     duplicate: true,
                 );
+
                 continue;
             }
 
@@ -2556,11 +2911,29 @@ class GoshenRetreatController extends Controller
         ]);
     }
 
-    private function eventPayload(Event $event): array
+    private function retreatSetupResponse(Event $event, string $message): JsonResponse
+    {
+        return response()->json([
+            'status' => 'ok',
+            'message' => $message,
+            'data' => [
+                'event' => $this->eventPayload(
+                    $event->fresh(['schedules', 'ticketTypes', 'paymentPlans', 'attendeeFields']),
+                    true,
+                ),
+            ],
+        ]);
+    }
+
+    private function eventPayload(Event $event, bool $forManagement = false): array
     {
         $settings = is_array($event->settings) ? $event->settings : [];
         $featureImagePath = $this->featureImagePath($settings);
         $registrationFields = $this->registrationFieldPayload($event);
+        $ticketTypes = $event->ticketTypes;
+        if (! $forManagement) {
+            $ticketTypes = $ticketTypes->where('is_active', true);
+        }
 
         return [
             'id' => $event->id,
@@ -2593,16 +2966,18 @@ class GoshenRetreatController extends Controller
             'attendee_fields' => $registrationFields,
             'pay_in_full_discount' => $this->discountPayload($event),
             'schedules' => $this->schedulePayload($event),
-            'ticket_types' => $event->ticketTypes
-                ->where('is_active', true)
+            'ticket_types' => $ticketTypes
                 ->map(fn ($ticketType): array => [
+                    'id' => $ticketType->id,
                     'public_id' => $ticketType->public_id,
                     'name' => $ticketType->name,
+                    'sku' => $ticketType->sku,
                     'currency' => $ticketType->currency,
                     'price' => (float) $ticketType->price,
                     'capacity' => $ticketType->capacity,
                     'min_per_booking' => $ticketType->min_per_booking,
                     'max_per_booking' => $ticketType->max_per_booking,
+                    'is_active' => (bool) $ticketType->is_active,
                 ])
                 ->values(),
             'payment_plans' => [],
@@ -2659,7 +3034,7 @@ class GoshenRetreatController extends Controller
             return null;
         }
 
-        return ($hasLeadingPlus ? '+' : '') . $digits;
+        return ($hasLeadingPlus ? '+' : '').$digits;
     }
 
     private function pastVideoPayload(array $settings): array
@@ -3198,7 +3573,7 @@ class GoshenRetreatController extends Controller
 
                     return [
                         'public_id' => $attendee->public_id,
-                        'name' => trim(($attendee->first_name ?? '') . ' ' . ($attendee->last_name ?? '')),
+                        'name' => trim(($attendee->first_name ?? '').' '.($attendee->last_name ?? '')),
                         'email' => $attendee->email,
                         'phone' => $attendee->phone,
                         'company' => $attendee->company,
@@ -3243,7 +3618,7 @@ class GoshenRetreatController extends Controller
             return 'Full payment';
         }
 
-        return 'Installment ' . (int) $installment->sequence;
+        return 'Installment '.(int) $installment->sequence;
     }
 
     private function paymentTransactionPayload(PaymentTransaction $transaction): array
@@ -3289,7 +3664,7 @@ class GoshenRetreatController extends Controller
 
         try {
             return Carbon::parse((string) $value)->toIso8601String();
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return null;
         }
     }
@@ -3306,7 +3681,7 @@ class GoshenRetreatController extends Controller
 
         try {
             return Carbon::parse((string) $value)->toDateString();
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return null;
         }
     }
@@ -3373,13 +3748,13 @@ class GoshenRetreatController extends Controller
             'last_checked_in_at' => $this->isoTimestamp($lastCheckIn?->checked_in_at),
             'event_name' => $ticket->event?->name,
             'ticket_type' => $ticket->ticketType?->name,
-            'attendee_name' => trim(($ticket->attendee?->first_name ?? '') . ' ' . ($ticket->attendee?->last_name ?? '')),
+            'attendee_name' => trim(($ticket->attendee?->first_name ?? '').' '.($ticket->attendee?->last_name ?? '')),
             'qr_payload' => $payload,
             'qr_encoded' => $encoded,
             'document_urls' => $ticket->public_id ? [
-                'pdf' => '/api/goshen-retreat/tickets/' . rawurlencode($ticket->public_id) . '/documents/pdf',
-                'ics' => '/api/goshen-retreat/tickets/' . rawurlencode($ticket->public_id) . '/documents/ics',
-                'qr' => '/api/goshen-retreat/tickets/' . rawurlencode($ticket->public_id) . '/qr.svg',
+                'pdf' => '/api/goshen-retreat/tickets/'.rawurlencode($ticket->public_id).'/documents/pdf',
+                'ics' => '/api/goshen-retreat/tickets/'.rawurlencode($ticket->public_id).'/documents/ics',
+                'qr' => '/api/goshen-retreat/tickets/'.rawurlencode($ticket->public_id).'/qr.svg',
             ] : [],
         ];
     }
@@ -3404,7 +3779,7 @@ class GoshenRetreatController extends Controller
 
         $number = $ticket->formatted_number ?: $ticket->ticket_number ?: $ticket->public_id;
 
-        return 'goshen-retreat-ticket-' . $number . '.' . $extension;
+        return 'goshen-retreat-ticket-'.$number.'.'.$extension;
     }
 
     private function accommodationAllocationPayload(GoshenAccommodationAllocation $allocation): array
@@ -3420,7 +3795,7 @@ class GoshenRetreatController extends Controller
             ],
             'attendee' => [
                 'public_id' => $allocation->attendee?->public_id,
-                'name' => trim(($allocation->attendee?->first_name ?? '') . ' ' . ($allocation->attendee?->last_name ?? '')),
+                'name' => trim(($allocation->attendee?->first_name ?? '').' '.($allocation->attendee?->last_name ?? '')),
             ],
             'ticket_number' => $allocation->ticket?->formatted_number ?: $allocation->ticket?->ticket_number,
             'building' => $allocation->building,
@@ -3470,7 +3845,7 @@ class GoshenRetreatController extends Controller
         return [
             'id' => $attendee->id,
             'public_id' => $attendee->public_id,
-            'name' => trim(($attendee->first_name ?? '') . ' ' . ($attendee->last_name ?? '')),
+            'name' => trim(($attendee->first_name ?? '').' '.($attendee->last_name ?? '')),
             'email' => $attendee->email,
             'phone' => $attendee->phone,
             'company' => $attendee->company,
@@ -3538,7 +3913,7 @@ class GoshenRetreatController extends Controller
                 $label = trim((string) ($value['label'] ?? $value['key'] ?? $value['name'] ?? $key));
                 $detail = $value['value'] ?? $value['text'] ?? $value['detail'] ?? null;
             } else {
-                $label = is_string($key) ? trim($key) : 'Detail ' . ((int) $key + 1);
+                $label = is_string($key) ? trim($key) : 'Detail '.((int) $key + 1);
                 $detail = $value;
             }
 
@@ -3573,14 +3948,14 @@ class GoshenRetreatController extends Controller
                         ->sortBy(['day_number', 'starts_at'])
                         ->map(fn ($schedule): array => [
                             'day_number' => $schedule->day_number,
-                            'title' => data_get($schedule->metadata, 'title') ?: 'Day ' . $schedule->day_number,
+                            'title' => data_get($schedule->metadata, 'title') ?: 'Day '.$schedule->day_number,
                             'starts_at' => $this->isoTimestamp($schedule->starts_at),
                         ])
                         ->values()
                     : [],
             ],
             'ticket_type' => $ticket->ticketType?->name,
-            'attendee_name' => trim(($ticket->attendee?->first_name ?? '') . ' ' . ($ticket->attendee?->last_name ?? '')),
+            'attendee_name' => trim(($ticket->attendee?->first_name ?? '').' '.($ticket->attendee?->last_name ?? '')),
             'booking_status' => $ticket->booking?->status?->value ?? $ticket->booking?->status,
             'checked_in_days' => $ticket->checkIns
                 ->where('status', TicketStatus::CheckedIn)
@@ -3604,7 +3979,7 @@ class GoshenRetreatController extends Controller
                     ->sortBy(['day_number', 'starts_at'])
                     ->map(fn ($schedule): array => [
                         'day_number' => $schedule->day_number,
-                        'title' => data_get($schedule->metadata, 'title') ?: 'Day ' . $schedule->day_number,
+                        'title' => data_get($schedule->metadata, 'title') ?: 'Day '.$schedule->day_number,
                         'starts_at' => $this->isoTimestamp($schedule->starts_at),
                     ])
                     ->values()
@@ -3634,8 +4009,8 @@ class GoshenRetreatController extends Controller
     {
         $term = trim($term);
         $digits = preg_replace('/\D+/', '', $term) ?: $term;
-        $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $term) . '%';
-        $digitsLike = '%' . str_replace(['%', '_'], ['\%', '\_'], $digits) . '%';
+        $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $term).'%';
+        $digitsLike = '%'.str_replace(['%', '_'], ['\%', '\_'], $digits).'%';
         $nameParts = collect(preg_split('/\s+/', $term) ?: [])
             ->map(fn (string $part): string => trim($part))
             ->filter()
@@ -3663,7 +4038,7 @@ class GoshenRetreatController extends Controller
                         ->orWhere('last_name', 'like', $like)
                         ->orWhere(function ($fullNameQuery) use ($nameParts): void {
                             foreach ($nameParts as $part) {
-                                $partLike = '%' . str_replace(['%', '_'], ['\%', '\_'], $part) . '%';
+                                $partLike = '%'.str_replace(['%', '_'], ['\%', '\_'], $part).'%';
 
                                 $fullNameQuery->where(function ($nameQuery) use ($partLike): void {
                                     $nameQuery
@@ -3690,7 +4065,7 @@ class GoshenRetreatController extends Controller
         return 'We could not find a Goshen Retreat ticket with that number. Please check the last four digits, enter the full ticket number, or scan the QR code again.';
     }
 
-    private function scannerRuntimeMessage(\RuntimeException $exception): string
+    private function scannerRuntimeMessage(RuntimeException $exception): string
     {
         if ($this->isScannerModelLookupLeak($exception)) {
             return $this->scannerTicketNotFoundMessage();
@@ -3699,12 +4074,12 @@ class GoshenRetreatController extends Controller
         return $exception->getMessage();
     }
 
-    private function scannerRuntimeStatus(\RuntimeException $exception): int
+    private function scannerRuntimeStatus(RuntimeException $exception): int
     {
         return $this->isScannerModelLookupLeak($exception) ? 404 : 422;
     }
 
-    private function isScannerModelLookupLeak(\RuntimeException $exception): bool
+    private function isScannerModelLookupLeak(RuntimeException $exception): bool
     {
         return str_contains($exception->getMessage(), 'No query results for model')
             || str_contains($exception->getMessage(), Ticket::class);
@@ -3990,8 +4365,8 @@ class GoshenRetreatController extends Controller
             return false;
         }
 
-        if (interface_exists(\Sunny\Fundraising\Contracts\PermissionResolverContract::class)
-            && app(\Sunny\Fundraising\Contracts\PermissionResolverContract::class)->canManage($user)) {
+        if (interface_exists(PermissionResolverContract::class)
+            && app(PermissionResolverContract::class)->canManage($user)) {
             return true;
         }
 
@@ -4094,7 +4469,7 @@ class GoshenRetreatController extends Controller
             }
 
             if ($tickets->count() > 1) {
-                throw new \RuntimeException('More than one ticket matches those last four digits. Please scan the QR code or enter the full ticket number.');
+                throw new RuntimeException('More than one ticket matches those last four digits. Please scan the QR code or enter the full ticket number.');
             }
 
             throw $exception;
@@ -4287,6 +4662,123 @@ class GoshenRetreatController extends Controller
             'profile_missing_fields' => $missing,
             'profile_needs_update' => $missing !== [],
         ];
+    }
+
+    private function validationError(\Illuminate\Contracts\Validation\Validator $validator): JsonResponse
+    {
+        return response()->json([
+            'status' => 'error',
+            'message' => $validator->errors()->first(),
+            'errors' => $validator->errors(),
+        ], 422);
+    }
+
+    private function nullableCarbon(mixed $value): ?Carbon
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        return Carbon::parse((string) $value);
+    }
+
+    private function nullableIsoTimestamp(mixed $value): ?string
+    {
+        return $this->nullableCarbon($value)?->toIso8601String();
+    }
+
+    private function scheduleFromEvent(Event $event, mixed $key): ?EventSchedule
+    {
+        if (blank($key)) {
+            return null;
+        }
+
+        return $event->schedules()
+            ->whereKey((int) $key)
+            ->first();
+    }
+
+    private function ticketTypeFromEvent(Event $event, mixed $key): ?EventTicketType
+    {
+        $key = trim((string) $key);
+        if ($key === '') {
+            return null;
+        }
+
+        return $event->ticketTypes()
+            ->where(function ($query) use ($key): void {
+                $query->where('public_id', $key);
+
+                if (ctype_digit($key)) {
+                    $query->orWhere('id', (int) $key);
+                }
+            })
+            ->first();
+    }
+
+    private function registrationFieldFromEvent(Event $event, mixed $key): ?EventAttendeeField
+    {
+        if (blank($key)) {
+            return null;
+        }
+
+        return $event->attendeeFields()
+            ->whereKey((int) $key)
+            ->first();
+    }
+
+    private function normalizedSetupFieldType(string $type): string
+    {
+        return match (strtolower(trim($type))) {
+            'single_select' => 'select',
+            'image_option', 'image' => 'image_select',
+            'color', 'colour', 'colour_select' => 'color_select',
+            'textarea' => 'textarea',
+            default => in_array(strtolower(trim($type)), ['text', 'select', 'image_select', 'color_select'], true)
+                ? strtolower(trim($type))
+                : 'text',
+        };
+    }
+
+    private function normalizedSetupFieldOptions(array $options): array
+    {
+        return collect($options)
+            ->filter(fn (mixed $option): bool => is_array($option))
+            ->map(function (array $option, int $index): ?array {
+                $label = trim((string) ($option['label'] ?? ''));
+                $value = array_key_exists('value', $option)
+                    ? trim((string) $option['value'])
+                    : '';
+
+                if ($label === '' && $value === '') {
+                    return null;
+                }
+
+                if ($value === '' && strcasecmp($label, 'Please Select') !== 0) {
+                    $value = Str::slug($label, '_');
+                }
+
+                $colorHex = trim((string) ($option['color_hex'] ?? $option['colour_hex'] ?? $option['color'] ?? ''));
+                if ($colorHex !== '' && ! str_starts_with($colorHex, '#')) {
+                    $colorHex = '#'.$colorHex;
+                }
+
+                $payload = [
+                    'label' => $label !== '' ? $label : Str::of($value)->replace('_', ' ')->headline()->toString(),
+                    'value' => $value,
+                    'image_path' => trim((string) ($option['image_path'] ?? $option['image'] ?? '')),
+                    'color_hex' => $colorHex,
+                    'fee_amount' => round(max(0, (float) ($option['fee_amount'] ?? $option['price'] ?? $option['amount'] ?? 0)), 2),
+                    'fee_label' => trim((string) ($option['fee_label'] ?? '')),
+                    'sort_order' => (int) ($option['sort_order'] ?? $index + 1),
+                ];
+
+                return $payload;
+            })
+            ->filter()
+            ->sortBy('sort_order')
+            ->values()
+            ->all();
     }
 
     private function payload(Request $request): array

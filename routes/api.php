@@ -1,18 +1,19 @@
 <?php
 
-use App\Http\Controllers\Api\CompatibilityController;
-use App\Http\Controllers\Api\ControlHubMobileUserController;
-use App\Http\Controllers\Api\ControlHubMessagingController;
 use App\Http\Controllers\Api\AccommodationController;
-use App\Http\Controllers\Api\PrayerCommunityController;
-use App\Http\Controllers\Api\TestimonyController;
+use App\Http\Controllers\Api\CompatibilityController;
+use App\Http\Controllers\Api\ControlHubMessagingController;
+use App\Http\Controllers\Api\ControlHubMobileUserController;
+use App\Http\Controllers\Api\DonationStripeController;
+use App\Http\Controllers\Api\DynamicFormController;
 use App\Http\Controllers\Api\GoshenExperienceController;
 use App\Http\Controllers\Api\GoshenQuizController;
 use App\Http\Controllers\Api\GoshenRetreatController;
 use App\Http\Controllers\Api\GoshenWalletController;
-use App\Http\Controllers\Api\DonationStripeController;
-use App\Http\Controllers\Api\DynamicFormController;
+use App\Http\Controllers\Api\PrayerCommunityController;
+use App\Http\Controllers\Api\PrayerPointController;
 use App\Http\Controllers\Api\RetiredFeatureController;
+use App\Http\Controllers\Api\TestimonyController;
 use App\Http\Controllers\Api\V1\AdminCommunityPrayerRequestController;
 use App\Http\Controllers\Api\V1\CommunityPrayerRequestController;
 use Illuminate\Support\Facades\Route;
@@ -100,6 +101,14 @@ Route::controller(GoshenRetreatController::class)
         Route::get('events/{event}', 'event');
         Route::post('events/{event}/registration-status', 'updateRegistrationStatus');
         Route::post('events/{event}/management-summary', 'managementSummary');
+        Route::post('events/{event}/setup', 'retreatSetup');
+        Route::post('events/{event}/setup/overview', 'updateRetreatSetupOverview');
+        Route::post('events/{event}/setup/schedules', 'saveRetreatSetupSchedule');
+        Route::post('events/{event}/setup/schedules/{schedule}/delete', 'deleteRetreatSetupSchedule')->whereNumber('schedule');
+        Route::post('events/{event}/setup/ticket-types', 'saveRetreatSetupTicketType');
+        Route::post('events/{event}/setup/ticket-types/{ticketType}/delete', 'deleteRetreatSetupTicketType');
+        Route::post('events/{event}/setup/registration-fields', 'saveRetreatSetupRegistrationField');
+        Route::post('events/{event}/setup/registration-fields/{field}/delete', 'deleteRetreatSetupRegistrationField')->whereNumber('field');
         Route::post('events/{event}/accommodation-management', 'accommodationManagement');
         Route::post('accommodation-allocations', 'storeAccommodationAllocation');
         Route::post('accommodation-allocations/{allocation}', 'updateAccommodationAllocation')->whereNumber('allocation');
@@ -253,6 +262,24 @@ Route::controller(PrayerCommunityController::class)
         Route::post('ai/bible-explain', 'aiBibleExplain');
         Route::post('ai/bible-search', 'aiBibleSearch');
         Route::post('profile/avatar', 'updateProfileImage');
+    });
+
+Route::controller(PrayerPointController::class)
+    ->prefix('prayer-points')
+    ->group(function () {
+        Route::match(['get', 'post'], '/', 'index')->middleware('throttle:30,1');
+    });
+
+Route::controller(PrayerPointController::class)
+    ->prefix('control-hub/prayer-points')
+    ->group(function () {
+        Route::get('/', 'managementIndex')->middleware('throttle:20,1');
+        Route::post('search', 'managementIndex')->middleware('throttle:20,1');
+        Route::post('/', 'store')->middleware('throttle:12,1');
+        Route::post('{prayerPoint}', 'update')->whereNumber('prayerPoint')->middleware('throttle:12,1');
+        Route::post('{prayerPoint}/status', 'status')->whereNumber('prayerPoint')->middleware('throttle:20,1');
+        Route::delete('{prayerPoint}', 'destroy')->whereNumber('prayerPoint')->middleware('throttle:12,1');
+        Route::post('{prayerPoint}/delete', 'destroy')->whereNumber('prayerPoint')->middleware('throttle:12,1');
     });
 
 Route::prefix('v1')->group(function () {
