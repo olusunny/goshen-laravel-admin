@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Filament\Pages\CloudBackups;
 use App\Filament\Pages\GoshenReferralSettings;
 use App\Filament\Pages\GoshenRetreatConsole;
+use App\Filament\Pages\GoogleFirebaseSettings;
 use App\Filament\Pages\PaymentGateways;
 use App\Models\AdminMenuRoleVisibility;
 use App\Models\User;
@@ -141,6 +142,7 @@ class AdminMenuRegistry
             CloudBackups::class,
             GoshenReferralSettings::class,
             GoshenRetreatConsole::class,
+            GoogleFirebaseSettings::class,
             PaymentGateways::class,
         ];
     }

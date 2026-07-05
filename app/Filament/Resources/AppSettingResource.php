@@ -12,6 +12,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class AppSettingResource extends Resource
 {
@@ -19,6 +20,12 @@ class AppSettingResource extends Resource
     protected static ?string $model = AppSetting::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Settings';
+
+    protected static ?string $navigationLabel = 'App Settings';
+
+    protected static ?int $navigationSort = 90;
 
     public static function form(Schema $schema): Schema
     {
