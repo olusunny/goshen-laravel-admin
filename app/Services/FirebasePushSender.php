@@ -81,7 +81,11 @@ class FirebasePushSender
                             'inbox' => json_encode($this->inboxPayload($message, $user), JSON_THROW_ON_ERROR),
                         ])
                         ->withAndroidConfig(AndroidConfig::fromArray([
+                            'priority' => 'high',
                             'notification' => [
+                                'channel_id' => 'churchapp',
+                                'notification_priority' => 'PRIORITY_HIGH',
+                                'visibility' => 'PUBLIC',
                                 'sound' => 'default',
                             ],
                         ]));
@@ -180,7 +184,11 @@ class FirebasePushSender
                         'devotional' => json_encode($payload, JSON_THROW_ON_ERROR),
                     ])
                     ->withAndroidConfig(AndroidConfig::fromArray([
+                        'priority' => 'high',
                         'notification' => [
+                            'channel_id' => 'churchapp',
+                            'notification_priority' => 'PRIORITY_HIGH',
+                            'visibility' => 'PUBLIC',
                             'sound' => 'default',
                         ],
                     ]));
