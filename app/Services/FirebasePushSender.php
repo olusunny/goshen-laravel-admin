@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FcmToken;
+use App\Models\Devotional;
 use App\Models\InboxMessage;
 use App\Models\MobileUser;
 use App\Support\MediaUrl;
@@ -120,6 +121,97 @@ class FirebasePushSender
         return ['sent' => $sent, 'failed' => $failed, 'error' => $lastError];
     }
 
+    public function sendDevotional(Devotional $devotional): array
+    {
+        $tokenRows = FcmToken::query()
+            ->whereNotNull('token')
+            ->get(['email', 'token'])
+            ->filter(fn (FcmToken $token): bool => filled($token->token))
+            ->unique('token')
+            ->values();
+
+        if ($tokenRows->isEmpty()) {
+            return ['sent' => 0, 'failed' => 0, 'error' => 'No Firebase device tokens are available.'];
+        }
+
+        $usersByEmail = MobileUser::query()
+            ->whereIn('email', $tokenRows->pluck('email')->filter()->unique())
+            ->get()
+            ->keyBy(fn (MobileUser $user): string => strtolower((string) $user->email));
+
+        $tokens = $tokenRows
+            ->filter(function (FcmToken $token) use ($usersByEmail): bool {
+                $email = strtolower((string) $token->email);
+                $user = $email !== '' ? $usersByEmail->get($email) : null;
+
+                return ! $user || $user->wantsNotificationCategory('devotionals');
+            })
+            ->pluck('token')
+            ->unique()
+            ->values();
+
+        if ($tokens->isEmpty()) {
+            return ['sent' => 0, 'failed' => 0, 'error' => 'No subscribed devices matched the devotional notification category.'];
+        }
+
+        $title = (string) ($devotional->title ?: 'Today\'s devotional');
+        $plainMessage = str($devotional->content ?? '')->stripTags()->limit(160)->toString();
+        $imageUrl = MediaUrl::resolve($devotional->thumbnail) ?: null;
+        $payload = $this->devotionalPayload($devotional);
+        $sent = 0;
+        $failed = 0;
+        $lastError = null;
+
+        foreach ($tokens->chunk(500) as $chunk) {
+            try {
+                $cloudMessage = CloudMessage::new()
+                    ->withNotification(FirebaseNotification::create(
+                        $title,
+                        $plainMessage,
+                        $imageUrl,
+                    ))
+                    ->withData([
+                        'action' => 'devotional',
+                        'devotional_id' => (string) $devotional->id,
+                        'title' => $title,
+                        'message' => $plainMessage,
+                        'image_url' => (string) ($imageUrl ?? ''),
+                        'notification_category' => 'devotionals',
+                        'devotional' => json_encode($payload, JSON_THROW_ON_ERROR),
+                    ])
+                    ->withAndroidConfig(AndroidConfig::fromArray([
+                        'notification' => [
+                            'sound' => 'default',
+                        ],
+                    ]));
+
+                $report = app(Messaging::class)->sendMulticast($cloudMessage, $chunk->values()->all());
+                $sent += $report->successes()->count();
+                $failed += $report->failures()->count();
+
+                if ($report->hasFailures()) {
+                    $staleTokens = collect([
+                        ...$report->unknownTokens(),
+                        ...$report->invalidTokens(),
+                    ])->filter()->unique()->values();
+
+                    if ($staleTokens->isNotEmpty()) {
+                        FcmToken::whereIn('token', $staleTokens)->delete();
+                    }
+
+                    $lastError = $staleTokens->isNotEmpty()
+                        ? "Removed {$staleTokens->count()} stale Firebase device token(s)."
+                        : 'Some Firebase tokens failed.';
+                }
+            } catch (\Throwable $exception) {
+                $failed += $chunk->count();
+                $lastError = $exception->getMessage();
+            }
+        }
+
+        return ['sent' => $sent, 'failed' => $failed, 'error' => $lastError];
+    }
+
     private function recipientUsers(InboxMessage $message): Collection
     {
         return app(MessageRecipientResolver::class)->usersFor($message, true);
@@ -159,6 +251,20 @@ class FirebasePushSender
             'notification_category' => $message->notification_category ?: 'general',
             'date' => optional($message->published_at ?? $message->created_at)->timestamp,
             'dateInserted' => optional($message->published_at ?? $message->created_at)->toDateTimeString(),
+        ];
+    }
+
+    private function devotionalPayload(Devotional $devotional): array
+    {
+        return [
+            'id' => $devotional->id,
+            'title' => $devotional->title,
+            'author' => $devotional->author ?? '',
+            'date' => optional($devotional->date)->toDateString(),
+            'content' => $devotional->content ?? '',
+            'thumbnail' => MediaUrl::resolve($devotional->thumbnail) ?: '',
+            'thumbnail_url' => MediaUrl::resolve($devotional->thumbnail) ?: '',
+            'excerpt' => str($devotional->content ?? '')->stripTags()->limit(140)->toString(),
         ];
     }
 }

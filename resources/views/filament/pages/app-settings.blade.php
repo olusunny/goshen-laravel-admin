@@ -150,6 +150,20 @@
                             'goshenWalletEnabled' => ['Goshen wallet', 'Enable wallet balance, transfers, and wallet payments.'],
                             'goshenStripeGivingEnabled' => ['Stripe giving', 'Allow Giving payments through Stripe.'],
                             'goshenReferralsEnabled' => ['Goshen referrals', 'Allow referral codes and wallet conversion.'],
+                            'fundraisingEnabled' => ['Project support', 'Show fundraising/project support campaigns.'],
+                            'prayerPointsEnabled' => ['Prayer points', 'Show church prayer points content.'],
+                            'interactivePrayerWallEnabled' => ['Interactive prayer wall', 'Allow prayer wall reading, posting, and responses.'],
+                            'hymnsEnabled' => ['Hymns', 'Show hymns in the mobile app.'],
+                            'devotionalsEnabled' => ['Devotional', 'Show devotional content and devotional notifications.'],
+                            'verseOfDayEnabled' => ['Verse of the day', 'Show the daily Bible verse card.'],
+                            'transportationArrangementsEnabled' => ['Transportation arrangement', 'Show transport arrangement information.'],
+                            'churchGroupsEnabled' => ['Church groups', 'Show groups and group join workflows.'],
+                            'dynamicFormsEnabled' => ['On-demand forms', 'Show dynamic forms created from the backend.'],
+                            'goshenQuizEnabled' => ['Quiz', 'Show Goshen Quiz in the app.'],
+                            'goshenWalletWithdrawalsEnabled' => ['Wallet withdrawal', 'Allow wallet withdrawal request screens.'],
+                            'goshenWalletAutoTopupEnabled' => ['Wallet auto top-up', 'Allow recurring wallet auto top-up plans.'],
+                            'branchesEnabled' => ['Branches', 'Show the branches module.'],
+                            'mobilePhoneOtpLoginEnabled' => ['Mobile phone OTP login', 'Allow Firebase phone number sign-in.'],
                         ] as $model => [$label, $note])
                             <label class="ash-check">
                                 <input type="checkbox" wire:model.live="{{ $model }}">

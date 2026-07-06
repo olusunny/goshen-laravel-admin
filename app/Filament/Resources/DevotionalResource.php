@@ -5,8 +5,10 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\DevotionalResource\Pages;
 use App\Models\Devotional;
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
+use App\Services\FirebasePushSender;
 use Filament\Actions;
 use Filament\Forms;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
@@ -81,6 +83,23 @@ class DevotionalResource extends Resource
                 //
             ])
             ->recordActions([
+                Actions\Action::make('sendPush')
+                    ->label('Send push')
+                    ->icon('heroicon-o-bell-alert')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading('Send devotional push notification?')
+                    ->modalDescription('This will notify app users who allow devotional notifications. It will not create inbox message records.')
+                    ->visible(fn (Devotional $record): bool => (bool) $record->is_published)
+                    ->action(function (Devotional $record): void {
+                        $result = app(FirebasePushSender::class)->sendDevotional($record);
+
+                        Notification::make()
+                            ->title("Devotional push sent to {$result['sent']} device(s)")
+                            ->body($result['failed'] ? "{$result['failed']} device(s) failed. {$result['error']}" : null)
+                            ->success()
+                            ->send();
+                    }),
                 Actions\EditAction::make(),
             ])
             ->toolbarActions([

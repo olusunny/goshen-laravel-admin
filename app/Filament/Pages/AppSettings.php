@@ -75,6 +75,34 @@ class AppSettings extends Page
 
     public bool $goshenReferralsEnabled = true;
 
+    public bool $fundraisingEnabled = true;
+
+    public bool $prayerPointsEnabled = true;
+
+    public bool $interactivePrayerWallEnabled = true;
+
+    public bool $hymnsEnabled = true;
+
+    public bool $devotionalsEnabled = true;
+
+    public bool $verseOfDayEnabled = true;
+
+    public bool $transportationArrangementsEnabled = true;
+
+    public bool $churchGroupsEnabled = true;
+
+    public bool $dynamicFormsEnabled = true;
+
+    public bool $goshenQuizEnabled = true;
+
+    public bool $goshenWalletWithdrawalsEnabled = true;
+
+    public bool $goshenWalletAutoTopupEnabled = true;
+
+    public bool $branchesEnabled = true;
+
+    public bool $mobilePhoneOtpLoginEnabled = true;
+
     public string $accommodationSupportName = '';
 
     public string $accommodationSupportEmail = '';
@@ -133,6 +161,20 @@ class AppSettings extends Page
         $this->goshenWalletEnabled = filter_var(AppSetting::value('goshen_wallet_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         $this->goshenStripeGivingEnabled = filter_var(AppSetting::value('goshen_stripe_giving_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         $this->goshenReferralsEnabled = filter_var(AppSetting::value('goshen_referrals_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->fundraisingEnabled = filter_var(AppSetting::value('fundraising_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->prayerPointsEnabled = filter_var(AppSetting::value('prayer_points_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->interactivePrayerWallEnabled = filter_var(AppSetting::value('interactive_prayer_wall_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->hymnsEnabled = filter_var(AppSetting::value('hymns_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->devotionalsEnabled = filter_var(AppSetting::value('devotionals_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->verseOfDayEnabled = filter_var(AppSetting::value('verse_of_day_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->transportationArrangementsEnabled = filter_var(AppSetting::value('transportation_arrangements_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->churchGroupsEnabled = filter_var(AppSetting::value('church_groups_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->dynamicFormsEnabled = filter_var(AppSetting::value('dynamic_forms_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->goshenQuizEnabled = filter_var(AppSetting::value('goshen_quiz_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->goshenWalletWithdrawalsEnabled = filter_var(AppSetting::value('goshen_wallet_withdrawals_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->goshenWalletAutoTopupEnabled = filter_var(AppSetting::value('goshen_wallet_auto_topup_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->branchesEnabled = filter_var(AppSetting::value('branches_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->mobilePhoneOtpLoginEnabled = filter_var(AppSetting::value('mobile_phone_otp_login_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
 
         $this->accommodationSupportName = (string) AppSetting::value('accommodation_booking_support_name', '');
         $this->accommodationSupportEmail = (string) AppSetting::value('accommodation_booking_support_email', '');
@@ -216,6 +258,20 @@ class AppSettings extends Page
             'goshen_wallet_enabled' => ['required', 'boolean'],
             'goshen_stripe_giving_enabled' => ['required', 'boolean'],
             'goshen_referrals_enabled' => ['required', 'boolean'],
+            'fundraising_enabled' => ['required', 'boolean'],
+            'prayer_points_enabled' => ['required', 'boolean'],
+            'interactive_prayer_wall_enabled' => ['required', 'boolean'],
+            'hymns_enabled' => ['required', 'boolean'],
+            'devotionals_enabled' => ['required', 'boolean'],
+            'verse_of_day_enabled' => ['required', 'boolean'],
+            'transportation_arrangements_enabled' => ['required', 'boolean'],
+            'church_groups_enabled' => ['required', 'boolean'],
+            'dynamic_forms_enabled' => ['required', 'boolean'],
+            'goshen_quiz_enabled' => ['required', 'boolean'],
+            'goshen_wallet_withdrawals_enabled' => ['required', 'boolean'],
+            'goshen_wallet_auto_topup_enabled' => ['required', 'boolean'],
+            'branches_enabled' => ['required', 'boolean'],
+            'mobile_phone_otp_login_enabled' => ['required', 'boolean'],
             'accommodation_booking_support_name' => ['nullable', 'string', 'max:120'],
             'accommodation_booking_support_email' => ['nullable', 'email', 'max:190'],
             'accommodation_booking_support_phone' => ['nullable', 'string', 'max:80'],
@@ -263,6 +319,20 @@ class AppSettings extends Page
             'goshen_wallet_enabled' => $this->goshenWalletEnabled,
             'goshen_stripe_giving_enabled' => $this->goshenStripeGivingEnabled,
             'goshen_referrals_enabled' => $this->goshenReferralsEnabled,
+            'fundraising_enabled' => $this->fundraisingEnabled,
+            'prayer_points_enabled' => $this->prayerPointsEnabled,
+            'interactive_prayer_wall_enabled' => $this->interactivePrayerWallEnabled,
+            'hymns_enabled' => $this->hymnsEnabled,
+            'devotionals_enabled' => $this->devotionalsEnabled,
+            'verse_of_day_enabled' => $this->verseOfDayEnabled,
+            'transportation_arrangements_enabled' => $this->transportationArrangementsEnabled,
+            'church_groups_enabled' => $this->churchGroupsEnabled,
+            'dynamic_forms_enabled' => $this->dynamicFormsEnabled,
+            'goshen_quiz_enabled' => $this->goshenQuizEnabled,
+            'goshen_wallet_withdrawals_enabled' => $this->goshenWalletWithdrawalsEnabled,
+            'goshen_wallet_auto_topup_enabled' => $this->goshenWalletAutoTopupEnabled,
+            'branches_enabled' => $this->branchesEnabled,
+            'mobile_phone_otp_login_enabled' => $this->mobilePhoneOtpLoginEnabled,
             'accommodation_booking_support_name' => $this->accommodationSupportName,
             'accommodation_booking_support_email' => $this->accommodationSupportEmail,
             'accommodation_booking_support_phone' => $this->accommodationSupportPhone,
@@ -299,6 +369,20 @@ class AppSettings extends Page
             ['features', 'goshen_wallet_enabled', $values['goshen_wallet_enabled'] ? '1' : '0', 'Allow members to use Goshen wallet features.'],
             ['features', 'goshen_stripe_giving_enabled', $values['goshen_stripe_giving_enabled'] ? '1' : '0', 'Allow Giving payments through Stripe.'],
             ['features', 'goshen_referrals_enabled', $values['goshen_referrals_enabled'] ? '1' : '0', 'Allow referral code entry and wallet conversion.'],
+            ['features', 'fundraising_enabled', $values['fundraising_enabled'] ? '1' : '0', 'Show Project support/Fundraising features in the mobile and web apps.'],
+            ['features', 'prayer_points_enabled', $values['prayer_points_enabled'] ? '1' : '0', 'Show Prayer Points content in the mobile and web apps.'],
+            ['features', 'interactive_prayer_wall_enabled', $values['interactive_prayer_wall_enabled'] ? '1' : '0', 'Show the Interactive Prayer Wall module.'],
+            ['features', 'hymns_enabled', $values['hymns_enabled'] ? '1' : '0', 'Show Hymns in the mobile app.'],
+            ['features', 'devotionals_enabled', $values['devotionals_enabled'] ? '1' : '0', 'Show Devotional content in the mobile app.'],
+            ['features', 'verse_of_day_enabled', $values['verse_of_day_enabled'] ? '1' : '0', 'Show Verse of the Day in the mobile app.'],
+            ['features', 'transportation_arrangements_enabled', $values['transportation_arrangements_enabled'] ? '1' : '0', 'Show transportation arrangement information.'],
+            ['features', 'church_groups_enabled', $values['church_groups_enabled'] ? '1' : '0', 'Show Church Groups and group requests.'],
+            ['features', 'dynamic_forms_enabled', $values['dynamic_forms_enabled'] ? '1' : '0', 'Show On-demand Forms in the mobile and web apps.'],
+            ['features', 'goshen_quiz_enabled', $values['goshen_quiz_enabled'] ? '1' : '0', 'Show Goshen Quiz in the mobile app.'],
+            ['features', 'goshen_wallet_withdrawals_enabled', $values['goshen_wallet_withdrawals_enabled'] ? '1' : '0', 'Allow wallet withdrawal requests.'],
+            ['features', 'goshen_wallet_auto_topup_enabled', $values['goshen_wallet_auto_topup_enabled'] ? '1' : '0', 'Allow recurring wallet auto top-up plans.'],
+            ['features', 'branches_enabled', $values['branches_enabled'] ? '1' : '0', 'Show Branches module in the mobile app.'],
+            ['features', 'mobile_phone_otp_login_enabled', $values['mobile_phone_otp_login_enabled'] ? '1' : '0', 'Allow Firebase phone OTP sign-in in the mobile app.'],
             ['support', 'accommodation_booking_support_name', $values['accommodation_booking_support_name'] ?? '', 'Accommodation support contact name.'],
             ['support', 'accommodation_booking_support_email', $values['accommodation_booking_support_email'] ?? '', 'Accommodation support email address.'],
             ['support', 'accommodation_booking_support_phone', $values['accommodation_booking_support_phone'] ?? '', 'Accommodation support phone number.'],
@@ -430,6 +514,20 @@ class AppSettings extends Page
             'goshen_wallet_enabled',
             'goshen_stripe_giving_enabled',
             'goshen_referrals_enabled',
+            'fundraising_enabled',
+            'prayer_points_enabled',
+            'interactive_prayer_wall_enabled',
+            'hymns_enabled',
+            'devotionals_enabled',
+            'verse_of_day_enabled',
+            'transportation_arrangements_enabled',
+            'church_groups_enabled',
+            'dynamic_forms_enabled',
+            'goshen_quiz_enabled',
+            'goshen_wallet_withdrawals_enabled',
+            'goshen_wallet_auto_topup_enabled',
+            'branches_enabled',
+            'mobile_phone_otp_login_enabled',
             'accommodation_booking_support_name',
             'accommodation_booking_support_email',
             'accommodation_booking_support_phone',

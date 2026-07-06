@@ -31,6 +31,7 @@ class MobileUser extends Authenticatable
         'is_deleted' => 'boolean',
         'password' => 'hashed',
         'email_verified_at' => 'datetime',
+        'phone_verified_at' => 'datetime',
         'email_verification_expires_at' => 'datetime',
         'password_reset_expires_at' => 'datetime',
         'last_login_at' => 'datetime',
@@ -100,6 +101,11 @@ class MobileUser extends Authenticatable
         'giving' => [
             'label' => 'Giving',
             'description' => 'Donation and giving-related updates.',
+            'default' => true,
+        ],
+        'devotionals' => [
+            'label' => 'Devotionals',
+            'description' => 'Daily devotional reading reminders and updates.',
             'default' => true,
         ],
     ];

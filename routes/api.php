@@ -63,6 +63,7 @@ Route::controller(CompatibilityController::class)->group(function () {
     Route::match(['get', 'post'], 'syncMobileSession', 'syncMobileSession');
     Route::match(['get', 'post'], 'registerUser', 'registerUser');
     Route::match(['get', 'post'], 'googleAuth', 'googleAuth');
+    Route::post('phoneAuth', 'phoneAuth')->middleware('throttle:6,1');
     Route::match(['get', 'post'], 'verifyMobileEmail', 'verifyMobileEmail');
     Route::match(['get', 'post'], 'resendMobileVerification', 'resendMobileVerification');
     Route::match(['get', 'post'], 'requestPasswordReset', 'requestPasswordReset');

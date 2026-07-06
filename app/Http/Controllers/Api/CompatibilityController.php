@@ -43,6 +43,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Kreait\Firebase\Contract\Auth as FirebaseAuth;
 use Sunny\Fundraising\Contracts\PermissionResolverContract;
 
 class CompatibilityController extends Controller
@@ -72,11 +73,25 @@ class CompatibilityController extends Controller
             'ads_interval' => AppSetting::value('ads_interval', '0'),
             'app_logo' => MediaUrl::resolve(AppSetting::value('app_logo')),
             'google_login_enabled' => $this->settingEnabled('google_login_enabled'),
+            'mobile_phone_otp_login_enabled' => $this->settingEnabled('mobile_phone_otp_login_enabled'),
             'testimonies_enabled' => $this->settingEnabled('testimonies_enabled'),
+            'fundraising_enabled' => $this->settingEnabled('fundraising_enabled'),
+            'prayer_points_enabled' => $this->settingEnabled('prayer_points_enabled'),
+            'interactive_prayer_wall_enabled' => $this->settingEnabled('interactive_prayer_wall_enabled'),
+            'hymns_enabled' => $this->settingEnabled('hymns_enabled'),
+            'devotionals_enabled' => $this->settingEnabled('devotionals_enabled'),
+            'verse_of_day_enabled' => $this->settingEnabled('verse_of_day_enabled'),
+            'transportation_arrangements_enabled' => $this->settingEnabled('transportation_arrangements_enabled'),
+            'church_groups_enabled' => $this->settingEnabled('church_groups_enabled'),
+            'dynamic_forms_enabled' => $this->settingEnabled('dynamic_forms_enabled'),
+            'goshen_quiz_enabled' => $this->settingEnabled('goshen_quiz_enabled'),
+            'goshen_wallet_withdrawals_enabled' => $this->settingEnabled('goshen_wallet_withdrawals_enabled'),
+            'goshen_wallet_auto_topup_enabled' => $this->settingEnabled('goshen_wallet_auto_topup_enabled'),
+            'branches_enabled' => $this->settingEnabled('branches_enabled'),
             'google_web_client_id' => AppSetting::value('google_web_client_id', ''),
             'google_android_client_id' => AppSetting::value('google_android_client_id', ''),
             'google_ios_client_id' => AppSetting::value('google_ios_client_id', ''),
-            'verse_of_day' => ($verse = VerseOfDay::current()) ? new VerseOfDayResource($verse) : null,
+            'verse_of_day' => $this->settingEnabled('verse_of_day_enabled') && ($verse = VerseOfDay::current()) ? new VerseOfDayResource($verse) : null,
             'prayer_requests_count' => CommunityPrayerRequest::visible()->count(),
             'prayer_request_avatars' => CommunityPrayerRequest::visible()
                 ->where('is_anonymous', false)
@@ -198,10 +213,36 @@ class CompatibilityController extends Controller
 
     public function devotionals(Request $request)
     {
-        $date = $this->payload($request)['date'] ?? now()->toDateString();
-        $devotional = Devotional::where('is_published', true)->whereDate('date', $date)->first();
+        if (! $this->settingEnabled('devotionals_enabled')) {
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'Devotionals are not currently available.',
+                'message' => 'Devotionals are not currently available.',
+            ], 404);
+        }
 
-        return response()->json($devotional ? ['status' => 'ok', 'devotional' => $devotional] : ['status' => 'error']);
+        $data = $this->payload($request);
+        $query = Devotional::query()
+            ->where('is_published', true)
+            ->orderByDesc('date')
+            ->orderByDesc('created_at');
+
+        if (! empty($data['id'])) {
+            $devotional = (clone $query)->whereKey($data['id'])->first();
+        } else {
+            $date = $data['date'] ?? now()->toDateString();
+            $devotional = (clone $query)->whereDate('date', $date)->first()
+                ?: (clone $query)->first();
+        }
+
+        return response()->json($devotional ? [
+            'status' => 'ok',
+            'devotional' => $this->devotionalPayload($devotional),
+        ] : [
+            'status' => 'error',
+            'msg' => 'No devotional is available for this date.',
+            'message' => 'No devotional is available for this date.',
+        ]);
     }
 
     public function events(Request $request)
@@ -917,6 +958,89 @@ class CompatibilityController extends Controller
         ]);
     }
 
+    public function phoneAuth(Request $request, FirebaseAuth $firebaseAuth)
+    {
+        if (! $this->settingEnabled('mobile_phone_otp_login_enabled')) {
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'Phone OTP login is not enabled yet.',
+                'message' => 'Phone OTP login is not enabled yet.',
+            ], 403);
+        }
+
+        $data = $this->payload($request) ?: $request->all();
+        validator($data, [
+            'id_token' => ['required', 'string'],
+        ])->validate();
+
+        try {
+            $verifiedToken = $firebaseAuth->verifyIdToken($data['id_token'], true, 60);
+        } catch (\Throwable) {
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'Phone verification could not be verified. Please request a new code and try again.',
+                'message' => 'Phone verification could not be verified. Please request a new code and try again.',
+            ], 422);
+        }
+
+        $claims = $verifiedToken->claims();
+        $firebaseUid = (string) ($claims->get('sub') ?? '');
+        $phone = $this->normalizedFirebasePhone((string) ($claims->get('phone_number') ?? ''));
+        $firebaseClaim = $claims->get('firebase') ?? [];
+        $signInProvider = is_array($firebaseClaim) ? (string) ($firebaseClaim['sign_in_provider'] ?? '') : '';
+
+        if ($firebaseUid === '' || $phone === '' || $signInProvider !== 'phone') {
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'Firebase did not return a verified phone sign-in.',
+                'message' => 'Firebase did not return a verified phone sign-in.',
+            ], 422);
+        }
+
+        $user = $this->mobileUserForFirebasePhone($firebaseUid, $phone);
+        $isNew = ! $user->exists;
+
+        if ($user->exists && ($user->is_blocked || $user->is_deleted)) {
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'This account is not currently active.',
+                'message' => 'This account is not currently active.',
+            ], 403);
+        }
+
+        if ($user->exists && filled($user->firebase_uid) && $user->firebase_uid !== $firebaseUid) {
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'This phone number is already linked to another verified Firebase account.',
+                'message' => 'This phone number is already linked to another verified Firebase account.',
+            ], 409);
+        }
+
+        $user->forceFill([
+            'firebase_uid' => $firebaseUid,
+            'phone' => $user->phone ?: $phone,
+            'phone_normalized' => $phone,
+            'name' => $user->name ?: 'Mobile user',
+            'email' => $user->email ?: $this->phonePlaceholderEmail($phone),
+            'login_type' => $isNew ? 'phone_otp' : $user->login_type,
+            'is_verified' => true,
+            'phone_verified_at' => now(),
+        ])->save();
+
+        if ($isNew) {
+            app(AutomaticNotificationService::class)->enqueue('welcome_verified_user', $user);
+        }
+
+        return response()->json([
+            'status' => 'ok',
+            'msg' => 'Signed in successfully.',
+            'message' => 'Signed in successfully.',
+            'user' => $this->mobileUserPayload($user->fresh(), $user->issueApiToken()),
+            'is_new_user' => $isNew,
+            'profile_needs_update' => blank($user->first_name) || blank($user->last_name) || blank($user->gender) || blank($user->member_type) || blank($user->country_of_residence) || blank($user->state_county_province) || blank($user->address),
+        ]);
+    }
+
     public function verifyMobileEmail(Request $request)
     {
         $data = $this->payload($request) ?: $request->all();
@@ -1559,6 +1683,25 @@ class CompatibilityController extends Controller
         ];
     }
 
+    private function devotionalPayload(Devotional $devotional): array
+    {
+        return [
+            'id' => $devotional->id,
+            'title' => $devotional->title,
+            'author' => $devotional->author ?? '',
+            'date' => optional($devotional->date)->toDateString(),
+            'content' => $devotional->content ?? '',
+            'bible_reading' => $devotional->bible_reading ?? '',
+            'confession' => $devotional->confession ?? '',
+            'studies' => $devotional->studies ?? '',
+            'excerpt' => str($devotional->content ?? '')->stripTags()->limit(140)->toString(),
+            'thumbnail' => MediaUrl::resolve($devotional->thumbnail) ?: '',
+            'thumbnail_url' => MediaUrl::resolve($devotional->thumbnail) ?: '',
+            'is_published' => (bool) $devotional->is_published,
+            'dateInserted' => optional($devotional->created_at)->toDateTimeString(),
+        ];
+    }
+
     private function mobileUserPayload(MobileUser $user, ?string $apiToken = null): array
     {
         $user->loadMissing('churchGroup');
@@ -1614,6 +1757,36 @@ class CompatibilityController extends Controller
     private function settingEnabled(string $key): bool
     {
         return filter_var(AppSetting::value($key, false), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function normalizedFirebasePhone(string $phone): string
+    {
+        $phone = trim($phone);
+        if (! str_starts_with($phone, '+')) {
+            return '';
+        }
+
+        $digits = preg_replace('/\D+/', '', $phone) ?: '';
+        if (strlen($digits) < 8 || strlen($digits) > 15) {
+            return '';
+        }
+
+        return '+'.$digits;
+    }
+
+    private function mobileUserForFirebasePhone(string $firebaseUid, string $phone): MobileUser
+    {
+        return MobileUser::query()
+            ->where('firebase_uid', $firebaseUid)
+            ->orWhere('phone_normalized', $phone)
+            ->orWhere('phone', $phone)
+            ->first()
+            ?: new MobileUser();
+    }
+
+    private function phonePlaceholderEmail(string $phone): string
+    {
+        return 'phone-'.hash('sha256', $phone).'@phone.goshen.local';
     }
 
     private function churchGroupPayload(ChurchGroup $group): array
