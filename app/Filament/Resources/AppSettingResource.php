@@ -9,6 +9,8 @@ use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -31,49 +33,66 @@ class AppSettingResource extends Resource
     {
         return $schema
             ->schema([
-                Forms\Components\TextInput::make('group')
-                    ->required(),
-                Forms\Components\TextInput::make('key')
-                    ->required(),
-                Forms\Components\FileUpload::make('logo_value')
-                    ->label('Logo image')
-                    ->disk('public')
-                    ->directory('branding')
-                    ->image()
-                    ->imageEditor()
-                    ->imageResizeMode('contain')
-                    ->imageResizeTargetWidth('512')
-                    ->imageResizeTargetHeight('160')
-                    ->maxSize(4096)
-                    ->downloadable()
-                    ->previewable()
-                    ->visible(fn ($get): bool => $get('key') === 'app_logo')
-                    ->columnSpanFull(),
-                Forms\Components\Textarea::make('text_value')
-                    ->label('Value')
-                    ->hidden(fn ($get): bool => $get('key') === 'app_logo' || in_array($get('key'), self::urlKeys(), true) || self::isToggleKey($get('key')))
-                    ->columnSpanFull(),
-                Forms\Components\Toggle::make('boolean_value')
-                    ->label(fn ($get): string => self::friendlyLabel($get('key')))
-                    ->helperText(fn ($get): ?string => self::helperText($get('key')))
-                    ->visible(fn ($get): bool => self::isToggleKey($get('key')))
-                    ->columnSpanFull(),
-                Forms\Components\TextInput::make('url_value')
-                    ->label(fn ($get): string => self::friendlyLabel($get('key')))
-                    ->url()
-                    ->helperText(fn ($get): ?string => self::helperText($get('key')))
-                    ->visible(fn ($get): bool => in_array($get('key'), self::urlKeys(), true))
-                    ->columnSpanFull(),
-                Forms\Components\Textarea::make('description')
-                    ->columnSpanFull(),
-                Section::make('Advanced system options')
-                    ->description('Use these controls only for credentials and private configuration values.')
-                    ->collapsed()
-                    ->schema([
-                        Forms\Components\Toggle::make('is_secret')
-                            ->label('Treat value as secret')
-                            ->helperText('Enable this for API keys, SMTP passwords, Firebase credentials, AI keys, and other private settings.')
-                            ->required(),
+                Tabs::make('App setting sections')
+                    ->extraAttributes(['class' => 'goshen-settings-tabs'])
+                    ->vertical()
+                    ->tabs([
+                        Tab::make('General')
+                            ->icon('heroicon-o-cog-6-tooth')
+                            ->schema([
+                                Forms\Components\TextInput::make('group')
+                                    ->required(),
+                                Forms\Components\TextInput::make('key')
+                                    ->required(),
+                                Forms\Components\Textarea::make('description')
+                                    ->columnSpanFull(),
+                            ]),
+                        Tab::make('Value')
+                            ->icon('heroicon-o-pencil-square')
+                            ->schema([
+                                Forms\Components\FileUpload::make('logo_value')
+                                    ->label('Logo image')
+                                    ->disk('public')
+                                    ->directory('branding')
+                                    ->image()
+                                    ->imageEditor()
+                                    ->imageResizeMode('contain')
+                                    ->imageResizeTargetWidth('512')
+                                    ->imageResizeTargetHeight('160')
+                                    ->maxSize(4096)
+                                    ->downloadable()
+                                    ->previewable()
+                                    ->visible(fn ($get): bool => $get('key') === 'app_logo')
+                                    ->columnSpanFull(),
+                                Forms\Components\Textarea::make('text_value')
+                                    ->label('Value')
+                                    ->hidden(fn ($get): bool => $get('key') === 'app_logo' || in_array($get('key'), self::urlKeys(), true) || self::isToggleKey($get('key')))
+                                    ->columnSpanFull(),
+                                Forms\Components\Toggle::make('boolean_value')
+                                    ->label(fn ($get): string => self::friendlyLabel($get('key')))
+                                    ->helperText(fn ($get): ?string => self::helperText($get('key')))
+                                    ->visible(fn ($get): bool => self::isToggleKey($get('key')))
+                                    ->columnSpanFull(),
+                                Forms\Components\TextInput::make('url_value')
+                                    ->label(fn ($get): string => self::friendlyLabel($get('key')))
+                                    ->url()
+                                    ->helperText(fn ($get): ?string => self::helperText($get('key')))
+                                    ->visible(fn ($get): bool => in_array($get('key'), self::urlKeys(), true))
+                                    ->columnSpanFull(),
+                            ]),
+                        Tab::make('Security')
+                            ->icon('heroicon-o-shield-check')
+                            ->schema([
+                                Section::make('Advanced system options')
+                                    ->description('Use these controls only for credentials and private configuration values.')
+                                    ->schema([
+                                        Forms\Components\Toggle::make('is_secret')
+                                            ->label('Treat value as secret')
+                                            ->helperText('Enable this for API keys, SMTP passwords, Firebase credentials, AI keys, and other private settings.')
+                                            ->required(),
+                                    ])
+                                    ->columnSpanFull(),
+                            ]),
                     ])
                     ->columnSpanFull(),
             ]);

@@ -18,6 +18,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -45,6 +46,9 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogoHeight('3rem')
             ->favicon(asset('favicon.png'))
             ->databaseNotifications()
+            ->sidebarCollapsibleOnDesktop()
+            ->collapsibleNavigationGroups()
+            ->navigationGroups($this->navigationGroups())
             ->colors([
                 'primary' => Color::Amber,
                 'info' => Color::Sky,
@@ -52,8 +56,20 @@ class AdminPanelProvider extends PanelProvider
                 'warning' => Color::Orange,
             ])
             ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn (): string => view('filament.admin-shell')->render(),
+            )
+            ->renderHook(
                 PanelsRenderHook::GLOBAL_SEARCH_AFTER,
                 fn (): string => view('filament.theme-switcher-topbar')->render(),
+            )
+            ->renderHook(
+                PanelsRenderHook::SIDEBAR_NAV_START,
+                fn (): string => view('filament.sidebar-menu-search')->render(),
+            )
+            ->renderHook(
+                PanelsRenderHook::SIDEBAR_NAV_END,
+                fn (): string => view('filament.sidebar-navigation-behavior')->render(),
             )
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources');
 
@@ -110,5 +126,25 @@ class AdminPanelProvider extends PanelProvider
         }
 
         return new HtmlString('<span class="com-admin-logo-mark" aria-label="MFM Triumphant Church Admin">MFM</span>');
+    }
+
+    /**
+     * @return array<NavigationGroup>
+     */
+    private function navigationGroups(): array
+    {
+        return [
+            NavigationGroup::make('Goshen Retreat')->collapsed(),
+            NavigationGroup::make('Forms')->collapsed(),
+            NavigationGroup::make('Giving')->collapsed(),
+            NavigationGroup::make('Fundraising')->collapsed(),
+            NavigationGroup::make('Messaging')->collapsed(),
+            NavigationGroup::make('Community')->collapsed(),
+            NavigationGroup::make('Content')->collapsed(),
+            NavigationGroup::make('Media Library')->collapsed(),
+            NavigationGroup::make('Programs')->collapsed(),
+            NavigationGroup::make('Settings')->collapsed(),
+            NavigationGroup::make('Legacy Accommodation Archive')->collapsed(),
+        ];
     }
 }
