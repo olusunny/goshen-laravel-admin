@@ -46,6 +46,20 @@ class RecurringChurchEventService
         )->take($limit)->values();
     }
 
+    public function upcomingDistinctEvents(Collection $events, int $limit = 5): Collection
+    {
+        $now = CarbonImmutable::now();
+
+        return $this->expandBetween(
+            $events,
+            $now->startOfDay(),
+            $now->addDays(self::DEFAULT_FUTURE_DAYS)->endOfDay(),
+        )
+            ->unique(fn (ChurchEvent $event): int => (int) ($event->recurring_parent_id ?? $event->id))
+            ->take($limit)
+            ->values();
+    }
+
     public function expandBetween(
         Collection $events,
         CarbonInterface $from,

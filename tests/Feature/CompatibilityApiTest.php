@@ -171,6 +171,39 @@ class CompatibilityApiTest extends TestCase
             ->assertJsonPath('slider_media.0.cover_photo', url('/storage/reference/header.jpg'));
     }
 
+    public function test_discover_slider_shows_one_item_for_recurring_programme(): void
+    {
+        \Carbon\Carbon::setTestNow('2026-07-01 09:00:00');
+
+        try {
+            ChurchEvent::create([
+                'title' => 'First Sunday Revival',
+                'details' => '<p>Monthly first Sunday programme.</p>',
+                'venue' => 'Main Auditorium',
+                'thumbnail' => 'reference/header.jpg',
+                'starts_at' => '2026-01-04 10:00:00',
+                'ends_at' => '2026-01-04 12:00:00',
+                'recurrence_type' => ChurchEvent::RECURRENCE_MONTHLY_NTH_WEEKDAY,
+                'recurrence_interval' => 1,
+                'recurrence_weekday' => 0,
+                'recurrence_week_of_month' => 1,
+                'is_published' => true,
+            ]);
+
+            $response = $this->postJson('/discover', ['data' => []])
+                ->assertOk()
+                ->assertJsonPath('status', 'ok');
+
+            $slider = collect($response->json('slider_media'));
+            $programmeItems = $slider->where('title', 'First Sunday Revival')->values();
+
+            $this->assertCount(1, $programmeItems);
+            $this->assertSame('2026-07-05 10:00:00', $programmeItems->first()['dateInserted'] ?? null);
+        } finally {
+            \Carbon\Carbon::setTestNow();
+        }
+    }
+
     public function test_media_endpoints_emit_flutter_compatible_payloads(): void
     {
         $this->seed();

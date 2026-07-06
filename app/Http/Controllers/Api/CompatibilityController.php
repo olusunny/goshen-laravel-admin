@@ -1449,7 +1449,7 @@ class CompatibilityController extends Controller
     private function homeSliderPayload()
     {
         $events = app(RecurringChurchEventService::class)
-            ->upcomingOccurrences($this->publishedChurchEventsForExpansion()->get(), 5)
+            ->upcomingDistinctEvents($this->publishedChurchEventsForExpansion()->get(), 5)
             ->map(fn (ChurchEvent $event) => $this->eventAsMediaPayload($event));
 
         $media = $this->orderedMediaQuery(MediaItem::with(['category', 'subCategory'])
