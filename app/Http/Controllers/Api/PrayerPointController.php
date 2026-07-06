@@ -16,9 +16,11 @@ class PrayerPointController extends Controller
     {
         $data = $this->payload($request);
         $perPage = min(max((int) ($data['per_page'] ?? 50), 1), 100);
+        $wallOnly = filter_var($data['wall'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         $points = PrayerPoint::query()
             ->where('is_published', true)
+            ->when($wallOnly, fn ($query) => $query->where('show_on_prayer_wall', true))
             ->orderByRaw('date IS NULL')
             ->orderByDesc('date')
             ->latest()
@@ -151,6 +153,7 @@ class PrayerPointController extends Controller
             'content' => ['required', 'string', 'max:20000'],
             'thumbnail' => ['nullable', 'string', 'max:1000'],
             'is_published' => ['nullable', 'boolean'],
+            'show_on_prayer_wall' => ['nullable', 'boolean'],
         ];
     }
 
@@ -163,6 +166,7 @@ class PrayerPointController extends Controller
             'content' => trim((string) $validated['content']),
             'thumbnail' => $validated['thumbnail'] ?? null,
             'is_published' => (bool) ($validated['is_published'] ?? false),
+            'show_on_prayer_wall' => (bool) ($validated['show_on_prayer_wall'] ?? true),
         ];
     }
 
@@ -177,6 +181,7 @@ class PrayerPointController extends Controller
             'thumbnail' => $point->thumbnail,
             'thumbnail_url' => MediaUrl::resolve($point->thumbnail),
             'is_published' => (bool) $point->is_published,
+            'show_on_prayer_wall' => (bool) $point->show_on_prayer_wall,
             'created_at' => $point->created_at?->toIso8601String(),
             'updated_at' => $point->updated_at?->toIso8601String(),
         ];

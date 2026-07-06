@@ -19,6 +19,7 @@ return new class extends Migration
             $table->longText('content');
             $table->string('thumbnail')->nullable();
             $table->boolean('is_published')->default(true);
+            $table->boolean('show_on_prayer_wall')->default(true)->index();
             $table->unsignedBigInteger('legacy_id')->nullable()->index();
             $table->timestamps();
         });

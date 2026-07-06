@@ -41,6 +41,13 @@ class PrayerPointResource extends Resource
                     ->previewable()
                     ->downloadable(),
                 Forms\Components\Toggle::make('is_published')
+                    ->label('Published in Prayer Points')
+                    ->helperText('Controls whether this prayer point is visible on the standalone Prayer Points page.')
+                    ->required(),
+                Forms\Components\Toggle::make('show_on_prayer_wall')
+                    ->label('Show above Interactive Prayer Wall')
+                    ->helperText('Turn this off when the prayer point should remain in Prayer Points but not appear above user prayer wall activities.')
+                    ->default(true)
                     ->required(),
                 Forms\Components\Hidden::make('legacy_id'),
             ]);
@@ -65,6 +72,11 @@ class PrayerPointResource extends Resource
                     ->searchable()
                     ->toggleable(),
                 Tables\Columns\IconColumn::make('is_published')
+                    ->label('Published')
+                    ->boolean()
+                    ->toggleable(),
+                Tables\Columns\IconColumn::make('show_on_prayer_wall')
+                    ->label('On prayer wall')
                     ->boolean()
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('created_at')
