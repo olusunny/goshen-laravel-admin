@@ -54,11 +54,14 @@
         <div class="ash-layout">
             <aside class="ash-tabs" aria-label="Settings sections">
                 @foreach ([
-                    'general' => ['General', 'Website, currency, ads', 'heroicon-o-cog-6-tooth'],
+                    'general' => ['General', 'Name, website, currency', 'heroicon-o-cog-6-tooth'],
+                    'branding' => ['Branding', 'Logo and app identity', 'heroicon-o-photo'],
                     'social' => ['Social links', 'Public contact channels', 'heroicon-o-share'],
                     'features' => ['Activation', 'Mobile app feature switches', 'heroicon-o-adjustments-horizontal'],
+                    'payments' => ['Giving & payments', 'PayPal and Stripe setup', 'heroicon-o-credit-card'],
                     'support' => ['Support', 'Accommodation support contact', 'heroicon-o-lifebuoy'],
                     'integrations' => ['Integrations', 'Gateways and credentials', 'heroicon-o-squares-plus'],
+                    'other' => ['Other settings', 'Additional app settings', 'heroicon-o-ellipsis-horizontal-circle'],
                 ] as $key => [$label, $note, $icon])
                     <button type="button" class="ash-tab" :class="{ 'active': tab === '{{ $key }}' }" x-on:click="tab = '{{ $key }}'">
                         <span class="ash-tab-icon"><x-filament::icon :icon="$icon" /></span>
@@ -82,12 +85,29 @@
                             <input class="ash-input" wire:model.defer="websiteUrl" placeholder="https://example.com">
                         </label>
                         <label class="ash-field">
-                            <span class="ash-label">Currency</span>
-                            <input class="ash-input" wire:model.defer="currency" maxlength="3" placeholder="GBP">
+                            <span class="ash-label">Currency code or symbol</span>
+                            <input class="ash-input" wire:model.defer="currency" maxlength="12" placeholder="£ or GBP">
                         </label>
                         <label class="ash-field">
                             <span class="ash-label">Ads interval seconds</span>
                             <input class="ash-input" type="number" min="0" wire:model.defer="adsInterval">
+                        </label>
+                    </div>
+                </section>
+
+                <section class="ash-panel" x-show="tab === 'branding'" x-cloak>
+                    <div class="ash-panel-head">
+                        <h2 class="ash-h2">Branding</h2>
+                        <p class="ash-muted">App identity values used by the mobile and web experience. Use a storage path for the logo, or upload through media tools and paste the stored path here.</p>
+                    </div>
+                    <div class="ash-grid">
+                        <label class="ash-field">
+                            <span class="ash-label">App name</span>
+                            <input class="ash-input" wire:model.defer="appName" placeholder="MFM Triumphant Church">
+                        </label>
+                        <label class="ash-field">
+                            <span class="ash-label">App logo path</span>
+                            <input class="ash-input" wire:model.defer="appLogo" placeholder="branding/logo.png">
                         </label>
                     </div>
                 </section>
@@ -132,13 +152,26 @@
                             'goshenReferralsEnabled' => ['Goshen referrals', 'Allow referral codes and wallet conversion.'],
                         ] as $model => [$label, $note])
                             <label class="ash-check">
-                                <input type="checkbox" wire:model.defer="{{ $model }}">
+                                <input type="checkbox" wire:model.live="{{ $model }}">
                                 <span>
                                     <strong>{{ $label }}</strong>
                                     <span>{{ $note }}</span>
                                 </span>
                             </label>
                         @endforeach
+                    </div>
+                </section>
+
+                <section class="ash-panel" x-show="tab === 'payments'" x-cloak>
+                    <div class="ash-panel-head">
+                        <h2 class="ash-h2">Giving & Payments</h2>
+                        <p class="ash-muted">General giving links are editable here. Stripe keys, modes, and webhooks live in the focused Payment Gateways page below.</p>
+                    </div>
+                    <div class="ash-grid">
+                        <label class="ash-field ash-field-full">
+                            <span class="ash-label">PayPal link</span>
+                            <input class="ash-input" wire:model.defer="paypalLink" placeholder="https://paypal.me/...">
+                        </label>
                     </div>
                 </section>
 
@@ -176,6 +209,12 @@
                         <h2 class="ash-h2">Integrations</h2>
                         <p class="ash-muted">Open focused setup pages for credentials and operational tooling.</p>
                     </div>
+                    <div class="ash-grid" style="padding-bottom:0;">
+                        <label class="ash-field ash-field-full">
+                            <span class="ash-label">Legacy Firebase service account path</span>
+                            <input class="ash-input" type="password" wire:model.defer="serviceAccountPath" placeholder="Leave blank to keep saved value">
+                        </label>
+                    </div>
                     <div class="ash-links">
                         @foreach ($quickLinks as $link)
                             <a class="ash-link" href="{{ $link['url'] }}">
@@ -187,6 +226,46 @@
                             </a>
                         @endforeach
                     </div>
+                </section>
+
+                <section class="ash-panel" x-show="tab === 'other'" x-cloak>
+                    <div class="ash-panel-head">
+                        <h2 class="ash-h2">Other Settings</h2>
+                        <p class="ash-muted">Any app settings not already handled by the grouped tabs or focused setup pages appear here automatically.</p>
+                    </div>
+                    @forelse ($additionalSettingGroups as $group => $settings)
+                        <div class="ash-panel-head" style="border-top:1px solid var(--ash-line);">
+                            <h3 class="ash-h2" style="font-size:18px;">{{ $group }}</h3>
+                        </div>
+                        <div class="ash-grid">
+                            @foreach ($settings as $setting)
+                                <label class="ash-field {{ strlen($setting['value']) > 120 ? 'ash-field-full' : '' }}">
+                                    <span class="ash-label">{{ $setting['label'] }}</span>
+                                    @if (strlen($setting['value']) > 120)
+                                        <textarea
+                                            class="ash-textarea"
+                                            wire:model.defer="additionalSettings.{{ $setting['key'] }}.value"
+                                            placeholder="{{ $setting['is_secret'] ? 'Leave blank to keep saved secret' : '' }}"
+                                        ></textarea>
+                                    @else
+                                        <input
+                                            class="ash-input"
+                                            type="{{ $setting['is_secret'] ? 'password' : 'text' }}"
+                                            wire:model.defer="additionalSettings.{{ $setting['key'] }}.value"
+                                            placeholder="{{ $setting['is_secret'] ? 'Leave blank to keep saved secret' : '' }}"
+                                        >
+                                    @endif
+                                    @if (filled($setting['description']))
+                                        <span class="ash-tab-note">{{ $setting['description'] }}</span>
+                                    @endif
+                                </label>
+                            @endforeach
+                        </div>
+                    @empty
+                        <div class="ash-grid">
+                            <p class="ash-muted ash-field-full">All current app settings are already grouped above or linked to focused setup pages.</p>
+                        </div>
+                    @endforelse
                 </section>
 
                 <div class="ash-actions">

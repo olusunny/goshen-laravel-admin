@@ -21,6 +21,8 @@ class AppSettingResource extends Resource
     use AuthorizesResourceAccess;
     protected static ?string $model = AppSetting::class;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 
     protected static string|UnitEnum|null $navigationGroup = 'Settings';
@@ -28,6 +30,11 @@ class AppSettingResource extends Resource
     protected static ?string $navigationLabel = 'Advanced Settings';
 
     protected static ?int $navigationSort = 99;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
     public static function form(Schema $schema): Schema
     {

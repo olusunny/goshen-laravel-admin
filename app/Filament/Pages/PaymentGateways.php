@@ -68,8 +68,7 @@ class PaymentGateways extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canAccess()
-            && AdminMenuRegistry::visibleForPage(static::class);
+        return false;
     }
 
     public function mount(StripePaymentSettings $settings): void

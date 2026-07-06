@@ -20,11 +20,18 @@ class AiProviderSettingResource extends Resource
     use AuthorizesResourceAccess;
     protected static ?string $model = AiProviderSetting::class;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-sparkles';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Settings';
 
     protected static ?string $navigationLabel = 'AI Providers';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
     public static function form(Schema $schema): Schema
     {
