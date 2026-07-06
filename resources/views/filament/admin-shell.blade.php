@@ -165,6 +165,58 @@
         display: grid !important;
     }
 
+    @media (min-width: 1024px) {
+        .fi-sidebar .fi-sidebar-header {
+            padding: 1rem .85rem .65rem;
+        }
+
+        .fi-sidebar .fi-logo .com-admin-logo-image {
+            max-width: 10.5rem;
+            max-height: 2.5rem;
+        }
+
+        .fi-sidebar .fi-sidebar-nav {
+            padding: .35rem .75rem 1rem;
+        }
+
+        .goshen-sidebar-search {
+            gap: .55rem;
+            margin-bottom: .95rem;
+            padding: .65rem .75rem;
+            border-radius: .5rem;
+        }
+
+        .goshen-sidebar-search input {
+            font-size: .9rem;
+        }
+
+        .fi-sidebar .fi-sidebar-nav-groups {
+            gap: .5rem;
+        }
+
+        .fi-sidebar .fi-sidebar-group-btn {
+            min-height: 2.5rem;
+            column-gap: .55rem;
+            padding: .45rem .55rem;
+        }
+
+        .fi-sidebar .fi-sidebar-group-label {
+            font-size: .7rem;
+            letter-spacing: .08em;
+        }
+
+        .fi-sidebar .fi-sidebar-item-btn {
+            min-height: 2.4rem;
+            column-gap: .55rem;
+            padding: .45rem .55rem;
+        }
+
+        .fi-sidebar .fi-sidebar-item-label {
+            font-size: .88rem;
+            font-weight: 720;
+        }
+    }
+
     .goshen-settings-tabs.fi-sc-tabs.fi-vertical {
         display: grid;
         grid-template-columns: minmax(240px, .34fr) minmax(0, 1fr);

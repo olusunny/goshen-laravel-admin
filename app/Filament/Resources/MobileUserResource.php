@@ -161,77 +161,13 @@ class MobileUserResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort('created_at', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('name')
-                    ->searchable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('triumphant_id')
-                    ->label('Triumphant ID')
-                    ->badge()
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('title')
-                    ->label('Title')
-                    ->badge()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('email')
-                    ->searchable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('phone')
-                    ->searchable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('member_type')
-                    ->label('Member status')
-                    ->formatStateUsing(fn (?string $state): string => $state === 'church_member' ? 'Church member' : ($state ? ucfirst($state) : '-'))
-                    ->badge()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('gender')
-                    ->searchable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('marital_status')
-                    ->label('Marital status')
-                    ->searchable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('churchGroup.name')
-                    ->label('Group')
-                    ->searchable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('country_of_residence')
-                    ->label('Country')
-                    ->searchable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('state_county_province')
-                    ->label('State / county / province')
-                    ->searchable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('login_type')
-                    ->searchable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('role_title')
-                    ->searchable()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('sort_order')
-                    ->numeric()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('roles.name')
-                    ->badge()
-                    ->toggleable(),
-                Tables\Columns\IconColumn::make('is_verified')
-                    ->boolean()
-                    ->toggleable(),
-                Tables\Columns\IconColumn::make('is_blocked')
-                    ->boolean()
-                    ->toggleable(),
-                Tables\Columns\IconColumn::make('is_deleted')
-                    ->boolean()
-                    ->toggleable(),
                 Tables\Columns\ImageColumn::make('avatar')
-                    ->label('Avatar')
+                    ->label('Photo')
                     ->circular()
-                    ->height(44)
-                    ->width(44)
+                    ->height(40)
+                    ->width(40)
                     ->getStateUsing(function (MobileUser $record): ?string {
                         $avatar = trim((string) $record->avatar);
 
@@ -245,11 +181,103 @@ class MobileUserResource extends Resource
 
                         return Storage::disk('public')->url($avatar);
                     })
-                    ->defaultImageUrl(fn (MobileUser $record): string => 'https://ui-avatars.com/api/?name='.urlencode($record->name ?: 'User').'&background=0c2230&color=fff')
+                    ->defaultImageUrl(fn (MobileUser $record): string => 'https://ui-avatars.com/api/?name='.urlencode($record->name ?: 'User').'&background=0c2230&color=fff'),
+                Tables\Columns\TextColumn::make('name')
+                    ->label('Member')
+                    ->searchable(['name', 'first_name', 'middle_name', 'last_name', 'email', 'phone', 'triumphant_id'])
+                    ->sortable()
+                    ->limit(30)
+                    ->description(function (MobileUser $record): string {
+                        return collect([
+                            $record->email,
+                            $record->phone,
+                        ])
+                            ->filter(fn (?string $value): bool => filled($value))
+                            ->implode(' · ') ?: 'No contact details';
+                    }),
+                Tables\Columns\TextColumn::make('triumphant_id')
+                    ->label('Triumphant ID')
+                    ->badge()
+                    ->searchable()
+                    ->sortable()
+                    ->copyable(),
+                Tables\Columns\TextColumn::make('title')
+                    ->label('Title')
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('email')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('phone')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('member_type')
+                    ->label('Member status')
+                    ->formatStateUsing(fn (?string $state): string => $state === 'church_member' ? 'Church member' : ($state ? ucfirst($state) : '-'))
+                    ->badge()
                     ->toggleable(),
+                Tables\Columns\TextColumn::make('account_status')
+                    ->label('Account')
+                    ->badge()
+                    ->getStateUsing(fn (MobileUser $record): string => match (true) {
+                        (bool) $record->is_deleted => 'Deleted',
+                        (bool) $record->is_blocked => 'Blocked',
+                        (bool) $record->is_verified => 'Verified',
+                        default => 'Pending',
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        'Verified' => 'success',
+                        'Blocked', 'Deleted' => 'danger',
+                        default => 'warning',
+                    }),
+                Tables\Columns\TextColumn::make('gender')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('marital_status')
+                    ->label('Marital status')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('churchGroup.name')
+                    ->label('Group')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('country_of_residence')
+                    ->label('Country')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('state_county_province')
+                    ->label('State / county / province')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('login_type')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('role_title')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('sort_order')
+                    ->numeric()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('roles.name')
+                    ->label('Roles')
+                    ->badge()
+                    ->limit(24)
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\IconColumn::make('is_verified')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\IconColumn::make('is_blocked')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\IconColumn::make('is_deleted')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('cover_photo')
                     ->searchable()
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -263,25 +291,36 @@ class MobileUserResource extends Resource
                 //
             ])
             ->recordActions([
-                Actions\ViewAction::make(),
-                Actions\Action::make('reset_password')
-                    ->label('Reset password')
-                    ->icon('heroicon-o-key')
-                    ->schema([
-                        Forms\Components\TextInput::make('password')
-                            ->label('New password')
-                            ->password()
-                            ->revealable()
-                            ->required()
-                            ->minLength(8),
-                    ])
-                    ->action(function (MobileUser $record, array $data): void {
-                        $record->forceFill([
-                            'password' => Hash::make($data['password']),
-                        ])->save();
-                    })
-                    ->successNotificationTitle('User password has been reset'),
-                Actions\EditAction::make(),
+                Actions\ActionGroup::make([
+                    Actions\ViewAction::make()
+                        ->label('View details')
+                        ->icon('heroicon-o-eye'),
+                    Actions\EditAction::make()
+                        ->label('Edit user')
+                        ->icon('heroicon-o-pencil-square'),
+                    Actions\Action::make('reset_password')
+                        ->label('Reset password')
+                        ->icon('heroicon-o-key')
+                        ->schema([
+                            Forms\Components\TextInput::make('password')
+                                ->label('New password')
+                                ->password()
+                                ->revealable()
+                                ->required()
+                                ->minLength(8),
+                        ])
+                        ->action(function (MobileUser $record, array $data): void {
+                            $record->forceFill([
+                                'password' => Hash::make($data['password']),
+                            ])->save();
+                        })
+                        ->successNotificationTitle('User password has been reset'),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->iconButton()
+                    ->tooltip('Actions')
+                    ->dropdownPlacement('bottom-end'),
             ])
             ->toolbarActions([
                 Actions\BulkActionGroup::make([

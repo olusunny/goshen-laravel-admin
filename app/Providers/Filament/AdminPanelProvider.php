@@ -47,6 +47,7 @@ class AdminPanelProvider extends PanelProvider
             ->favicon(asset('favicon.png'))
             ->databaseNotifications()
             ->sidebarCollapsibleOnDesktop()
+            ->sidebarWidth('16rem')
             ->collapsibleNavigationGroups()
             ->navigationGroups($this->navigationGroups())
             ->colors([
