@@ -25,9 +25,9 @@ class AppSettingResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'Settings';
 
-    protected static ?string $navigationLabel = 'App Settings';
+    protected static ?string $navigationLabel = 'Advanced Settings';
 
-    protected static ?int $navigationSort = 90;
+    protected static ?int $navigationSort = 99;
 
     public static function form(Schema $schema): Schema
     {
@@ -167,6 +167,7 @@ class AppSettingResource extends Resource
             'telegram_page',
             'mixlr_page',
             'whatsapp_page',
+            'twitter_page',
         ];
     }
 
@@ -222,6 +223,7 @@ class AppSettingResource extends Resource
             'testimonies_enabled',
             'goshen_retreat_enabled',
             'goshen_scanner_enabled',
+            'goshen_wallet_enabled',
             'goshen_stripe_giving_enabled',
             'goshen_referrals_enabled',
         ];
@@ -238,10 +240,12 @@ class AppSettingResource extends Resource
             'telegram_page' => 'Telegram URL',
             'mixlr_page' => 'Mixlr URL',
             'whatsapp_page' => 'WhatsApp URL',
+            'twitter_page' => 'X/Twitter URL',
             'google_login_enabled' => 'Enable Google login',
             'testimonies_enabled' => 'Enable Testimonies & Thanksgiving Wall',
             'goshen_retreat_enabled' => 'Enable Goshen Retreat',
             'goshen_scanner_enabled' => 'Enable Goshen scanner',
+            'goshen_wallet_enabled' => 'Enable Goshen wallet',
             'goshen_stripe_giving_enabled' => 'Enable Goshen Stripe giving',
             'goshen_referrals_enabled' => 'Enable Goshen referrals',
             'goshen_referral_points_per_paid_registration' => 'Goshen referral points per paid registration',
@@ -269,6 +273,7 @@ class AppSettingResource extends Resource
             'testimonies_enabled' => 'Turn the Testimonies & Thanksgiving Wall on or off in the mobile app.',
             'goshen_retreat_enabled' => 'Show or hide the Goshen Retreat module in the mobile app and web experience.',
             'goshen_scanner_enabled' => 'Allow authorized event scanner users to access check-in features.',
+            'goshen_wallet_enabled' => 'Allow members to use Goshen wallet features in the mobile app.',
             'goshen_stripe_giving_enabled' => 'Allow new Goshen giving payments through the configured Stripe gateway.',
             'goshen_referrals_enabled' => 'Allow referral code entry, point validation, and wallet conversion for Goshen Retreat.',
             'goshen_referral_points_per_paid_registration' => 'Awarded after a referred Goshen Retreat registration is paid.',

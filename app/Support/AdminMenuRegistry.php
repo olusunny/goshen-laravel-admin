@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Filament\Pages\CloudBackups;
+use App\Filament\Pages\AppSettings;
 use App\Filament\Pages\GoshenReferralSettings;
 use App\Filament\Pages\GoshenRetreatConsole;
 use App\Filament\Pages\GoogleFirebaseSettings;
@@ -139,6 +140,7 @@ class AdminMenuRegistry
     private static function pageClasses(): array
     {
         return [
+            AppSettings::class,
             CloudBackups::class,
             GoshenReferralSettings::class,
             GoshenRetreatConsole::class,
