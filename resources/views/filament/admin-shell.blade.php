@@ -1,20 +1,42 @@
 <style>
     :root {
+        --goshen-admin-sidebar: #f7fbf9;
+        --goshen-admin-sidebar-deep: #eef6f2;
+        --goshen-admin-sidebar-active: #dff2eb;
+        --goshen-admin-sidebar-active-text: #0f513c;
+        --goshen-admin-sidebar-hover: rgba(15, 81, 60, .08);
+        --goshen-admin-sidebar-line: rgba(15, 81, 60, .16);
+        --goshen-admin-sidebar-muted: #5f716b;
+        --goshen-admin-sidebar-text: #18342b;
+        --goshen-admin-sidebar-search-bg: rgba(255, 255, 255, .84);
+        --goshen-admin-sidebar-search-border: rgba(15, 81, 60, .18);
+        --goshen-admin-sidebar-search-text: #18342b;
+        --goshen-admin-sidebar-search-placeholder: #657770;
+        --goshen-admin-amber: #f59e0b;
+        --goshen-admin-soft: #eef8f5;
+    }
+
+    .dark {
         --goshen-admin-sidebar: #20342e;
         --goshen-admin-sidebar-deep: #172821;
         --goshen-admin-sidebar-active: #176451;
+        --goshen-admin-sidebar-active-text: #fff;
+        --goshen-admin-sidebar-hover: rgba(23, 100, 81, .65);
         --goshen-admin-sidebar-line: rgba(232, 244, 239, .24);
         --goshen-admin-sidebar-muted: rgba(232, 244, 239, .68);
-        --goshen-admin-amber: #f59e0b;
-        --goshen-admin-soft: #eef8f5;
+        --goshen-admin-sidebar-text: rgba(255, 255, 255, .88);
+        --goshen-admin-sidebar-search-bg: rgba(255, 255, 255, .12);
+        --goshen-admin-sidebar-search-border: rgba(255, 255, 255, .08);
+        --goshen-admin-sidebar-search-text: #fff;
+        --goshen-admin-sidebar-search-placeholder: rgba(255, 255, 255, .82);
     }
 
     .fi-sidebar.fi-main-sidebar {
         background:
             radial-gradient(circle at 90% 10%, rgba(245, 158, 11, .12), transparent 28%),
             linear-gradient(180deg, var(--goshen-admin-sidebar), var(--goshen-admin-sidebar-deep)) !important;
-        color: #f8fafc;
-        border-inline-end: 0;
+        color: var(--goshen-admin-sidebar-text);
+        border-inline-end: 1px solid var(--goshen-admin-sidebar-line);
     }
 
     .fi-sidebar .fi-sidebar-header-ctn,
@@ -28,7 +50,7 @@
     }
 
     .fi-sidebar .fi-logo {
-        color: #fff;
+        color: var(--goshen-admin-sidebar-text);
     }
 
     .fi-sidebar .fi-sidebar-nav {
@@ -43,14 +65,14 @@
         margin: 0 0 1.15rem;
         padding: .82rem .95rem;
         border-radius: .55rem;
-        background: rgba(255, 255, 255, .12);
-        border: 1px solid rgba(255, 255, 255, .08);
+        background: var(--goshen-admin-sidebar-search-bg);
+        border: 1px solid var(--goshen-admin-sidebar-search-border);
     }
 
     .goshen-sidebar-search svg {
         width: 1.15rem;
         height: 1.15rem;
-        color: rgba(255, 255, 255, .9);
+        color: var(--goshen-admin-sidebar-search-text);
         flex: none;
     }
 
@@ -59,13 +81,13 @@
         border: 0;
         outline: 0;
         background: transparent;
-        color: #fff;
+        color: var(--goshen-admin-sidebar-search-text);
         font-size: .95rem;
         font-weight: 650;
     }
 
     .goshen-sidebar-search input::placeholder {
-        color: rgba(255, 255, 255, .82);
+        color: var(--goshen-admin-sidebar-search-placeholder);
     }
 
     .fi-sidebar .fi-sidebar-nav-groups {
@@ -76,12 +98,12 @@
         min-height: 2.85rem;
         padding: .55rem .75rem;
         border-radius: .35rem;
-        color: #fff;
+        color: var(--goshen-admin-sidebar-text);
     }
 
     .fi-sidebar .fi-sidebar-group.fi-active > .fi-sidebar-group-btn,
     .fi-sidebar .fi-sidebar-group-btn:hover {
-        background: rgba(23, 100, 81, .65);
+        background: var(--goshen-admin-sidebar-hover);
     }
 
     .fi-sidebar .fi-sidebar-group-label {
@@ -93,7 +115,7 @@
     }
 
     .fi-sidebar .fi-sidebar-group-collapse-btn {
-        color: rgba(255, 255, 255, .78);
+        color: var(--goshen-admin-sidebar-muted);
     }
 
     .fi-sidebar .fi-sidebar-group-items,
@@ -107,7 +129,7 @@
         min-height: 2.65rem;
         padding: .52rem .72rem;
         border-radius: .35rem;
-        color: rgba(255, 255, 255, .84);
+        color: var(--goshen-admin-sidebar-text) !important;
         transition: background .16s ease, color .16s ease;
     }
 
@@ -115,14 +137,15 @@
     .fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn,
     .fi-sidebar .fi-sidebar-item-has-active-child-items > .fi-sidebar-item-btn {
         background: var(--goshen-admin-sidebar-active);
-        color: #fff;
+        color: var(--goshen-admin-sidebar-active-text) !important;
     }
 
     .fi-sidebar .fi-sidebar-item-icon {
-        color: currentColor;
+        color: currentColor !important;
     }
 
     .fi-sidebar .fi-sidebar-item-label {
+        color: currentColor !important;
         font-size: .94rem;
         font-weight: 750;
         letter-spacing: 0;
