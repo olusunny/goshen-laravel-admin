@@ -54,7 +54,7 @@ class AdminMenuSettings extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canAccess();
+        return false;
     }
 
     public function mount(): void

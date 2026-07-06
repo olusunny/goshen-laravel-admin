@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\AddonResource;
 use App\Filament\Resources\AiProviderSettingResource;
 use App\Filament\Resources\AppSettingResource;
+use App\Filament\Resources\RoleResource;
 use App\Models\AppSetting;
 use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
@@ -174,6 +175,16 @@ class AppSettings extends Page
                     'label' => 'Add-ons',
                     'description' => 'Installed add-ons, lifecycle status, and package health.',
                     'url' => AddonResource::getUrl('index'),
+                ],
+                [
+                    'label' => 'Role Permissions',
+                    'description' => 'Admin roles and feature permissions.',
+                    'url' => RoleResource::getUrl('index'),
+                ],
+                [
+                    'label' => 'Admin Menu Settings',
+                    'description' => 'Role-based visibility for admin navigation items.',
+                    'url' => AdminMenuSettings::getUrl(),
                 ],
             ],
             'additionalSettingGroups' => $this->additionalSettingGroups(),

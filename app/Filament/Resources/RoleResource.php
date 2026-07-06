@@ -27,6 +27,8 @@ class RoleResource extends Resource
 
     protected static ?string $model = Role::class;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shield-check';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Settings';
@@ -36,6 +38,11 @@ class RoleResource extends Resource
     protected static ?string $modelLabel = 'Role Permission';
 
     protected static ?string $pluralModelLabel = 'Role Permissions';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
     public static function getEloquentQuery(): Builder
     {
