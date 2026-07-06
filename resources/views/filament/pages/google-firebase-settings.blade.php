@@ -102,7 +102,7 @@
 
         <section class="gfs-card gfs-pad">
             @php
-                $firebaseAdminOk = $firebaseCredentialsFileExists && $firebaseCredentialsMatchesMobileProject && $firebaseStorageMatchesMobileProject;
+                $firebaseAdminOk = $firebaseCredentialsFileExists && $firebaseCredentialsFileReadable && $firebaseCredentialsMatchesMobileProject && $firebaseStorageMatchesMobileProject;
             @endphp
 
             <h2 class="gfs-h2">Firebase Admin credentials</h2>
@@ -134,7 +134,15 @@
                 </div>
                 <div class="gfs-field">
                     <span class="gfs-label">Credential file status</span>
-                    <code class="gfs-code">{{ $firebaseCredentialsFileExists ? 'Found' : 'Missing' }}</code>
+                    <code class="gfs-code">
+                        @if (! $firebaseCredentialsFileExists)
+                            Missing
+                        @elseif (! $firebaseCredentialsFileReadable)
+                            Found but not readable by the web server user
+                        @else
+                            Found and readable
+                        @endif
+                    </code>
                 </div>
                 <div class="gfs-field">
                     <span class="gfs-label">Credential project ID</span>

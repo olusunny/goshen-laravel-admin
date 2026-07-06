@@ -56,6 +56,8 @@ class GoogleFirebaseSettings extends Page
 
     public bool $firebaseCredentialsFileExists = false;
 
+    public bool $firebaseCredentialsFileReadable = false;
+
     public bool $firebaseCredentialsMatchesMobileProject = false;
 
     public bool $firebaseStorageMatchesMobileProject = false;
@@ -150,6 +152,7 @@ class GoogleFirebaseSettings extends Page
     private function inspectFirebaseCredentials(): void
     {
         $this->firebaseCredentialsFileExists = false;
+        $this->firebaseCredentialsFileReadable = false;
         $this->firebaseCredentialsMatchesMobileProject = false;
         $this->firebaseStorageMatchesMobileProject = trim($this->firebaseStorageBucket) === $this->mobileFirebaseStorageBucket;
         $this->firebaseCredentialsProjectId = '';
@@ -161,7 +164,18 @@ class GoogleFirebaseSettings extends Page
         }
 
         $this->firebaseCredentialsFileExists = true;
-        $decoded = json_decode((string) file_get_contents($resolvedPath), true);
+        if (! is_readable($resolvedPath)) {
+            return;
+        }
+
+        $this->firebaseCredentialsFileReadable = true;
+        $json = @file_get_contents($resolvedPath);
+        if ($json === false) {
+            $this->firebaseCredentialsFileReadable = false;
+            return;
+        }
+
+        $decoded = json_decode($json, true);
         if (! is_array($decoded)) {
             return;
         }
