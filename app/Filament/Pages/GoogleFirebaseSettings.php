@@ -50,6 +50,20 @@ class GoogleFirebaseSettings extends Page
 
     public string $firebaseStorageBucket = '';
 
+    public string $mobileFirebaseProjectId = 'mfm-triumphant-church-apps';
+
+    public string $mobileFirebaseStorageBucket = 'mfm-triumphant-church-apps.firebasestorage.app';
+
+    public bool $firebaseCredentialsFileExists = false;
+
+    public bool $firebaseCredentialsMatchesMobileProject = false;
+
+    public bool $firebaseStorageMatchesMobileProject = false;
+
+    public string $firebaseCredentialsProjectId = '';
+
+    public string $firebaseCredentialsClientEmail = '';
+
     public static function shouldRegisterNavigation(): bool
     {
         return static::canAccess()
@@ -77,6 +91,8 @@ class GoogleFirebaseSettings extends Page
         $this->firebaseCredentialsPath = (string) (env('FIREBASE_CREDENTIALS') ?: config('firebase.projects.app.credentials') ?: '');
         $this->googleApplicationCredentialsPath = (string) env('GOOGLE_APPLICATION_CREDENTIALS', '');
         $this->firebaseStorageBucket = (string) env('FIREBASE_STORAGE_DEFAULT_BUCKET', '');
+
+        $this->inspectFirebaseCredentials();
     }
 
     public function save(): void
@@ -129,5 +145,43 @@ class GoogleFirebaseSettings extends Page
                 'description' => $description,
             ],
         );
+    }
+
+    private function inspectFirebaseCredentials(): void
+    {
+        $this->firebaseCredentialsFileExists = false;
+        $this->firebaseCredentialsMatchesMobileProject = false;
+        $this->firebaseStorageMatchesMobileProject = trim($this->firebaseStorageBucket) === $this->mobileFirebaseStorageBucket;
+        $this->firebaseCredentialsProjectId = '';
+        $this->firebaseCredentialsClientEmail = '';
+
+        $resolvedPath = $this->resolveFirebaseCredentialPath($this->firebaseCredentialsPath);
+        if ($resolvedPath === null || ! is_file($resolvedPath)) {
+            return;
+        }
+
+        $this->firebaseCredentialsFileExists = true;
+        $decoded = json_decode((string) file_get_contents($resolvedPath), true);
+        if (! is_array($decoded)) {
+            return;
+        }
+
+        $this->firebaseCredentialsProjectId = (string) ($decoded['project_id'] ?? '');
+        $this->firebaseCredentialsClientEmail = (string) ($decoded['client_email'] ?? '');
+        $this->firebaseCredentialsMatchesMobileProject = $this->firebaseCredentialsProjectId === $this->mobileFirebaseProjectId;
+    }
+
+    private function resolveFirebaseCredentialPath(string $path): ?string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return null;
+        }
+
+        if (preg_match('/^(?:[A-Za-z]:[\/\\\\]|\/)/', $path) === 1) {
+            return $path;
+        }
+
+        return base_path($path);
     }
 }

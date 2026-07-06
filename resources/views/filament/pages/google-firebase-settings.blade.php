@@ -23,6 +23,11 @@
         .gfs-check { display:flex; gap:10px; align-items:center; min-height:46px; padding:10px 12px; border:1px solid var(--gfs-line); border-radius:13px; background:var(--gfs-soft); font-weight:800; }
         .gfs-code { display:block; margin-top:8px; overflow-wrap:anywhere; border:1px solid var(--gfs-line); border-radius:12px; padding:10px 12px; background:rgba(12,34,48,.04); color:var(--gfs-text); font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace; font-size:12px; }
         .dark .gfs-code { background:rgba(255,255,255,.04); }
+        .gfs-status { display:inline-flex; align-items:center; gap:8px; width:max-content; max-width:100%; margin-top:12px; border-radius:999px; padding:8px 12px; font-size:12px; font-weight:950; }
+        .gfs-status-ok { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+        .gfs-status-warn { background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; }
+        .dark .gfs-status-ok { background:rgba(22,101,52,.18); color:#86efac; border-color:rgba(134,239,172,.28); }
+        .dark .gfs-status-warn { background:rgba(154,52,18,.2); color:#fed7aa; border-color:rgba(254,215,170,.24); }
         .gfs-note { padding:14px 16px; border-radius:16px; background:#eff6ff; border:1px solid #bfdbfe; color:#155eef; font-size:13px; font-weight:750; line-height:1.55; }
         .dark .gfs-note { background:rgba(37,99,235,.13); border-color:rgba(147,197,253,.22); color:#93c5fd; }
         @media (max-width:900px) { .gfs-grid { grid-template-columns:1fr; } .gfs-pad { padding:18px; } }
@@ -96,10 +101,25 @@
         </form>
 
         <section class="gfs-card gfs-pad">
+            @php
+                $firebaseAdminOk = $firebaseCredentialsFileExists && $firebaseCredentialsMatchesMobileProject && $firebaseStorageMatchesMobileProject;
+            @endphp
+
             <h2 class="gfs-h2">Firebase Admin credentials</h2>
             <p class="gfs-muted">Backend push notifications use Firebase Admin SDK credentials from server environment variables. These are not the same as the mobile app's google-services.json.</p>
+            <span class="gfs-status {{ $firebaseAdminOk ? 'gfs-status-ok' : 'gfs-status-warn' }}">
+                {{ $firebaseAdminOk ? 'Connected to current Firebase project' : 'Firebase Admin project needs attention' }}
+            </span>
 
             <div class="gfs-grid" style="margin-top:18px;">
+                <div class="gfs-field">
+                    <span class="gfs-label">Expected mobile Firebase project</span>
+                    <code class="gfs-code">{{ $mobileFirebaseProjectId }}</code>
+                </div>
+                <div class="gfs-field">
+                    <span class="gfs-label">Expected storage bucket</span>
+                    <code class="gfs-code">{{ $mobileFirebaseStorageBucket }}</code>
+                </div>
                 <div class="gfs-field">
                     <span class="gfs-label">FIREBASE_CREDENTIALS</span>
                     <code class="gfs-code">{{ $firebaseCredentialsPath !== '' ? $firebaseCredentialsPath : 'Not configured' }}</code>
@@ -111,6 +131,18 @@
                 <div class="gfs-field">
                     <span class="gfs-label">Firebase storage bucket</span>
                     <code class="gfs-code">{{ $firebaseStorageBucket !== '' ? $firebaseStorageBucket : 'Not configured' }}</code>
+                </div>
+                <div class="gfs-field">
+                    <span class="gfs-label">Credential file status</span>
+                    <code class="gfs-code">{{ $firebaseCredentialsFileExists ? 'Found' : 'Missing' }}</code>
+                </div>
+                <div class="gfs-field">
+                    <span class="gfs-label">Credential project ID</span>
+                    <code class="gfs-code">{{ $firebaseCredentialsProjectId !== '' ? $firebaseCredentialsProjectId : 'Unavailable' }}</code>
+                </div>
+                <div class="gfs-field">
+                    <span class="gfs-label">Credential service account</span>
+                    <code class="gfs-code">{{ $firebaseCredentialsClientEmail !== '' ? $firebaseCredentialsClientEmail : 'Unavailable' }}</code>
                 </div>
             </div>
         </section>
