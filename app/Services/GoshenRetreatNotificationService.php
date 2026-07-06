@@ -24,6 +24,7 @@ class GoshenRetreatNotificationService
     ): InboxMessage {
         $message = InboxMessage::query()->create([
             'title' => $title,
+            'message_source' => InboxMessage::SOURCE_SYSTEM,
             'content' => nl2br(e($body)),
             'recipient_mode' => 'selected',
             'selected_mobile_user_ids' => [(int) $user->id],

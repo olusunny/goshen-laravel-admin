@@ -240,6 +240,21 @@ class AdminAccessTest extends TestCase
         }
     }
 
+    public function test_inbox_message_resource_pages_render(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@church.local')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get('/admin/inbox-messages')
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->get('/admin/inbox-messages/create')
+            ->assertOk();
+    }
+
     /**
      * @return array<int, string>
      */

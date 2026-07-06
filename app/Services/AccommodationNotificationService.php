@@ -185,6 +185,7 @@ class AccommodationNotificationService
 
         $message = InboxMessage::create([
             'title' => $inboxTitle ?: $subject,
+            'message_source' => InboxMessage::SOURCE_SYSTEM,
             'notification_category' => 'accommodation',
             'content' => $this->inboxHtml($body),
             'send_push' => true,

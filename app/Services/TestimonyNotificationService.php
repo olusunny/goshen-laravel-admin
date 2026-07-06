@@ -21,6 +21,7 @@ class TestimonyNotificationService
 
         $message = InboxMessage::create([
             'title' => 'Testimony review update',
+            'message_source' => InboxMessage::SOURCE_SYSTEM,
             'notification_category' => 'testimonies',
             'content' => $this->content($testimony, $reason),
             'send_push' => true,

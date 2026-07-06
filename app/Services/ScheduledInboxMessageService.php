@@ -118,6 +118,7 @@ class ScheduledInboxMessageService
             'schedule_enabled' => false,
             'schedule_type' => 'generated',
             'scheduled_parent_id' => $message->id,
+            'message_source' => InboxMessage::SOURCE_RECURRING_DELIVERY,
             'is_published' => (bool) $copy->send_inbox,
             'published_at' => now(),
         ])->save();

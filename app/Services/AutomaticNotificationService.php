@@ -96,6 +96,7 @@ class AutomaticNotificationService
         if ($notification->send_inbox || $notification->send_push) {
             $inbox = InboxMessage::create([
                 'title' => $title,
+                'message_source' => InboxMessage::SOURCE_AUTOMATIC,
                 'notification_category' => $notification->notification_category ?: 'general',
                 'content' => nl2br(e($body)),
                 'thumbnail' => $notification->image_path,

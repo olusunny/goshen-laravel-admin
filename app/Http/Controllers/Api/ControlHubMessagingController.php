@@ -177,6 +177,7 @@ class ControlHubMessagingController extends Controller
         $message = InboxMessage::query()->create(InboxMessageResource::normalizePublishingData([
             'title' => trim((string) $validated['title']),
             'content' => nl2br(e(trim((string) $validated['content']))),
+            'message_source' => InboxMessage::SOURCE_CONTROL_HUB,
             'notification_category' => $validated['notification_category'] ?? 'general',
             'send_inbox' => $sendInbox,
             'send_push' => $sendPush,

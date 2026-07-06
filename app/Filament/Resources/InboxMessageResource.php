@@ -321,6 +321,11 @@ class InboxMessageResource extends Resource
                 Tables\Columns\TextColumn::make('title')
                     ->searchable()
                     ->toggleable(),
+                Tables\Columns\TextColumn::make('message_source')
+                    ->label('Source')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => InboxMessage::sourceOptions()[$state ?: InboxMessage::SOURCE_ADMIN] ?? 'Other')
+                    ->toggleable(),
                 Tables\Columns\IconColumn::make('send_push')
                     ->boolean()
                     ->toggleable(),
@@ -379,8 +384,21 @@ class InboxMessageResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('message_source')
+                    ->label('Message source')
+                    ->options(InboxMessage::sourceOptions())
+                    ->multiple()
+                    ->default(InboxMessage::MANAGED_SOURCES),
+                Tables\Filters\SelectFilter::make('schedule_type')
+                    ->label('Schedule type')
+                    ->options([
+                        'manual' => 'Manual',
+                        'scheduled' => 'Scheduled once',
+                        'recurring_daily' => 'Recurring daily',
+                        'generated' => 'Generated delivery copy',
+                    ]),
             ])
+            ->defaultSort('created_at', 'desc')
             ->recordActions([
                 Actions\Action::make('sendPushNow')
                     ->label('Send push')
@@ -513,6 +531,8 @@ class InboxMessageResource extends Resource
 
     public static function normalizePublishingData(array $data): array
     {
+        $data['message_source'] = $data['message_source'] ?? InboxMessage::SOURCE_ADMIN;
+
         $mode = (string) ($data['recipient_mode'] ?? '');
         if (MessageRecipientResolver::isGoshenMode($mode)) {
             $data['goshen_payment_filter'] = MessageRecipientResolver::paymentFilterForMode($mode);
