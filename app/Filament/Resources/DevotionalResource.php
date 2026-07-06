@@ -44,7 +44,14 @@ class DevotionalResource extends Resource
                     ->previewable()
                     ->downloadable(),
                 Forms\Components\Toggle::make('is_published')
+                    ->live()
                     ->required(),
+                Forms\Components\Toggle::make('send_push_after_save')
+                    ->label('Send devotional push after saving')
+                    ->helperText('Only sends when this devotional is published. This does not create inbox message records.')
+                    ->default(false)
+                    ->dehydrated(false)
+                    ->visible(fn ($get): bool => (bool) $get('is_published')),
                 Forms\Components\Hidden::make('legacy_id'),
             ]);
     }
@@ -92,13 +99,7 @@ class DevotionalResource extends Resource
                     ->modalDescription('This will notify app users who allow devotional notifications. It will not create inbox message records.')
                     ->visible(fn (Devotional $record): bool => (bool) $record->is_published)
                     ->action(function (Devotional $record): void {
-                        $result = app(FirebasePushSender::class)->sendDevotional($record);
-
-                        Notification::make()
-                            ->title("Devotional push sent to {$result['sent']} device(s)")
-                            ->body($result['failed'] ? "{$result['failed']} device(s) failed. {$result['error']}" : null)
-                            ->success()
-                            ->send();
+                        self::sendPushNotification($record);
                     }),
                 Actions\EditAction::make(),
             ])
@@ -123,5 +124,26 @@ class DevotionalResource extends Resource
             'create' => Pages\CreateDevotional::route('/create'),
             'edit' => Pages\EditDevotional::route('/{record}/edit'),
         ];
+    }
+
+    public static function sendPushNotification(Devotional $record): void
+    {
+        if (! $record->is_published) {
+            Notification::make()
+                ->title('Devotional push not sent')
+                ->body('Publish the devotional before sending a push notification.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $result = app(FirebasePushSender::class)->sendDevotional($record);
+
+        Notification::make()
+            ->title("Devotional push sent to {$result['sent']} device(s)")
+            ->body($result['failed'] ? "{$result['failed']} device(s) failed. {$result['error']}" : ($result['error'] ?: null))
+            ->success()
+            ->send();
     }
 }

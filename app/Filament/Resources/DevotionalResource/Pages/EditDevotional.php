@@ -16,4 +16,13 @@ class EditDevotional extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
+    protected function afterSave(): void
+    {
+        $state = $this->form->getRawState();
+
+        if ((bool) ($state['send_push_after_save'] ?? false)) {
+            DevotionalResource::sendPushNotification($this->record);
+        }
+    }
 }
