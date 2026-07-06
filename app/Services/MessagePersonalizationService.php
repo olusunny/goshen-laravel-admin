@@ -36,8 +36,12 @@ class MessagePersonalizationService
 
         $context = $this->contextFor($user, $message);
 
-        return preg_replace_callback('/\{([^{}]+)\}/u', function (array $matches) use ($context, $escapeHtml): string {
-            $key = $this->canonicalKey((string) $matches[1]);
+        return preg_replace_callback('/\{\{\s*([^{}]+?)\s*\}\}|\{\s*([^{}]+?)\s*\}/u', function (array $matches) use ($context, $escapeHtml): string {
+            $rawKey = trim((string) ($matches[1] ?? ''));
+            if ($rawKey === '') {
+                $rawKey = trim((string) ($matches[2] ?? ''));
+            }
+            $key = $this->canonicalKey($rawKey);
             $value = $context[$key] ?? null;
 
             if ($value === null || $value === '') {
