@@ -332,21 +332,13 @@
             background: rgba(248, 181, 34, .16);
             color: #fff;
         }
-        .nav-mark {
+        .nav-icon {
             width: 26px;
             height: 26px;
-            border-radius: 9px;
-            border: 1px solid currentColor;
             display: inline-block;
             opacity: .9;
-            position: relative;
-        }
-        .nav-mark::after {
-            content: "";
-            position: absolute;
-            inset: 8px;
-            border-radius: 99px;
-            background: currentColor;
+            flex: 0 0 auto;
+            stroke-width: 2.2;
         }
 
         .portal-main {
@@ -708,6 +700,40 @@
 </head>
 <body>
     <div id="toast" class="toast" role="status" hidden></div>
+    <svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden">
+        <symbol id="icon-home" viewBox="0 0 24 24">
+            <path d="M3 10.6 12 3l9 7.6v9.1a1.3 1.3 0 0 1-1.3 1.3h-5.2v-6.2h-5V21H4.3A1.3 1.3 0 0 1 3 19.7z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-calendar" viewBox="0 0 24 24">
+            <rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8 3v4M16 3v4M3 10h18M8 15l2.2 2.2L16 12" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-ticket" viewBox="0 0 24 24">
+            <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v2a2.5 2.5 0 0 0 0 5v2A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-2a2.5 2.5 0 0 0 0-5zM10 8v8M14 8v8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-card" viewBox="0 0 24 24">
+            <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 10h18M7 15h4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-wallet" viewBox="0 0 24 24">
+            <path d="M4 7.5h14A2.5 2.5 0 0 1 20.5 10v7A2.5 2.5 0 0 1 18 19.5H5.5A2.5 2.5 0 0 1 3 17V7.7A2.7 2.7 0 0 1 5.7 5H17" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M16 12.2h4.5v3.6H16a1.8 1.8 0 1 1 0-3.6z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-receipt" viewBox="0 0 24 24">
+            <path d="M6 3h12v18l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2L6 21zM9 8h6M9 12h6M9 16h3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-bell" viewBox="0 0 24 24">
+            <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-user" viewBox="0 0 24 24">
+            <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor"/>
+            <path d="M4.5 21a7.5 7.5 0 0 1 15 0" fill="none" stroke="currentColor" stroke-linecap="round"/>
+        </symbol>
+        <symbol id="icon-help" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"/>
+            <path d="M9.7 9a2.5 2.5 0 1 1 4.1 1.9c-.9.7-1.8 1.3-1.8 2.6M12 17h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+    </svg>
 
     <section id="authShell" class="auth-shell">
         <div class="auth-card">
@@ -865,15 +891,15 @@
                 <span id="sidebarUserEmail">Signed in</span>
             </div>
             <nav class="nav-list">
-                <button class="nav-item active" type="button" data-nav-page="home"><span class="nav-mark"></span>Home</button>
-                <button class="nav-item" type="button" data-nav-page="retreat"><span class="nav-mark"></span>Retreat Registration</button>
-                <button class="nav-item" type="button" data-nav-page="tickets"><span class="nav-mark"></span>My Ticket</button>
-                <button class="nav-item" type="button" data-nav-page="payments"><span class="nav-mark"></span>Payments</button>
-                <button class="nav-item" type="button" data-nav-page="wallet"><span class="nav-mark"></span>Wallet</button>
-                <button class="nav-item" type="button" data-nav-page="receipts"><span class="nav-mark"></span>Receipts</button>
-                <button class="nav-item" type="button" data-nav-page="updates"><span class="nav-mark"></span>Updates</button>
-                <button class="nav-item" type="button" data-nav-page="profile"><span class="nav-mark"></span>Profile</button>
-                <button class="nav-item" type="button" data-nav-page="support"><span class="nav-mark"></span>Support</button>
+                <button class="nav-item active" type="button" data-nav-page="home"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>Home</button>
+                <button class="nav-item" type="button" data-nav-page="retreat"><svg class="nav-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg>Retreat Registration</button>
+                <button class="nav-item" type="button" data-nav-page="tickets"><svg class="nav-icon" aria-hidden="true"><use href="#icon-ticket"></use></svg>My Ticket</button>
+                <button class="nav-item" type="button" data-nav-page="payments"><svg class="nav-icon" aria-hidden="true"><use href="#icon-card"></use></svg>Payments</button>
+                <button class="nav-item" type="button" data-nav-page="wallet"><svg class="nav-icon" aria-hidden="true"><use href="#icon-wallet"></use></svg>Wallet</button>
+                <button class="nav-item" type="button" data-nav-page="receipts"><svg class="nav-icon" aria-hidden="true"><use href="#icon-receipt"></use></svg>Receipts</button>
+                <button class="nav-item" type="button" data-nav-page="updates"><svg class="nav-icon" aria-hidden="true"><use href="#icon-bell"></use></svg>Updates</button>
+                <button class="nav-item" type="button" data-nav-page="profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg>Profile</button>
+                <button class="nav-item" type="button" data-nav-page="support"><svg class="nav-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Support</button>
             </nav>
             <div style="margin-top:24px">
                 <button id="sidebarLogout" class="button outline" type="button">Sign out</button>
@@ -886,7 +912,7 @@
                 <strong id="mobileTitle">Home</strong>
                 <span>Goshen Retreat</span>
             </div>
-            <button class="icon-button" type="button" data-nav-page="profile" aria-label="Open profile"><span class="nav-mark"></span></button>
+            <button class="icon-button" type="button" data-nav-page="profile" aria-label="Open profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg></button>
         </header>
 
         <div id="drawerBackdrop" class="drawer-backdrop" hidden>
@@ -903,15 +929,15 @@
                     <span id="drawerUserEmail">Signed in</span>
                 </div>
                 <nav class="nav-list">
-                    <button class="nav-item active" type="button" data-nav-page="home"><span class="nav-mark"></span>Home</button>
-                    <button class="nav-item" type="button" data-nav-page="retreat"><span class="nav-mark"></span>Retreat Registration</button>
-                    <button class="nav-item" type="button" data-nav-page="tickets"><span class="nav-mark"></span>My Ticket</button>
-                    <button class="nav-item" type="button" data-nav-page="payments"><span class="nav-mark"></span>Payments</button>
-                    <button class="nav-item" type="button" data-nav-page="wallet"><span class="nav-mark"></span>Wallet</button>
-                    <button class="nav-item" type="button" data-nav-page="receipts"><span class="nav-mark"></span>Receipts</button>
-                    <button class="nav-item" type="button" data-nav-page="updates"><span class="nav-mark"></span>Updates</button>
-                    <button class="nav-item" type="button" data-nav-page="profile"><span class="nav-mark"></span>Profile</button>
-                    <button class="nav-item" type="button" data-nav-page="support"><span class="nav-mark"></span>Support</button>
+                    <button class="nav-item active" type="button" data-nav-page="home"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>Home</button>
+                    <button class="nav-item" type="button" data-nav-page="retreat"><svg class="nav-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg>Retreat Registration</button>
+                    <button class="nav-item" type="button" data-nav-page="tickets"><svg class="nav-icon" aria-hidden="true"><use href="#icon-ticket"></use></svg>My Ticket</button>
+                    <button class="nav-item" type="button" data-nav-page="payments"><svg class="nav-icon" aria-hidden="true"><use href="#icon-card"></use></svg>Payments</button>
+                    <button class="nav-item" type="button" data-nav-page="wallet"><svg class="nav-icon" aria-hidden="true"><use href="#icon-wallet"></use></svg>Wallet</button>
+                    <button class="nav-item" type="button" data-nav-page="receipts"><svg class="nav-icon" aria-hidden="true"><use href="#icon-receipt"></use></svg>Receipts</button>
+                    <button class="nav-item" type="button" data-nav-page="updates"><svg class="nav-icon" aria-hidden="true"><use href="#icon-bell"></use></svg>Updates</button>
+                    <button class="nav-item" type="button" data-nav-page="profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg>Profile</button>
+                    <button class="nav-item" type="button" data-nav-page="support"><svg class="nav-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Support</button>
                 </nav>
                 <button id="drawerLogout" class="button dark" type="button">Sign out</button>
             </div>
@@ -1011,10 +1037,10 @@
         </main>
 
         <nav class="bottom-nav" aria-label="Primary navigation">
-            <button class="active" type="button" data-nav-page="home"><span class="nav-mark"></span><span>Home</span></button>
-            <button type="button" data-nav-page="retreat"><span class="nav-mark"></span><span>Retreat</span></button>
-            <button type="button" data-nav-page="tickets"><span class="nav-mark"></span><span>Tickets</span></button>
-            <button type="button" data-nav-page="payments"><span class="nav-mark"></span><span>Payments</span></button>
+            <button class="active" type="button" data-nav-page="home"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg><span>Home</span></button>
+            <button type="button" data-nav-page="retreat"><svg class="nav-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg><span>Retreat</span></button>
+            <button type="button" data-nav-page="tickets"><svg class="nav-icon" aria-hidden="true"><use href="#icon-ticket"></use></svg><span>Tickets</span></button>
+            <button type="button" data-nav-page="payments"><svg class="nav-icon" aria-hidden="true"><use href="#icon-card"></use></svg><span>Payments</span></button>
         </nav>
     </div>
 
