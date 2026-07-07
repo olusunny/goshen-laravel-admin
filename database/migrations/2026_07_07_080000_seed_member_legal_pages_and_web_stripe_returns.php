@@ -1,8 +1,8 @@
 <?php
 
-use App\Models\AppSetting;
 use App\Models\ContentPage;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -35,18 +35,31 @@ return new class extends Migration
 
     private function putWebReturnUrl(string $key, string $url): void
     {
-        $setting = AppSetting::query()->firstOrNew(['key' => $key]);
-        $current = trim((string) $setting->value);
+        $setting = DB::table('app_settings')->where('key', $key)->first();
+        $current = trim((string) ($setting->value ?? ''));
 
         if ($current !== '' && ! str_starts_with($current, 'covenantofmercy://')) {
             return;
         }
 
-        $setting->forceFill([
+        $values = [
             'group' => 'payments',
             'value' => $url,
             'is_secret' => false,
-        ])->save();
+            'updated_at' => now(),
+        ];
+
+        if ($setting) {
+            DB::table('app_settings')->where('id', $setting->id)->update($values);
+
+            return;
+        }
+
+        DB::table('app_settings')->insert([
+            'key' => $key,
+            'created_at' => now(),
+            ...$values,
+        ]);
     }
 
     private function pages(): array
