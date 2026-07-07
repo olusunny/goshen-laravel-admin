@@ -105,9 +105,9 @@ class GoogleFirebaseSettings extends Page
         $this->googleIosClientId = (string) AppSetting::value('google_ios_client_id', '');
         $this->googleClientSecret = '';
 
-        $this->firebaseCredentialsPath = (string) (env('FIREBASE_CREDENTIALS') ?: config('firebase.projects.app.credentials') ?: '');
-        $this->googleApplicationCredentialsPath = (string) env('GOOGLE_APPLICATION_CREDENTIALS', '');
-        $this->firebaseStorageBucket = (string) env('FIREBASE_STORAGE_DEFAULT_BUCKET', '');
+        $this->firebaseCredentialsPath = (string) (config('firebase.projects.app.credentials') ?: env('FIREBASE_CREDENTIALS') ?: '');
+        $this->googleApplicationCredentialsPath = (string) (env('GOOGLE_APPLICATION_CREDENTIALS') ?: config('firebase.projects.app.credentials') ?: '');
+        $this->firebaseStorageBucket = (string) (config('firebase.projects.app.storage.default_bucket') ?: env('FIREBASE_STORAGE_DEFAULT_BUCKET') ?: '');
         $this->webFirebaseAppId = (string) AppSetting::value('firebase_web_app_id', $this->webFirebaseAppId);
         $this->webFirebaseAuthDomain = (string) AppSetting::value('firebase_web_auth_domain', $this->webFirebaseAuthDomain);
         $this->webFirebaseApiKeyStatus = filled(AppSetting::value('firebase_web_api_key', '')) ? 'Configured in app settings' : 'Using Firebase project default';
