@@ -290,6 +290,37 @@
             pointer-events: none;
             opacity: .62;
         }
+        .google-signin-button {
+            width: min(320px, 100%);
+            min-height: 48px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: var(--surface);
+            color: var(--ink);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font: inherit;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow: var(--shadow-soft);
+        }
+        .google-signin-button:hover {
+            border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+            transform: translateY(-1px);
+        }
+        .google-signin-button:disabled {
+            cursor: wait;
+            opacity: .7;
+            transform: none;
+        }
+        .google-mark {
+            color: #4285f4;
+            font-family: Arial, sans-serif;
+            font-weight: 1000;
+            line-height: 1;
+        }
         .social-auth-help {
             margin: 0;
             color: var(--muted);
@@ -982,7 +1013,11 @@
 
             <div id="googleAuthPanel" class="social-auth-panel" hidden>
                 <div class="auth-divider"><span>Continue with</span></div>
-                <div id="googleSignInButton" class="google-button-shell"></div>
+                <button id="firebaseGoogleSignInButton" class="google-signin-button" type="button" hidden>
+                    <span class="google-mark" aria-hidden="true">G</span>
+                    <span>Continue with Google</span>
+                </button>
+                <div id="googleIdentityButton" class="google-button-shell" hidden></div>
                 <p class="social-auth-help">Use your Google account to sign in or create your Goshen portal profile.</p>
             </div>
 
@@ -1320,9 +1355,13 @@
         const toast = document.getElementById('toast');
         const drawerBackdrop = document.getElementById('drawerBackdrop');
         const googleAuthPanel = document.getElementById('googleAuthPanel');
-        const googleSignInButton = document.getElementById('googleSignInButton');
+        const firebaseGoogleSignInButton = document.getElementById('firebaseGoogleSignInButton');
+        const googleIdentityButton = document.getElementById('googleIdentityButton');
+        const firebaseGoogleConfig = googleLoginConfig?.firebase?.config || {};
         let googleIdentityLoading = null;
         let googleIdentityReady = false;
+        let firebaseAuthLoading = null;
+        let firebaseAuthReady = false;
 
         function escapeHtml(value) {
             return `${value ?? ''}`.replace(/[&<>"']/g, (char) => ({
@@ -1533,9 +1572,60 @@
             return Boolean(googleLoginConfig?.enabled && googleLoginConfig?.clientId && ['login', 'register'].includes(tab));
         }
 
+        function canUseFirebaseGoogleAuth() {
+            return Boolean(
+                googleLoginConfig?.firebase?.enabled
+                && firebaseGoogleConfig?.apiKey
+                && firebaseGoogleConfig?.authDomain
+                && firebaseGoogleConfig?.projectId
+                && firebaseGoogleConfig?.appId
+            );
+        }
+
         function setGoogleBusy(busy) {
-            googleSignInButton?.classList.toggle('busy', busy);
-            googleSignInButton?.setAttribute('aria-busy', busy ? 'true' : 'false');
+            if (firebaseGoogleSignInButton) {
+                firebaseGoogleSignInButton.disabled = busy;
+                firebaseGoogleSignInButton.setAttribute('aria-busy', busy ? 'true' : 'false');
+            }
+            googleIdentityButton?.classList.toggle('busy', busy);
+            googleIdentityButton?.setAttribute('aria-busy', busy ? 'true' : 'false');
+        }
+
+        function loadScriptOnce(src, isLoaded) {
+            if (isLoaded()) return Promise.resolve(true);
+
+            return new Promise((resolve) => {
+                const existing = Array.from(document.scripts).find((script) => script.src === src);
+                const script = existing || document.createElement('script');
+                script.async = true;
+                script.defer = true;
+                script.onload = () => resolve(Boolean(isLoaded()));
+                script.onerror = () => resolve(false);
+                if (!existing) {
+                    script.src = src;
+                    document.head.appendChild(script);
+                }
+            });
+        }
+
+        function loadFirebaseAuthScripts() {
+            if (!canUseFirebaseGoogleAuth()) return Promise.resolve(false);
+            if (window.firebase?.auth) return Promise.resolve(true);
+            if (firebaseAuthLoading) return firebaseAuthLoading;
+
+            firebaseAuthLoading = loadScriptOnce(
+                'https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js',
+                () => Boolean(window.firebase?.initializeApp),
+            ).then((appLoaded) => {
+                if (!appLoaded) return false;
+
+                return loadScriptOnce(
+                    'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js',
+                    () => Boolean(window.firebase?.auth),
+                );
+            });
+
+            return firebaseAuthLoading;
         }
 
         function loadGoogleIdentityScript() {
@@ -1556,6 +1646,14 @@
             return googleIdentityLoading;
         }
 
+        function googleProfileFromFirebaseResult(result) {
+            return {
+                name: result?.user?.displayName || '',
+                email: result?.user?.email || '',
+                photo_url: result?.user?.photoURL || '',
+            };
+        }
+
         async function handleGoogleCredential(response) {
             const idToken = response?.credential;
             if (!idToken) {
@@ -1567,7 +1665,10 @@
             showAuthNotice('');
 
             try {
-                const payload = await apiPost('/api/googleAuth', { id_token: idToken });
+                const payload = await apiPost('/api/googleAuth', {
+                    id_token: idToken,
+                    ...(response?.profile || {}),
+                });
                 saveUser(payload.user);
                 notify(`Welcome, ${payload.user?.name || 'member'}.`);
             } catch (error) {
@@ -1577,10 +1678,69 @@
             }
         }
 
-        async function initializeGoogleLogin() {
-            if (!googleAuthPanel || !googleSignInButton || !canShowGoogleAuth('login') || googleIdentityReady) {
+        async function handleFirebaseGoogleSignIn() {
+            if (!canUseFirebaseGoogleAuth()) {
+                showAuthNotice('Google sign-in is not configured for this web portal yet.', 'error');
                 return;
             }
+
+            setGoogleBusy(true);
+            showAuthNotice('');
+
+            try {
+                const loaded = await loadFirebaseAuthScripts();
+                if (!loaded) {
+                    throw new Error('Google sign-in could not load. Please refresh and try again.');
+                }
+
+                if (!window.firebase.apps?.length) {
+                    window.firebase.initializeApp(firebaseGoogleConfig);
+                }
+
+                const provider = new window.firebase.auth.GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: 'select_account' });
+
+                const result = await window.firebase.auth().signInWithPopup(provider);
+                const credential = window.firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+                const idToken = credential?.idToken;
+
+                if (!idToken) {
+                    throw new Error('Google did not return a verified sign-in token. Please try again.');
+                }
+
+                await handleGoogleCredential({
+                    credential: idToken,
+                    profile: googleProfileFromFirebaseResult(result),
+                });
+            } catch (error) {
+                const code = `${error?.code || ''}`;
+                const message = code.includes('unauthorized-domain')
+                    ? 'This web domain is not authorized in Firebase Authentication yet. Add goshen.shotfaz.com and staging-goshen.shotfaz.com to Firebase Auth authorized domains.'
+                    : (error?.message || 'Google sign-in failed. Please try again.');
+                showAuthNotice(message, 'error');
+            } finally {
+                setGoogleBusy(false);
+            }
+        }
+
+        async function initializeGoogleLogin() {
+            if (!googleAuthPanel || !canShowGoogleAuth('login')) {
+                return;
+            }
+
+            if (canUseFirebaseGoogleAuth()) {
+                if (firebaseGoogleSignInButton) firebaseGoogleSignInButton.hidden = false;
+                if (googleIdentityButton) googleIdentityButton.hidden = true;
+                googleAuthPanel.hidden = false;
+                firebaseAuthReady = true;
+                return;
+            }
+
+            if (!googleIdentityButton || googleIdentityReady) {
+                return;
+            }
+
+            if (firebaseGoogleSignInButton) firebaseGoogleSignInButton.hidden = true;
 
             const loaded = await loadGoogleIdentityScript();
             if (!loaded) {
@@ -1595,14 +1755,15 @@
                 cancel_on_tap_outside: true,
             });
 
-            window.google.accounts.id.renderButton(googleSignInButton, {
+            window.google.accounts.id.renderButton(googleIdentityButton, {
                 theme: 'outline',
                 size: 'large',
                 shape: 'pill',
                 text: 'continue_with',
-                width: Math.min(320, googleAuthPanel.clientWidth || googleSignInButton.clientWidth || 320),
+                width: Math.min(320, googleAuthPanel.clientWidth || googleIdentityButton.clientWidth || 320),
             });
 
+            googleIdentityButton.hidden = false;
             googleIdentityReady = true;
         }
 
@@ -2542,6 +2703,8 @@
                 showAuthNotice('');
             });
         });
+
+        firebaseGoogleSignInButton?.addEventListener('click', handleFirebaseGoogleSignIn);
 
         document.getElementById('loginForm').addEventListener('submit', async (event) => {
             event.preventDefault();
