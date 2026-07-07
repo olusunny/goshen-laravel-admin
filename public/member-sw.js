@@ -1,4 +1,4 @@
-const CACHE_NAME = 'goshen-member-shell-v2';
+const CACHE_NAME = 'goshen-member-shell-v3';
 const APP_SHELL = [
   '/app',
   '/member-manifest.json',

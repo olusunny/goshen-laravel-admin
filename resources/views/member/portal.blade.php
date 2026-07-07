@@ -1691,6 +1691,7 @@
             event.preventDefault();
             const form = event.currentTarget;
             const data = payloadFromForm(form);
+            data.email = `${data.email || ''}`.trim().toLowerCase();
             setBusy(form, true);
             showAuthNotice('');
             try {
@@ -1708,6 +1709,7 @@
             event.preventDefault();
             const form = event.currentTarget;
             const data = payloadFromForm(form);
+            data.email = `${data.email || ''}`.trim().toLowerCase();
             if (data.password !== data.password_confirmation) {
                 showAuthNotice('Password confirmation does not match.', 'error');
                 return;
@@ -1732,6 +1734,7 @@
             event.preventDefault();
             const form = event.currentTarget;
             const data = payloadFromForm(form);
+            data.email = `${data.email || ''}`.trim().toLowerCase();
             setBusy(form, true);
             showAuthNotice('');
             try {
@@ -1763,6 +1766,7 @@
             event.preventDefault();
             const form = event.currentTarget;
             const data = payloadFromForm(form);
+            data.email = `${data.email || ''}`.trim().toLowerCase();
             setBusy(form, true);
             showAuthNotice('');
             try {
@@ -1781,6 +1785,7 @@
             event.preventDefault();
             const form = event.currentTarget;
             const data = payloadFromForm(form);
+            data.email = `${data.email || ''}`.trim().toLowerCase();
             setBusy(form, true);
             showAuthNotice('');
             try {
