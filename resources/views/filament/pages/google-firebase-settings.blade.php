@@ -38,14 +38,14 @@
             <p class="gfs-eyebrow">Mobile authentication</p>
             <h2 class="gfs-title">Google & Firebase settings</h2>
             <p class="gfs-copy">
-                Configure the Google OAuth client IDs used by Flutter Google sign-in. Firebase Admin credentials for backend push notifications are shown below from the server environment.
+                Configure the Google OAuth client IDs used by the web portal and Flutter Google sign-in. Firebase Admin credentials for backend push notifications are shown below from the server environment.
             </p>
         </section>
 
         <form wire:submit.prevent="save" class="gfs-card gfs-pad">
             <div>
                 <h2 class="gfs-h2">Google sign-in</h2>
-                <p class="gfs-muted">These values are returned to the Flutter app through the backend discover endpoint and are used when the app requests a Google identity token.</p>
+                <p class="gfs-muted">These values are used by the web portal and returned to the Flutter app through the backend discover endpoint when either app requests a Google identity token.</p>
             </div>
 
             <div class="gfs-grid" style="margin-top:18px;">
@@ -53,7 +53,7 @@
                     <span class="gfs-label">Enable Google login</span>
                     <span class="gfs-check">
                         <input type="checkbox" wire:model.defer="googleLoginEnabled">
-                        <span>Show Google login/register buttons in the Flutter app</span>
+                        <span>Show Google login/register buttons in the web portal and Flutter app</span>
                     </span>
                 </label>
 
@@ -66,7 +66,7 @@
                 <label class="gfs-field">
                     <span class="gfs-label">Google Web client ID</span>
                     <input class="gfs-input" wire:model.defer="googleWebClientId" placeholder="000000000000-xxxxx.apps.googleusercontent.com">
-                    <span class="gfs-help">Required. Flutter uses this as serverClientId so Google returns an ID token.</span>
+                    <span class="gfs-help">Required. The web portal uses this with Google Identity Services. Flutter uses it as serverClientId so Google returns an ID token.</span>
                 </label>
 
                 <label class="gfs-field">
@@ -87,6 +87,14 @@
                     <span class="gfs-help">Optional. The current mobile login flow does not require exposing this to the app.</span>
                 </label>
             </div>
+
+            <section class="gfs-panel" style="margin-top:18px;">
+                <h3 class="gfs-h2" style="font-size:16px;">Required web OAuth origins</h3>
+                <p class="gfs-muted">These must be present in the Authorized JavaScript origins list for the Google Web client ID above.</p>
+                @foreach ($requiredGoogleOrigins as $origin)
+                    <code class="gfs-code">{{ $origin }}</code>
+                @endforeach
+            </section>
 
             <section class="gfs-panel" style="margin-top:18px;">
                 <h3 class="gfs-h2" style="font-size:16px;">Fingerprints to add in Firebase</h3>
@@ -119,6 +127,24 @@
                 <div class="gfs-field">
                     <span class="gfs-label">Expected storage bucket</span>
                     <code class="gfs-code">{{ $mobileFirebaseStorageBucket }}</code>
+                </div>
+                <div class="gfs-field">
+                    <span class="gfs-label">Web Firebase app ID</span>
+                    <code class="gfs-code">{{ $webFirebaseAppId }}</code>
+                </div>
+                <div class="gfs-field">
+                    <span class="gfs-label">Web Firebase auth domain</span>
+                    <code class="gfs-code">{{ $webFirebaseAuthDomain }}</code>
+                </div>
+                <div class="gfs-field">
+                    <span class="gfs-label">Web Firebase API key</span>
+                    <code class="gfs-code">{{ $webFirebaseApiKeyStatus }}</code>
+                </div>
+                <div class="gfs-field">
+                    <span class="gfs-label">Required Firebase Auth authorized domains</span>
+                    @foreach ($requiredFirebaseAuthDomains as $domain)
+                        <code class="gfs-code">{{ $domain }}</code>
+                    @endforeach
                 </div>
                 <div class="gfs-field">
                     <span class="gfs-label">FIREBASE_CREDENTIALS</span>

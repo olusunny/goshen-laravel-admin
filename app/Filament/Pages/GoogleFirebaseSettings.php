@@ -54,6 +54,22 @@ class GoogleFirebaseSettings extends Page
 
     public string $mobileFirebaseStorageBucket = 'mfm-triumphant-church-apps.firebasestorage.app';
 
+    public string $webFirebaseAppId = '1:245162281677:web:cf1df7affcc5a4cb3eb784';
+
+    public string $webFirebaseAuthDomain = 'mfm-triumphant-church-apps.firebaseapp.com';
+
+    public string $webFirebaseApiKeyStatus = 'Configured';
+
+    public array $requiredGoogleOrigins = [
+        'https://goshen.shotfaz.com',
+        'https://staging-goshen.shotfaz.com',
+    ];
+
+    public array $requiredFirebaseAuthDomains = [
+        'goshen.shotfaz.com',
+        'staging-goshen.shotfaz.com',
+    ];
+
     public bool $firebaseCredentialsFileExists = false;
 
     public bool $firebaseCredentialsFileReadable = false;
@@ -92,6 +108,9 @@ class GoogleFirebaseSettings extends Page
         $this->firebaseCredentialsPath = (string) (env('FIREBASE_CREDENTIALS') ?: config('firebase.projects.app.credentials') ?: '');
         $this->googleApplicationCredentialsPath = (string) env('GOOGLE_APPLICATION_CREDENTIALS', '');
         $this->firebaseStorageBucket = (string) env('FIREBASE_STORAGE_DEFAULT_BUCKET', '');
+        $this->webFirebaseAppId = (string) AppSetting::value('firebase_web_app_id', $this->webFirebaseAppId);
+        $this->webFirebaseAuthDomain = (string) AppSetting::value('firebase_web_auth_domain', $this->webFirebaseAuthDomain);
+        $this->webFirebaseApiKeyStatus = filled(AppSetting::value('firebase_web_api_key', '')) ? 'Configured in app settings' : 'Using Firebase project default';
 
         $this->inspectFirebaseCredentials();
     }
@@ -106,8 +125,8 @@ class GoogleFirebaseSettings extends Page
             'google_client_secret' => ['nullable', 'string', 'max:255'],
         ])->validate();
 
-        $this->saveSetting('google_login_enabled', $validated['google_login_enabled'] ? '1' : '0', false, 'Enable native Google sign-in and registration in the Flutter app.');
-        $this->saveSetting('google_web_client_id', (string) ($validated['google_web_client_id'] ?? ''), false, 'Google OAuth Web client ID used by the mobile app to request an ID token.');
+        $this->saveSetting('google_login_enabled', $validated['google_login_enabled'] ? '1' : '0', false, 'Enable Google sign-in and registration in the web and Flutter apps.');
+        $this->saveSetting('google_web_client_id', (string) ($validated['google_web_client_id'] ?? ''), false, 'Google OAuth Web client ID used by the web portal and mobile app to request an ID token.');
         $this->saveSetting('google_android_client_id', (string) ($validated['google_android_client_id'] ?? ''), false, 'Google OAuth Android client ID for the app package and signing certificate.');
         $this->saveSetting('google_ios_client_id', (string) ($validated['google_ios_client_id'] ?? ''), false, 'Optional Google OAuth iOS client ID.');
 
