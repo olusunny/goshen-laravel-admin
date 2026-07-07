@@ -95,7 +95,7 @@ class StripePaymentSettings
 
     public function givingSuccessUrl(): string
     {
-        return $this->setting('stripe_giving_success_url', $this->configuredUrl('services.stripe.success_url', url('/app?giving=success')));
+        return $this->setting('stripe_giving_success_url', $this->configuredUrl('services.stripe.success_url', url('/app?giving=success&session_id={CHECKOUT_SESSION_ID}')));
     }
 
     public function givingCancelUrl(): string
@@ -105,22 +105,22 @@ class StripePaymentSettings
 
     public function eventSuccessUrl(): string
     {
-        return $this->setting('stripe_event_success_url', $this->configuredUrl('event-installments.payments.stripe.success_url', 'covenantofmercy://goshen-payment/success'));
+        return $this->setting('stripe_event_success_url', $this->configuredUrl('event-installments.payments.stripe.success_url', url('/app/payments?checkout=success&session_id={CHECKOUT_SESSION_ID}')));
     }
 
     public function eventCancelUrl(): string
     {
-        return $this->setting('stripe_event_cancel_url', $this->configuredUrl('event-installments.payments.stripe.cancel_url', 'covenantofmercy://goshen-payment/cancel'));
+        return $this->setting('stripe_event_cancel_url', $this->configuredUrl('event-installments.payments.stripe.cancel_url', url('/app/payments?checkout=cancelled')));
     }
 
     public function walletSuccessUrl(): string
     {
-        return $this->setting('stripe_wallet_success_url', $this->configuredUrl('services.stripe.wallet_success_url', 'covenantofmercy://goshen-wallet/success'));
+        return $this->setting('stripe_wallet_success_url', $this->configuredUrl('services.stripe.wallet_success_url', url('/app/wallet?wallet=success&session_id={CHECKOUT_SESSION_ID}')));
     }
 
     public function walletCancelUrl(): string
     {
-        return $this->setting('stripe_wallet_cancel_url', $this->configuredUrl('services.stripe.wallet_cancel_url', 'covenantofmercy://goshen-wallet/cancel'));
+        return $this->setting('stripe_wallet_cancel_url', $this->configuredUrl('services.stripe.wallet_cancel_url', url('/app/wallet?wallet=cancelled')));
     }
 
     public function configured(?string $mode = null): bool

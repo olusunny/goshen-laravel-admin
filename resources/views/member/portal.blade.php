@@ -12,7 +12,8 @@
             const key = 'goshen_portal_theme';
             const saved = localStorage.getItem(key);
             const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-            if ((saved || (prefersDark ? 'dark' : 'light')) === 'dark') {
+            const resolved = saved === 'light' || saved === 'dark' ? saved : (prefersDark ? 'dark' : 'light');
+            if (resolved === 'dark') {
                 document.documentElement.classList.add('theme-dark');
             }
         })();
@@ -254,17 +255,42 @@
             color: var(--danger);
         }
 
-        .theme-toggle {
-            margin-top: 12px;
+        .theme-mode-switch {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
+            padding: 6px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: var(--field);
+            margin: -8px 0 18px;
         }
-        .theme-toggle + .button {
-            margin-top: 10px;
+        .sidebar .theme-mode-switch {
+            border-color: rgba(255,255,255,.16);
+            background: rgba(255,255,255,.08);
         }
-        .theme-toggle .theme-icon {
-            width: 22px;
-            height: 22px;
+        .theme-mode-switch button {
+            min-height: 40px;
+            border: 0;
+            border-radius: 13px;
+            background: transparent;
+            color: var(--muted);
             display: inline-grid;
             place-items: center;
+            cursor: pointer;
+            font-weight: 1000;
+        }
+        .sidebar .theme-mode-switch button {
+            color: rgba(255,255,255,.72);
+        }
+        .theme-mode-switch button.active {
+            background: var(--brand);
+            color: #fff;
+            box-shadow: var(--soft-shadow);
+        }
+        html.theme-dark .theme-mode-switch button.active,
+        body.theme-dark .theme-mode-switch button.active {
+            color: #07151d;
         }
 
         .auth-footer {
@@ -1050,6 +1076,11 @@
                 <strong id="sidebarUserName">Member</strong>
                 <span id="sidebarUserEmail">Signed in</span>
             </div>
+            <div class="theme-mode-switch" role="radiogroup" aria-label="Theme preference">
+                <button type="button" data-theme-mode="light" aria-label="Use light mode">Sun</button>
+                <button type="button" data-theme-mode="dark" aria-label="Use dark mode">Moon</button>
+                <button type="button" data-theme-mode="device" aria-label="Use device theme">Auto</button>
+            </div>
             <nav class="nav-list">
                 <button class="nav-item active" type="button" data-nav-page="home"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>Home</button>
                 <button class="nav-item" type="button" data-nav-page="retreat"><svg class="nav-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg>Retreat Registration</button>
@@ -1062,7 +1093,6 @@
                 <button class="nav-item" type="button" data-nav-page="support"><svg class="nav-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Support</button>
             </nav>
             <div style="margin-top:24px">
-                <button class="button outline theme-toggle" type="button" data-theme-toggle aria-pressed="false"><span class="theme-icon" aria-hidden="true">D</span><span data-theme-label>Dark mode</span></button>
                 <button id="sidebarLogout" class="button outline" type="button">Sign out</button>
             </div>
         </aside>
@@ -1089,6 +1119,11 @@
                     <strong id="drawerUserName">Member</strong>
                     <span id="drawerUserEmail">Signed in</span>
                 </div>
+                <div class="theme-mode-switch" role="radiogroup" aria-label="Theme preference">
+                    <button type="button" data-theme-mode="light" aria-label="Use light mode">Sun</button>
+                    <button type="button" data-theme-mode="dark" aria-label="Use dark mode">Moon</button>
+                    <button type="button" data-theme-mode="device" aria-label="Use device theme">Auto</button>
+                </div>
                 <nav class="nav-list">
                     <button class="nav-item active" type="button" data-nav-page="home"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>Home</button>
                     <button class="nav-item" type="button" data-nav-page="retreat"><svg class="nav-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg>Retreat Registration</button>
@@ -1100,7 +1135,6 @@
                     <button class="nav-item" type="button" data-nav-page="profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg>Profile</button>
                     <button class="nav-item" type="button" data-nav-page="support"><svg class="nav-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Support</button>
                 </nav>
-                <button class="button outline theme-toggle" type="button" data-theme-toggle aria-pressed="false"><span class="theme-icon" aria-hidden="true">D</span><span data-theme-label>Dark mode</span></button>
                 <button id="drawerLogout" class="button dark" type="button">Sign out</button>
             </div>
         </div>
@@ -1229,6 +1263,7 @@
         let activePage = 'home';
         let activeWalletTab = localStorage.getItem(walletTabKey) || 'overview';
         let churchGroupsCache = [];
+        let handledReturnNotice = false;
 
         const authShell = document.getElementById('authShell');
         const portalShell = document.getElementById('portalShell');
@@ -1276,24 +1311,31 @@
             return { ...extra, email: currentUser?.email || '', api_token: currentUser?.api_token || '' };
         }
 
-        function applyTheme(theme) {
-            const isDark = theme === 'dark';
+        function savedThemeMode() {
+            const saved = localStorage.getItem(themeKey);
+            return ['light', 'dark', 'device'].includes(saved) ? saved : 'device';
+        }
+
+        function resolvedTheme(mode = savedThemeMode()) {
+            if (mode === 'light' || mode === 'dark') return mode;
+            return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+
+        function applyTheme(mode = savedThemeMode()) {
+            const resolved = resolvedTheme(mode);
+            const isDark = resolved === 'dark';
             document.documentElement.classList.toggle('theme-dark', isDark);
             document.body.classList.toggle('theme-dark', isDark);
             document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#07151d' : '#0c2230');
-            document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
-                button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
-                button.querySelector('[data-theme-label]').textContent = isDark ? 'Light mode' : 'Dark mode';
-                button.querySelector('.theme-icon').textContent = isDark ? 'L' : 'D';
+            document.querySelectorAll('[data-theme-mode]').forEach((button) => {
+                const active = button.dataset.themeMode === mode;
+                button.classList.toggle('active', active);
+                button.setAttribute('aria-checked', active ? 'true' : 'false');
             });
         }
 
-        function currentTheme() {
-            return document.documentElement.classList.contains('theme-dark') ? 'dark' : 'light';
-        }
-
-        function toggleTheme() {
-            const next = currentTheme() === 'dark' ? 'light' : 'dark';
+        function setThemeMode(mode) {
+            const next = ['light', 'dark', 'device'].includes(mode) ? mode : 'device';
             localStorage.setItem(themeKey, next);
             applyTheme(next);
         }
@@ -1319,6 +1361,51 @@
             toast.hidden = false;
             clearTimeout(notify.timer);
             notify.timer = setTimeout(() => { toast.hidden = true; }, 5200);
+        }
+
+        function handlePaymentReturnNotice() {
+            if (handledReturnNotice) return;
+
+            const params = new URLSearchParams(window.location.search);
+            const checkout = params.get('checkout');
+            const wallet = params.get('wallet');
+            const giving = params.get('giving');
+
+            if (!checkout && !wallet && !giving) return;
+
+            handledReturnNotice = true;
+
+            if (checkout === 'success') {
+                notify('Payment completed. Your retreat status will update once Stripe confirms it.');
+                loadMemberRetreatData();
+                loadWallet();
+                return;
+            }
+
+            if (checkout === 'cancelled') {
+                notify('Payment was cancelled. You can try again when ready.', 'error');
+                return;
+            }
+
+            if (wallet === 'success') {
+                notify('Wallet top-up completed. Your balance will update once Stripe confirms it.');
+                loadWallet();
+                return;
+            }
+
+            if (wallet === 'cancelled') {
+                notify('Wallet top-up was cancelled.', 'error');
+                return;
+            }
+
+            if (giving === 'success') {
+                notify('Thank you. Your giving payment will appear once Stripe confirms it.');
+                return;
+            }
+
+            if (giving === 'cancelled') {
+                notify('Giving checkout was cancelled.', 'error');
+            }
         }
 
         function showAuthNotice(message, type = 'ok') {
@@ -1412,6 +1499,7 @@
             loadMemberRetreatData();
             loadWallet();
             loadUpdates();
+            handlePaymentReturnNotice();
         }
 
         function updateUserIdentity() {
@@ -2451,8 +2539,11 @@
 
         document.getElementById('sidebarLogout').addEventListener('click', () => clearUser());
         document.getElementById('drawerLogout').addEventListener('click', () => clearUser());
-        document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
-            button.addEventListener('click', toggleTheme);
+        document.querySelectorAll('[data-theme-mode]').forEach((button) => {
+            button.addEventListener('click', () => setThemeMode(button.dataset.themeMode));
+        });
+        window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => {
+            if (savedThemeMode() === 'device') applyTheme('device');
         });
 
         document.getElementById('portalMain').addEventListener('input', (event) => {
@@ -2710,7 +2801,7 @@
             }
         });
 
-        applyTheme(currentTheme());
+        applyTheme(savedThemeMode());
         loadGroups();
         restoreUser();
 

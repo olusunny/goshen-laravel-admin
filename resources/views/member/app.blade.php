@@ -1462,7 +1462,7 @@
             <div class="actions">
                 <a class="button" href="/privacy">Privacy</a>
                 <a class="button" href="/terms">Terms</a>
-                <a class="button" href="/aboutus">About</a>
+                <a class="button" href="/aboutus">Support</a>
             </div>
         </div>
     </section>

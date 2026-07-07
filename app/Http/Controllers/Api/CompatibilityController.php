@@ -1763,6 +1763,7 @@ class CompatibilityController extends Controller
             'can_manage_wallet_withdrawals' => $this->canManageWalletWithdrawals($user),
             'can_manage_dynamic_forms' => $this->canManageDynamicForms($user),
             'can_manage_church_events' => $this->canManageChurchEvents($user),
+            'can_manage_verse_of_day' => $this->canManageVerseOfDay($user),
             'can_manage_mobile_users' => $this->canManageMobileUsers($user),
             'can_send_admin_messages' => $this->canSendAdminMessages($user),
             'is_go' => $user->hasGeneralOverseerRole(),
@@ -2024,6 +2025,29 @@ class CompatibilityController extends Controller
             ->contains(fn ($role): bool => in_array(
                 str($role)->lower()->replaceMatches('/[^a-z]/', '')->toString(),
                 ['admin', 'superadmin', 'eventmanager', 'eventsmanager', 'churcheventmanager', 'contentmanager', 'goshenmanager', 'retreatmanager', 'triumphantitmanager'],
+                true,
+            ));
+    }
+
+    private function canManageVerseOfDay(MobileUser $user): bool
+    {
+        if (! $user->canUseCommunity()) {
+            return false;
+        }
+
+        if ($user->can('manage_verse_of_day')
+            || $user->can('manage_verses')
+            || $user->can('manage_devotionals')
+            || $user->can('manage_devotional')
+            || $user->can('manage_content')) {
+            return true;
+        }
+
+        return $user->roles()
+            ->pluck('name')
+            ->contains(fn ($role): bool => in_array(
+                str($role)->lower()->replaceMatches('/[^a-z]/', '')->toString(),
+                ['admin', 'superadmin', 'eventmanager', 'contentmanager', 'devotionalmanager', 'versemanager', 'verseofdaymanager', 'goshenmanager', 'retreatmanager', 'go', 'generaloverseer', 'triumphantitmanager'],
                 true,
             ));
     }

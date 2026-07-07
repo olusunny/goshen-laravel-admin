@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\CompatibilityController;
 use App\Http\Controllers\Api\ControlHubChurchEventController;
 use App\Http\Controllers\Api\ControlHubMessagingController;
 use App\Http\Controllers\Api\ControlHubMobileUserController;
+use App\Http\Controllers\Api\ControlHubVerseOfDayController;
 use App\Http\Controllers\Api\DonationStripeController;
 use App\Http\Controllers\Api\DynamicFormController;
 use App\Http\Controllers\Api\GoshenExperienceController;
@@ -241,6 +242,18 @@ Route::controller(ControlHubChurchEventController::class)
         Route::post('{churchEvent}/status', 'status')->whereNumber('churchEvent')->middleware('throttle:20,1');
         Route::delete('{churchEvent}', 'destroy')->whereNumber('churchEvent')->middleware('throttle:12,1');
         Route::post('{churchEvent}/delete', 'destroy')->whereNumber('churchEvent')->middleware('throttle:12,1');
+    });
+
+Route::controller(ControlHubVerseOfDayController::class)
+    ->prefix('control-hub/verse-of-day')
+    ->group(function () {
+        Route::get('/', 'index')->middleware('throttle:20,1');
+        Route::post('search', 'index')->middleware('throttle:20,1');
+        Route::post('/', 'store')->middleware('throttle:12,1');
+        Route::post('{verseOfDay}', 'update')->whereNumber('verseOfDay')->middleware('throttle:12,1');
+        Route::post('{verseOfDay}/status', 'status')->whereNumber('verseOfDay')->middleware('throttle:20,1');
+        Route::delete('{verseOfDay}', 'destroy')->whereNumber('verseOfDay')->middleware('throttle:12,1');
+        Route::post('{verseOfDay}/delete', 'destroy')->whereNumber('verseOfDay')->middleware('throttle:12,1');
     });
 
 Route::controller(DonationStripeController::class)
