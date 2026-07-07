@@ -255,6 +255,48 @@
             color: var(--danger);
         }
 
+        .social-auth-panel {
+            display: grid;
+            gap: 12px;
+            margin: 16px 0 18px;
+            text-align: center;
+        }
+        .auth-divider {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 12px;
+            align-items: center;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+        .auth-divider::before,
+        .auth-divider::after {
+            content: "";
+            height: 1px;
+            background: var(--line);
+        }
+        .google-button-shell {
+            min-height: 44px;
+            display: grid;
+            justify-items: center;
+            align-items: center;
+            max-width: 100%;
+        }
+        .google-button-shell > div { max-width: 100%; }
+        .google-button-shell.busy {
+            pointer-events: none;
+            opacity: .62;
+        }
+        .social-auth-help {
+            margin: 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
         .theme-mode-switch {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -938,6 +980,12 @@
 
             <div id="authNotice" class="notice" hidden></div>
 
+            <div id="googleAuthPanel" class="social-auth-panel" hidden>
+                <div class="auth-divider"><span>Continue with</span></div>
+                <div id="googleSignInButton" class="google-button-shell"></div>
+                <p class="social-auth-help">Use your Google account to sign in or create your Goshen portal profile.</p>
+            </div>
+
             <form id="loginForm" class="form" autocomplete="on">
                 <div class="field">
                     <label for="loginEmail">Email address</label>
@@ -1244,6 +1292,7 @@
         const storageKey = 'goshen_member_user';
         const themeKey = 'goshen_portal_theme';
         const walletTabKey = 'goshen_wallet_tab';
+        const googleLoginConfig = @json($googleLogin ?? ['enabled' => false, 'clientId' => '']);
         const pageTitles = {
             home: 'Home',
             retreat: 'Retreat',
@@ -1270,6 +1319,10 @@
         const authNotice = document.getElementById('authNotice');
         const toast = document.getElementById('toast');
         const drawerBackdrop = document.getElementById('drawerBackdrop');
+        const googleAuthPanel = document.getElementById('googleAuthPanel');
+        const googleSignInButton = document.getElementById('googleSignInButton');
+        let googleIdentityLoading = null;
+        let googleIdentityReady = false;
 
         function escapeHtml(value) {
             return `${value ?? ''}`.replace(/[&<>"']/g, (char) => ({
@@ -1460,6 +1513,9 @@
             currentUser = null;
             authShell.hidden = false;
             portalShell.hidden = true;
+            if (googleAuthPanel) {
+                googleAuthPanel.hidden = !canShowGoogleAuth(tab);
+            }
             document.querySelectorAll('[data-auth-tab]').forEach((button) => {
                 button.classList.toggle('active', button.dataset.authTab === tab);
             });
@@ -1471,6 +1527,83 @@
                 const url = tab === 'forgot' ? '/app/forgot-password' : (tab === 'reset' ? '/app/reset-password' : '/app');
                 history.replaceState(null, '', url);
             }
+        }
+
+        function canShowGoogleAuth(tab = 'login') {
+            return Boolean(googleLoginConfig?.enabled && googleLoginConfig?.clientId && ['login', 'register'].includes(tab));
+        }
+
+        function setGoogleBusy(busy) {
+            googleSignInButton?.classList.toggle('busy', busy);
+            googleSignInButton?.setAttribute('aria-busy', busy ? 'true' : 'false');
+        }
+
+        function loadGoogleIdentityScript() {
+            if (!canShowGoogleAuth('login')) return Promise.resolve(false);
+            if (window.google?.accounts?.id) return Promise.resolve(true);
+            if (googleIdentityLoading) return googleIdentityLoading;
+
+            googleIdentityLoading = new Promise((resolve) => {
+                const script = document.createElement('script');
+                script.src = 'https://accounts.google.com/gsi/client';
+                script.async = true;
+                script.defer = true;
+                script.onload = () => resolve(Boolean(window.google?.accounts?.id));
+                script.onerror = () => resolve(false);
+                document.head.appendChild(script);
+            });
+
+            return googleIdentityLoading;
+        }
+
+        async function handleGoogleCredential(response) {
+            const idToken = response?.credential;
+            if (!idToken) {
+                showAuthNotice('Google did not return a sign-in token. Please try again.', 'error');
+                return;
+            }
+
+            setGoogleBusy(true);
+            showAuthNotice('');
+
+            try {
+                const payload = await apiPost('/api/googleAuth', { id_token: idToken });
+                saveUser(payload.user);
+                notify(`Welcome, ${payload.user?.name || 'member'}.`);
+            } catch (error) {
+                showAuthNotice(error.message, 'error');
+            } finally {
+                setGoogleBusy(false);
+            }
+        }
+
+        async function initializeGoogleLogin() {
+            if (!googleAuthPanel || !googleSignInButton || !canShowGoogleAuth('login') || googleIdentityReady) {
+                return;
+            }
+
+            const loaded = await loadGoogleIdentityScript();
+            if (!loaded) {
+                googleAuthPanel.hidden = true;
+                return;
+            }
+
+            window.google.accounts.id.initialize({
+                client_id: googleLoginConfig.clientId,
+                callback: handleGoogleCredential,
+                auto_select: false,
+                cancel_on_tap_outside: true,
+            });
+
+            window.google.accounts.id.renderButton(googleSignInButton, {
+                theme: 'outline',
+                size: 'large',
+                shape: 'pill',
+                text: 'continue_with',
+                width: Math.min(320, googleAuthPanel.clientWidth || googleSignInButton.clientWidth || 320),
+            });
+
+            googleIdentityReady = true;
         }
 
         function saveUser(user) {
@@ -2802,6 +2935,7 @@
         });
 
         applyTheme(savedThemeMode());
+        initializeGoogleLogin();
         loadGroups();
         restoreUser();
 

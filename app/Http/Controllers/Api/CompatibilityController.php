@@ -868,6 +868,23 @@ class CompatibilityController extends Controller
             'address_longitude' => ['nullable', 'numeric', 'between:-180,180'],
         ])->validate();
 
+        $allowedAudiences = collect([
+            AppSetting::value('google_web_client_id', ''),
+            AppSetting::value('google_android_client_id', ''),
+            AppSetting::value('google_ios_client_id', ''),
+        ])
+            ->map(fn ($id) => trim((string) $id))
+            ->filter()
+            ->values();
+
+        if ($allowedAudiences->isEmpty()) {
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'Google sign-in is not configured yet.',
+                'message' => 'Google sign-in is not configured yet.',
+            ], 503);
+        }
+
         try {
             $googleResponse = Http::timeout(10)->get('https://oauth2.googleapis.com/tokeninfo', [
                 'id_token' => $data['id_token'],
@@ -889,13 +906,8 @@ class CompatibilityController extends Controller
         }
 
         $google = $googleResponse->json();
-        $allowedAudiences = collect([
-            AppSetting::value('google_web_client_id', ''),
-            AppSetting::value('google_android_client_id', ''),
-            AppSetting::value('google_ios_client_id', ''),
-        ])->filter()->values();
 
-        if ($allowedAudiences->isNotEmpty() && ! $allowedAudiences->contains($google['aud'] ?? null)) {
+        if (! $allowedAudiences->contains($google['aud'] ?? null)) {
             return response()->json([
                 'status' => 'error',
                 'msg' => 'This Google account is not configured for this app.',
@@ -911,7 +923,7 @@ class CompatibilityController extends Controller
             ], 422);
         }
 
-        $email = strtolower($google['email'] ?? $data['email'] ?? '');
+        $email = strtolower((string) ($google['email'] ?? ''));
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return response()->json([
                 'status' => 'error',
@@ -923,6 +935,14 @@ class CompatibilityController extends Controller
         $user = MobileUser::firstOrNew(['email' => $email]);
         $isNew = ! $user->exists;
         $wasVerified = (bool) ($user->exists && $user->is_verified && $user->email_verified_at);
+
+        if ($user->exists && ($user->is_blocked || $user->is_deleted)) {
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'This account is not allowed to sign in. Please contact support.',
+                'message' => 'This account is not allowed to sign in. Please contact support.',
+            ], 403);
+        }
 
         $user->forceFill([
             'google_id' => $google['sub'] ?? $user->google_id,
@@ -938,6 +958,7 @@ class CompatibilityController extends Controller
             'address_longitude' => $data['address_longitude'] ?? $user->address_longitude,
             'avatar' => $user->avatar ?: ($data['photo_url'] ?? $google['picture'] ?? null),
             'password' => $isNew ? null : $user->password,
+            'login_type' => $isNew ? 'google' : ($user->login_type ?: 'google'),
             'is_verified' => true,
             'email_verified_at' => $user->email_verified_at ?? now(),
             'email_verification_code_hash' => null,

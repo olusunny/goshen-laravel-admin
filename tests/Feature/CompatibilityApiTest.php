@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AppSetting;
 use App\Models\BibleVersion;
 use App\Models\Branch;
 use App\Models\Category;
@@ -16,6 +17,7 @@ use App\Models\MobileUser;
 use App\Models\TransportationArrangement;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -802,6 +804,165 @@ class CompatibilityApiTest extends TestCase
             ->assertJsonPath('message', 'Invalid email or password.');
     }
 
+    public function test_google_auth_creates_verified_member_session_with_configured_web_client(): void
+    {
+        $this->enableGoogleLogin('web-client.apps.googleusercontent.com');
+
+        Http::fake([
+            'https://oauth2.googleapis.com/tokeninfo*' => Http::response([
+                'aud' => 'web-client.apps.googleusercontent.com',
+                'sub' => 'google-user-123',
+                'email' => 'google.member@example.com',
+                'email_verified' => 'true',
+                'name' => 'Google Member',
+                'picture' => 'https://example.com/avatar.png',
+            ], 200),
+        ]);
+
+        $this->postJson('/api/googleAuth', [
+            'data' => ['id_token' => 'valid-google-id-token'],
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('user.email', 'google.member@example.com')
+            ->assertJsonStructure(['user' => ['api_token']]);
+
+        $this->assertDatabaseHas('mobile_users', [
+            'email' => 'google.member@example.com',
+            'google_id' => 'google-user-123',
+            'login_type' => 'google',
+            'is_verified' => true,
+        ]);
+
+        Http::assertSent(fn ($request): bool => str_starts_with($request->url(), 'https://oauth2.googleapis.com/tokeninfo')
+            && $request['id_token'] === 'valid-google-id-token');
+    }
+
+    public function test_google_auth_fails_closed_when_client_id_is_missing(): void
+    {
+        AppSetting::query()->updateOrCreate(
+            ['key' => 'google_login_enabled'],
+            ['group' => 'features', 'value' => '1', 'is_secret' => false]
+        );
+
+        Http::fake();
+
+        $this->postJson('/api/googleAuth', [
+            'data' => ['id_token' => 'valid-google-id-token'],
+        ])
+            ->assertStatus(503)
+            ->assertJsonPath('status', 'error')
+            ->assertJsonPath('message', 'Google sign-in is not configured yet.');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_google_auth_respects_disabled_google_login_setting_even_with_client_id(): void
+    {
+        AppSetting::query()->updateOrCreate(
+            ['key' => 'google_login_enabled'],
+            ['group' => 'features', 'value' => '0', 'is_secret' => false]
+        );
+
+        AppSetting::query()->updateOrCreate(
+            ['key' => 'google_web_client_id'],
+            ['group' => 'features', 'value' => 'web-client.apps.googleusercontent.com', 'is_secret' => false]
+        );
+
+        Http::fake();
+
+        $this->postJson('/api/googleAuth', [
+            'data' => ['id_token' => 'valid-google-id-token'],
+        ])
+            ->assertStatus(403)
+            ->assertJsonPath('status', 'error')
+            ->assertJsonPath('message', 'Google sign-in is not enabled yet.');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_google_auth_trims_configured_client_id_before_audience_check(): void
+    {
+        $this->enableGoogleLogin('  web-client.apps.googleusercontent.com  ');
+
+        Http::fake([
+            'https://oauth2.googleapis.com/tokeninfo*' => Http::response([
+                'aud' => 'web-client.apps.googleusercontent.com',
+                'sub' => 'google-trimmed-123',
+                'email' => 'trimmed.google@example.com',
+                'email_verified' => 'true',
+                'name' => 'Trimmed Google',
+            ], 200),
+        ]);
+
+        $this->postJson('/api/googleAuth', [
+            'data' => ['id_token' => 'valid-google-id-token'],
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('user.email', 'trimmed.google@example.com');
+    }
+
+    public function test_google_auth_rejects_tokeninfo_without_google_email_even_if_payload_has_email(): void
+    {
+        $this->enableGoogleLogin('web-client.apps.googleusercontent.com');
+
+        Http::fake([
+            'https://oauth2.googleapis.com/tokeninfo*' => Http::response([
+                'aud' => 'web-client.apps.googleusercontent.com',
+                'sub' => 'google-no-email-123',
+                'email_verified' => 'true',
+                'name' => 'No Email Google',
+            ], 200),
+        ]);
+
+        $this->postJson('/api/googleAuth', [
+            'data' => [
+                'id_token' => 'valid-google-id-token',
+                'email' => 'client.supplied@example.com',
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('status', 'error')
+            ->assertJsonPath('message', 'Google did not return a valid email address.');
+
+        $this->assertDatabaseMissing('mobile_users', [
+            'email' => 'client.supplied@example.com',
+        ]);
+    }
+
+    public function test_google_auth_does_not_issue_session_for_blocked_mobile_user(): void
+    {
+        $this->enableGoogleLogin('web-client.apps.googleusercontent.com');
+
+        $user = MobileUser::query()->create([
+            'name' => 'Blocked User',
+            'email' => 'blocked.google@example.com',
+            'is_verified' => true,
+            'email_verified_at' => now(),
+            'is_blocked' => true,
+        ]);
+
+        Http::fake([
+            'https://oauth2.googleapis.com/tokeninfo*' => Http::response([
+                'aud' => 'web-client.apps.googleusercontent.com',
+                'sub' => 'blocked-google-id',
+                'email' => 'blocked.google@example.com',
+                'email_verified' => 'true',
+                'name' => 'Blocked User',
+            ], 200),
+        ]);
+
+        $this->postJson('/api/googleAuth', [
+            'data' => ['id_token' => 'blocked-google-id-token'],
+        ])
+            ->assertStatus(403)
+            ->assertJsonPath('status', 'error')
+            ->assertJsonPath('message', 'This account is not allowed to sign in. Please contact support.');
+
+        $this->assertNull($user->fresh()->api_token_hash);
+    }
+
     public function test_mobile_user_can_update_profile_without_required_images_or_social_fields(): void
     {
         $group = ChurchGroup::updateOrCreate(['name' => 'Choir'], [
@@ -899,5 +1060,18 @@ class CompatibilityApiTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('status', 'ok');
+    }
+
+    private function enableGoogleLogin(string $webClientId): void
+    {
+        AppSetting::query()->updateOrCreate(
+            ['key' => 'google_login_enabled'],
+            ['group' => 'features', 'value' => '1', 'is_secret' => false]
+        );
+
+        AppSetting::query()->updateOrCreate(
+            ['key' => 'google_web_client_id'],
+            ['group' => 'features', 'value' => $webClientId, 'is_secret' => false]
+        );
     }
 }
