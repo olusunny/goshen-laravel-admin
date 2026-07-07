@@ -1533,6 +1533,10 @@
                 const url = tab === 'forgot' ? '/app/forgot-password' : (tab === 'reset' ? '/app/reset-password' : '/app');
                 history.replaceState(null, '', url);
             }
+
+            if (canShowGoogleAuth(tab)) {
+                window.setTimeout(() => initializeGoogleLogin(), 0);
+            }
         }
 
         function canShowGoogleAuth(tab = 'login') {
@@ -1591,6 +1595,8 @@
             if (!googleIdentityButton || googleIdentityReady) {
                 return;
             }
+
+            googleAuthPanel.hidden = false;
 
             const loaded = await loadGoogleIdentityScript();
             if (!loaded) {
@@ -2953,7 +2959,6 @@
         });
 
         applyTheme(savedThemeMode());
-        initializeGoogleLogin();
         loadGroups();
         restoreUser();
 
