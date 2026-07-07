@@ -7,6 +7,16 @@
     <title>Goshen Retreat Portal</title>
     <link rel="manifest" href="/member-manifest.json">
     <link rel="icon" href="/favicon.png">
+    <script>
+        (() => {
+            const key = 'goshen_portal_theme';
+            const saved = localStorage.getItem(key);
+            const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+            if ((saved || (prefersDark ? 'dark' : 'light')) === 'dark') {
+                document.documentElement.classList.add('theme-dark');
+            }
+        })();
+    </script>
     <style>
         :root {
             color-scheme: light;
@@ -15,6 +25,9 @@
             --line: #dce7eb;
             --wash: #f3f8fa;
             --card: #ffffff;
+            --field: #f8fbfc;
+            --nav-surface: rgba(255,255,255,.94);
+            --topbar-surface: rgba(243, 248, 250, .92);
             --brand: #0c2230;
             --brand-2: #0f4b3d;
             --gold: #f8b522;
@@ -28,6 +41,23 @@
             font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
+        html.theme-dark, body.theme-dark {
+            color-scheme: dark;
+            --ink: #f4fbff;
+            --muted: #a8b8c1;
+            --line: #24404c;
+            --wash: #07151d;
+            --card: #102633;
+            --field: #0b1d27;
+            --nav-surface: rgba(12, 28, 38, .96);
+            --topbar-surface: rgba(7, 21, 29, .92);
+            --brand: #f8b522;
+            --brand-2: #f8b522;
+            --gold-2: rgba(248,181,34,.16);
+            --shadow: 0 18px 50px rgba(0, 0, 0, .38);
+            --soft-shadow: 0 12px 28px rgba(0, 0, 0, .22);
+        }
+
         * { box-sizing: border-box; }
         html, body { min-height: 100%; }
         body {
@@ -35,6 +65,7 @@
             background: var(--wash);
             color: var(--ink);
             overflow-x: hidden;
+            transition: background-color .18s ease, color .18s ease;
         }
 
         a { color: inherit; }
@@ -78,7 +109,7 @@
             object-fit: cover;
             border-radius: 24px;
             box-shadow: 0 12px 30px rgba(12, 34, 48, .16);
-            background: #fff;
+            background: var(--card);
         }
 
         .auth-head {
@@ -114,7 +145,7 @@
             gap: 6px;
             padding: 6px;
             border-radius: 18px;
-            background: #edf4f6;
+            background: var(--field);
             margin: 18px 0;
         }
 
@@ -148,7 +179,7 @@
             min-height: 52px;
             border: 1px solid var(--line);
             border-radius: 17px;
-            background: #f8fbfc;
+            background: var(--field);
             color: var(--ink);
             padding: 0 16px;
             outline: none;
@@ -180,9 +211,10 @@
             text-decoration: none;
         }
         .button.dark { background: var(--brand); color: #fff; }
-        .button.subtle { background: #eef5f7; color: var(--ink); }
+        html.theme-dark .button.dark, body.theme-dark .button.dark { color: #07151d; }
+        .button.subtle { background: var(--field); color: var(--ink); }
         .button.outline {
-            background: #fff;
+            background: var(--card);
             border: 1px solid var(--line);
             color: var(--ink);
         }
@@ -222,6 +254,19 @@
             color: var(--danger);
         }
 
+        .theme-toggle {
+            margin-top: 12px;
+        }
+        .theme-toggle + .button {
+            margin-top: 10px;
+        }
+        .theme-toggle .theme-icon {
+            width: 22px;
+            height: 22px;
+            display: inline-grid;
+            place-items: center;
+        }
+
         .auth-footer {
             margin-top: 18px;
             display: flex;
@@ -246,7 +291,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: rgba(243, 248, 250, .92);
+            background: var(--topbar-surface);
             backdrop-filter: blur(16px);
             border-bottom: 1px solid rgba(220, 231, 235, .85);
         }
@@ -394,7 +439,7 @@
             gap: 12px;
         }
         .stat {
-            background: #f8fbfc;
+            background: var(--field);
             border: 1px solid var(--line);
             border-radius: 20px;
             padding: 16px;
@@ -459,7 +504,7 @@
         .detail-row span, .item-meta { color: var(--muted); line-height: 1.5; }
 
         .attendee-card {
-            background: #f8fbfc;
+            background: var(--field);
             border: 1px solid var(--line);
             border-radius: 22px;
             padding: 16px;
@@ -475,7 +520,7 @@
             min-height: 50px;
             border: 1px solid var(--line);
             border-radius: 16px;
-            background: #fff;
+            background: var(--card);
             padding: 10px;
             display: flex;
             align-items: center;
@@ -501,7 +546,7 @@
         }
         .record {
             border: 1px solid var(--line);
-            background: #f8fbfc;
+            background: var(--field);
             border-radius: 22px;
             padding: 16px;
             display: grid;
@@ -545,6 +590,40 @@
         .wallet-actions-grid {
             display: grid;
             gap: 14px;
+        }
+        .wallet-tabs {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            padding: 6px;
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            background: var(--card);
+            box-shadow: var(--soft-shadow);
+        }
+        .wallet-tab {
+            min-height: 46px;
+            border: 0;
+            border-radius: 15px;
+            background: transparent;
+            color: var(--muted);
+            font-weight: 1000;
+            cursor: pointer;
+        }
+        .wallet-tab.active {
+            background: var(--brand);
+            color: #fff;
+            box-shadow: var(--soft-shadow);
+        }
+        html.theme-dark .wallet-tab.active, body.theme-dark .wallet-tab.active {
+            color: #07151d;
+        }
+        .wallet-panel {
+            display: none;
+            gap: 14px;
+        }
+        .wallet-panel.active {
+            display: grid;
         }
         .wallet-mini-grid {
             display: grid;
@@ -600,12 +679,77 @@
             overflow: hidden;
         }
         .qr-holder img { width: 100%; height: auto; display: block; }
+        .ticket-card {
+            gap: 18px;
+        }
+        .ticket-summary {
+            display: grid;
+            gap: 8px;
+        }
+        .ticket-summary strong {
+            font-size: clamp(22px, 6vw, 30px);
+            line-height: 1.12;
+            overflow-wrap: anywhere;
+        }
+        .ticket-qr-stage {
+            display: grid;
+            justify-items: center;
+            gap: 10px;
+            padding: 16px;
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            background: var(--card);
+        }
+        .ticket-qr-stage .qr-holder {
+            width: min(78vw, 320px);
+            min-height: min(78vw, 320px);
+            border-radius: 22px;
+            border-style: solid;
+            box-shadow: 0 14px 34px rgba(12, 34, 48, .12);
+        }
+        .ticket-qr-stage p {
+            margin: 0;
+            color: var(--muted);
+            font-weight: 900;
+            text-align: center;
+        }
+        .ticket-details {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .ticket-detail {
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 12px;
+            background: var(--card);
+            min-width: 0;
+        }
+        .ticket-detail span {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 900;
+            margin-bottom: 4px;
+        }
+        .ticket-detail strong {
+            display: block;
+            overflow-wrap: anywhere;
+        }
+        .profile-form-grid {
+            display: grid;
+            gap: 14px;
+        }
+        .profile-section-title {
+            margin: 10px 0 0;
+            font-size: 18px;
+        }
 
         .empty {
             border: 1px dashed var(--line);
             border-radius: 22px;
             padding: 22px;
-            background: #fff;
+            background: var(--card);
             color: var(--muted);
             line-height: 1.6;
             font-weight: 800;
@@ -630,13 +774,13 @@
         }
         .drawer .user-chip {
             color: var(--ink);
-            background: #f8fbfc;
+            background: var(--field);
             border-color: var(--line);
         }
         .drawer .user-chip span { color: var(--muted); }
         .drawer .nav-item { color: var(--ink); }
         .drawer .nav-item.active, .drawer .nav-item:hover {
-            background: #eef7f3;
+            background: var(--field);
             color: var(--brand-2);
         }
 
@@ -650,7 +794,7 @@
             grid-template-columns: repeat(4, 1fr);
             gap: 4px;
             padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-            background: rgba(255,255,255,.94);
+            background: var(--nav-surface);
             border-top: 1px solid var(--line);
             backdrop-filter: blur(18px);
         }
@@ -671,11 +815,27 @@
             background: var(--brand);
             color: #fff;
         }
+        html.theme-dark .bottom-nav button.active, body.theme-dark .bottom-nav button.active {
+            color: #07151d;
+        }
+
+        @media (max-width: 430px) {
+            .wallet-tabs {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .ticket-details {
+                grid-template-columns: 1fr;
+            }
+        }
 
         @media (min-width: 620px) {
             .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
             .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .ticket-qr-stage .qr-holder {
+                width: 340px;
+                min-height: 340px;
+            }
         }
 
         @media (min-width: 980px) {
@@ -902,6 +1062,7 @@
                 <button class="nav-item" type="button" data-nav-page="support"><svg class="nav-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Support</button>
             </nav>
             <div style="margin-top:24px">
+                <button class="button outline theme-toggle" type="button" data-theme-toggle aria-pressed="false"><span class="theme-icon" aria-hidden="true">D</span><span data-theme-label>Dark mode</span></button>
                 <button id="sidebarLogout" class="button outline" type="button">Sign out</button>
             </div>
         </aside>
@@ -939,6 +1100,7 @@
                     <button class="nav-item" type="button" data-nav-page="profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg>Profile</button>
                     <button class="nav-item" type="button" data-nav-page="support"><svg class="nav-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Support</button>
                 </nav>
+                <button class="button outline theme-toggle" type="button" data-theme-toggle aria-pressed="false"><span class="theme-icon" aria-hidden="true">D</span><span data-theme-label>Dark mode</span></button>
                 <button id="drawerLogout" class="button dark" type="button">Sign out</button>
             </div>
         </div>
@@ -1046,6 +1208,8 @@
 
     <script>
         const storageKey = 'goshen_member_user';
+        const themeKey = 'goshen_portal_theme';
+        const walletTabKey = 'goshen_wallet_tab';
         const pageTitles = {
             home: 'Home',
             retreat: 'Retreat',
@@ -1063,6 +1227,8 @@
         let memberData = { registrations: [], payment_history: [], tickets: [], accommodation_allocations: [] };
         let walletData = null;
         let activePage = 'home';
+        let activeWalletTab = localStorage.getItem(walletTabKey) || 'overview';
+        let churchGroupsCache = [];
 
         const authShell = document.getElementById('authShell');
         const portalShell = document.getElementById('portalShell');
@@ -1108,6 +1274,43 @@
 
         function authPayload(extra = {}) {
             return { ...extra, email: currentUser?.email || '', api_token: currentUser?.api_token || '' };
+        }
+
+        function applyTheme(theme) {
+            const isDark = theme === 'dark';
+            document.documentElement.classList.toggle('theme-dark', isDark);
+            document.body.classList.toggle('theme-dark', isDark);
+            document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#07151d' : '#0c2230');
+            document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+                button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+                button.querySelector('[data-theme-label]').textContent = isDark ? 'Light mode' : 'Dark mode';
+                button.querySelector('.theme-icon').textContent = isDark ? 'L' : 'D';
+            });
+        }
+
+        function currentTheme() {
+            return document.documentElement.classList.contains('theme-dark') ? 'dark' : 'light';
+        }
+
+        function toggleTheme() {
+            const next = currentTheme() === 'dark' ? 'light' : 'dark';
+            localStorage.setItem(themeKey, next);
+            applyTheme(next);
+        }
+
+        function setWalletTab(tab, persist = true) {
+            activeWalletTab = ['overview', 'transfer', 'withdraw', 'activity'].includes(tab) ? tab : 'overview';
+            if (persist) localStorage.setItem(walletTabKey, activeWalletTab);
+            document.querySelectorAll('[data-wallet-tab]').forEach((button) => {
+                const active = button.dataset.walletTab === activeWalletTab;
+                button.classList.toggle('active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+            document.querySelectorAll('[data-wallet-panel]').forEach((panel) => {
+                const active = panel.dataset.walletPanel === activeWalletTab;
+                panel.classList.toggle('active', active);
+                panel.hidden = !active;
+            });
         }
 
         function notify(message, type = 'ok') {
@@ -1248,11 +1451,14 @@
             try {
                 const payload = await apiGet('/api/church_groups');
                 const groups = Array.isArray(payload.groups) ? payload.groups : [];
-                select.innerHTML = '<option value="">Please select</option>' + groups
+                churchGroupsCache = groups;
+                if (select) select.innerHTML = '<option value="">Please select</option>' + groups
                     .map((group) => `<option value="${escapeHtml(group.id)}">${escapeHtml(group.name)}</option>`)
                     .join('');
+                if (currentUser && activePage === 'profile') renderProfile();
             } catch {
-                select.innerHTML = '<option value="">Church groups unavailable</option>';
+                churchGroupsCache = [];
+                if (select) select.innerHTML = '<option value="">Church groups unavailable</option>';
             }
         }
 
@@ -1651,7 +1857,14 @@
                     ${wallet.security_reset?.reset_required ? `<p class="muted">${escapeHtml(wallet.security_reset.message || 'Wallet security reset is pending.')}</p>` : ''}
                 </section>
 
-                <section class="wallet-actions-grid">
+                <div class="wallet-tabs" role="tablist" aria-label="Wallet tools">
+                    <button class="wallet-tab" type="button" role="tab" data-wallet-tab="overview">Overview</button>
+                    <button class="wallet-tab" type="button" role="tab" data-wallet-tab="transfer">Transfer</button>
+                    <button class="wallet-tab" type="button" role="tab" data-wallet-tab="withdraw">Withdraw</button>
+                    <button class="wallet-tab" type="button" role="tab" data-wallet-tab="activity">Activity</button>
+                </div>
+
+                <section class="wallet-panel wallet-actions-grid" data-wallet-panel="overview" role="tabpanel">
                     <article class="card">
                         <h3>Top up now</h3>
                         <p class="muted">Add money securely with Stripe.</p>
@@ -1695,7 +1908,9 @@
                         </form>
                         <div class="record-list" style="margin-top:14px">${plans.length ? plans.map(renderSavingsPlan).join('') : '<div class="empty">No auto top-up plan has been created yet.</div>'}</div>
                     </article>
+                </section>
 
+                <section class="wallet-panel" data-wallet-panel="transfer" role="tabpanel">
                     <article class="card">
                         <h3>Transfer to a member</h3>
                         <p class="muted">Send wallet funds to another member by email, phone, or Triumphant ID.</p>
@@ -1709,7 +1924,9 @@
                             <button class="button" type="submit">Send transfer</button>
                         </form>
                     </article>
+                </section>
 
+                <section class="wallet-panel" data-wallet-panel="withdraw" role="tabpanel">
                     <article class="card">
                         <h3>Withdraw wallet funds</h3>
                         <p class="muted">Submit a withdrawal request for admin review.</p>
@@ -1730,7 +1947,9 @@
                         </form>
                         <div class="record-list" style="margin-top:14px">${withdrawals.length ? withdrawals.map(renderWithdrawal).join('') : '<div class="empty">No withdrawal request yet.</div>'}</div>
                     </article>
+                </section>
 
+                <section class="wallet-panel" data-wallet-panel="activity" role="tabpanel">
                     <article class="card">
                         <h3>Recent activity</h3>
                         <p class="muted">Wallet top-ups, transfers, payments, and withdrawal movements.</p>
@@ -1738,6 +1957,7 @@
                     </article>
                 </section>
             `;
+            setWalletTab(activeWalletTab, false);
         }
 
         function renderSavingsPlan(plan) {
@@ -1800,19 +2020,27 @@
 
         function renderTicket(ticket) {
             const urls = ticket.document_urls || {};
+            const ticketNumber = ticket.ticket_number || ticket.public_id || 'Ticket';
             return `
-                <article class="record">
-                    <div class="record-top">
-                        <div class="record-title">
-                            <strong>${escapeHtml(ticket.ticket_number || ticket.public_id || 'Ticket')}</strong>
-                            <span class="item-meta">${escapeHtml(ticket.attendee_name || 'Attendee')} - ${escapeHtml(ticket.ticket_type || 'Goshen Retreat')}</span>
-                            ${statusBadge(ticket.status)}
-                        </div>
+                <article class="record ticket-card">
+                    <div class="ticket-summary">
+                        ${statusBadge(ticket.status)}
+                        <strong>${escapeHtml(ticketNumber)}</strong>
+                        <span class="item-meta">${escapeHtml(ticket.attendee_name || 'Attendee')} - ${escapeHtml(ticket.ticket_type || 'Goshen Retreat')}</span>
+                    </div>
+                    <div class="ticket-qr-stage">
                         <div class="qr-holder" data-qr-url="${escapeHtml(urls.qr || '')}">QR</div>
+                        <p>Scan this QR code at check-in</p>
+                    </div>
+                    <div class="ticket-details">
+                        <div class="ticket-detail"><span>Ticket holder</span><strong>${escapeHtml(ticket.attendee_name || currentUser?.name || 'Attendee')}</strong></div>
+                        <div class="ticket-detail"><span>Ticket type</span><strong>${escapeHtml(ticket.ticket_type || 'Goshen Retreat')}</strong></div>
+                        <div class="ticket-detail"><span>Issued for</span><strong>${escapeHtml(ticket.event?.name || ticket.event_name || 'Goshen Retreat')}</strong></div>
+                        <div class="ticket-detail"><span>Ticket number</span><strong>${escapeHtml(ticketNumber)}</strong></div>
                     </div>
                     <div class="record-actions">
-                        ${urls.pdf ? `<button class="button small subtle ticket-download" type="button" data-url="${escapeHtml(urls.pdf)}" data-filename="${escapeHtml((ticket.ticket_number || ticket.public_id || 'ticket') + '.pdf')}">Download PDF</button>` : ''}
-                        ${urls.ics ? `<button class="button small outline ticket-download" type="button" data-url="${escapeHtml(urls.ics)}" data-filename="${escapeHtml((ticket.ticket_number || ticket.public_id || 'ticket') + '.ics')}">Add to calendar</button>` : ''}
+                        ${urls.pdf ? `<button class="button subtle ticket-download" type="button" data-url="${escapeHtml(urls.pdf)}" data-filename="${escapeHtml(ticketNumber + '.pdf')}">Download PDF</button>` : ''}
+                        ${urls.ics ? `<button class="button outline ticket-download" type="button" data-url="${escapeHtml(urls.ics)}" data-filename="${escapeHtml(ticketNumber + '.ics')}">Add to calendar</button>` : ''}
                     </div>
                 </article>
             `;
@@ -1900,8 +2128,34 @@
             `;
         }
 
+        function selectedAttr(value, selected) {
+            return `${value ?? ''}` === `${selected ?? ''}` ? 'selected' : '';
+        }
+
+        function optionMarkup(options, selected, placeholder = 'Please select') {
+            return `<option value="">${escapeHtml(placeholder)}</option>` + options
+                .map((option) => {
+                    const value = option && typeof option === 'object' ? option.value : option;
+                    const label = option && typeof option === 'object' ? option.label : option;
+                    return `<option value="${escapeHtml(value)}" ${selectedAttr(value, selected)}>${escapeHtml(label)}</option>`;
+                })
+                .join('');
+        }
+
+        function groupOptionsMarkup(selected) {
+            const groups = churchGroupsCache.length
+                ? churchGroupsCache
+                : (currentUser?.group_id ? [{ id: currentUser.group_id, name: currentUser.group_name || 'Current church group' }] : []);
+            return '<option value="">Please select</option>' + groups
+                .map((group) => `<option value="${escapeHtml(group.id)}" ${selectedAttr(group.id, selected)}>${escapeHtml(group.name)}</option>`)
+                .join('');
+        }
+
         function renderProfile() {
             const user = currentUser || {};
+            const nameParts = splitName(user.name || '');
+            const firstName = user.first_name || nameParts.first;
+            const lastName = user.last_name || nameParts.last;
             document.getElementById('profileCard').innerHTML = `
                 <h3>${escapeHtml(user.name || 'Member')}</h3>
                 <div class="detail-list">
@@ -1911,6 +2165,65 @@
                     <div class="detail-row"><strong>Church group</strong><span>${escapeHtml(user.group_name || 'Not selected')}</span></div>
                     <div class="detail-row"><strong>Residence</strong><span>${escapeHtml([user.country_of_residence, user.state_county_province].filter(Boolean).join(', ') || 'Not provided')}</span></div>
                 </div>
+                <h4 class="profile-section-title">Edit profile</h4>
+                <form class="form profile-update-form">
+                    <input type="hidden" name="email" value="${escapeHtml(user.email || '')}">
+                    <div class="form-grid profile-form-grid">
+                        <div class="field">
+                            <label>Title</label>
+                            <select class="input" name="title" required>${optionMarkup(['Mr.', 'Mrs.', 'Miss'], user.title || user.profile_title)}</select>
+                        </div>
+                        <div class="field">
+                            <label>First name</label>
+                            <input class="input" name="first_name" autocomplete="given-name" value="${escapeHtml(firstName)}" required>
+                        </div>
+                        <div class="field">
+                            <label>Middle name</label>
+                            <input class="input" name="middle_name" value="${escapeHtml(user.middle_name || '')}">
+                        </div>
+                        <div class="field">
+                            <label>Last name</label>
+                            <input class="input" name="last_name" autocomplete="family-name" value="${escapeHtml(lastName)}" required>
+                        </div>
+                        <div class="field">
+                            <label>Phone number</label>
+                            <input class="input" name="phone" type="tel" autocomplete="tel" value="${escapeHtml(user.phone || '')}" required>
+                        </div>
+                        <div class="field">
+                            <label>Gender</label>
+                            <select class="input" name="gender" required>${optionMarkup([{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }], user.gender)}</select>
+                        </div>
+                        <div class="field">
+                            <label>Marital status</label>
+                            <select class="input" name="marital_status" required>${optionMarkup(['Single', 'Married', 'Widowed', 'Divorced/Separated', 'Prefer not to say'], user.marital_status)}</select>
+                        </div>
+                        <div class="field">
+                            <label>Member type</label>
+                            <select class="input" name="member_type" required>${optionMarkup([{ value: 'church_member', label: 'Church member' }, { value: 'visitor', label: 'Visitor' }], user.member_type || 'church_member')}</select>
+                        </div>
+                        <div class="field">
+                            <label>Church group</label>
+                            <select class="input" name="group_id" required>${groupOptionsMarkup(user.group_id)}</select>
+                        </div>
+                        <div class="field">
+                            <label>Country of residence</label>
+                            <input class="input" name="country_of_residence" autocomplete="country-name" value="${escapeHtml(user.country_of_residence || '')}" required>
+                        </div>
+                        <div class="field">
+                            <label>State/county/province</label>
+                            <input class="input" name="state_county_province" autocomplete="address-level1" value="${escapeHtml(user.state_county_province || '')}" required>
+                        </div>
+                        <div class="field">
+                            <label>Address</label>
+                            <textarea class="input" name="address" autocomplete="street-address" required>${escapeHtml(user.address || '')}</textarea>
+                        </div>
+                        <div class="field">
+                            <label>About me</label>
+                            <textarea class="input" name="about_me">${escapeHtml(user.about_me || '')}</textarea>
+                        </div>
+                    </div>
+                    <button class="button" type="submit">Save profile</button>
+                </form>
             `;
         }
 
@@ -1983,7 +2296,7 @@
         async function downloadAuthenticatedDocument(url, filename) {
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { Accept: 'application/octet-stream, application/json', 'Content-Type': 'application/json' },
+                headers: { Accept: 'application/octet-stream, application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.api_token}` },
                 body: JSON.stringify({ data: authPayload() }),
             });
             if (!response.ok) {
@@ -2138,6 +2451,9 @@
 
         document.getElementById('sidebarLogout').addEventListener('click', () => clearUser());
         document.getElementById('drawerLogout').addEventListener('click', () => clearUser());
+        document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+            button.addEventListener('click', toggleTheme);
+        });
 
         document.getElementById('portalMain').addEventListener('input', (event) => {
             const quantity = event.target.closest('.attendee-quantity');
@@ -2242,6 +2558,28 @@
                 }
                 return;
             }
+            const profileUpdate = event.target.closest('.profile-update-form');
+            if (profileUpdate) {
+                event.preventDefault();
+                if (!profileUpdate.reportValidity()) return;
+                const data = payloadFromForm(profileUpdate);
+                data.fullname = [data.first_name, data.middle_name, data.last_name].filter(Boolean).join(' ');
+                setBusy(profileUpdate, true);
+                try {
+                    const payload = await apiPost('/api/updateProfile', authPayload(data));
+                    currentUser = { ...currentUser, ...(payload.user || {}), api_token: payload.user?.api_token || currentUser.api_token };
+                    localStorage.setItem(storageKey, JSON.stringify(currentUser));
+                    updateUserIdentity();
+                    renderProfile();
+                    notify(payload.message || 'Profile updated successfully.');
+                    await loadMemberRetreatData();
+                } catch (error) {
+                    notify(error.message, 'error');
+                } finally {
+                    setBusy(profileUpdate, false);
+                }
+                return;
+            }
             const voucher = event.target.closest('.voucher-pay-form');
             if (voucher) {
                 event.preventDefault();
@@ -2265,6 +2603,11 @@
         });
 
         document.getElementById('portalMain').addEventListener('click', async (event) => {
+            const walletTab = event.target.closest('[data-wallet-tab]');
+            if (walletTab) {
+                setWalletTab(walletTab.dataset.walletTab);
+                return;
+            }
             const nav = event.target.closest('[data-nav-page]');
             if (nav) {
                 showPage(nav.dataset.navPage);
@@ -2367,6 +2710,7 @@
             }
         });
 
+        applyTheme(currentTheme());
         loadGroups();
         restoreUser();
 

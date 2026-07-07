@@ -41,16 +41,13 @@ class TicketDocumentService
 
     public function generatePdf(Ticket $ticket): TicketDocument
     {
-        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-            throw new RuntimeException('Install barryvdh/laravel-dompdf to generate PDF tickets.');
-        }
-
         $ticket->loadMissing(['event', 'booking', 'attendee', 'ticketType']);
         $disk = config('event-installments.storage.disk');
         $path = trim(config('event-installments.storage.pdf_path'), '/') . '/' . $ticket->public_id . '.pdf';
 
-        $html = $this->ticketHtml($ticket);
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)->output();
+        $pdf = class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)
+            ? \Barryvdh\DomPDF\Facade\Pdf::loadHTML($this->ticketHtml($ticket))->output()
+            : $this->basicTicketPdf($ticket);
 
         Storage::disk($disk)->put($path, $pdf);
 
@@ -140,6 +137,70 @@ HTML;
     private function escapeHtml(string $value): string
     {
         return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    private function basicTicketPdf(Ticket $ticket): string
+    {
+        $attendee = trim(($ticket->attendee?->first_name ?? '') . ' ' . ($ticket->attendee?->last_name ?? ''));
+        $number = $ticket->formatted_number ?: $ticket->ticket_number ?: $ticket->public_id;
+        $event = $ticket->event?->name ?: 'Goshen Retreat';
+        $type = $ticket->ticketType?->name ?: 'Ticket';
+        $status = $ticket->status instanceof \BackedEnum
+            ? $ticket->status->value
+            : (string) $ticket->status;
+
+        $lines = [
+            'Goshen Retreat Ticket',
+            $event,
+            'Ticket: ' . $number,
+            'Attendee: ' . ($attendee ?: 'Guest'),
+            'Type: ' . $type,
+            'Status: ' . $status,
+            '',
+            'Open the Goshen web app ticket page to scan the live QR code.',
+        ];
+
+        $content = "BT\n/F1 24 Tf\n72 760 Td\n";
+        foreach ($lines as $index => $line) {
+            if ($index === 1) {
+                $content .= "/F1 16 Tf\n";
+            } elseif ($index === 2) {
+                $content .= "/F1 13 Tf\n";
+            }
+
+            $content .= '(' . $this->pdfText($line) . ") Tj\n0 -26 Td\n";
+        }
+        $content .= "ET\n";
+
+        $objects = [
+            '<< /Type /Catalog /Pages 2 0 R >>',
+            '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+            '<< /Length ' . strlen($content) . " >>\nstream\n" . $content . "endstream",
+        ];
+
+        $pdf = "%PDF-1.4\n";
+        $offsets = [];
+        foreach ($objects as $index => $object) {
+            $offsets[] = strlen($pdf);
+            $pdf .= ($index + 1) . " 0 obj\n" . $object . "\nendobj\n";
+        }
+
+        $xref = strlen($pdf);
+        $pdf .= "xref\n0 " . (count($objects) + 1) . "\n0000000000 65535 f \n";
+        foreach ($offsets as $offset) {
+            $pdf .= str_pad((string) $offset, 10, '0', STR_PAD_LEFT) . " 00000 n \n";
+        }
+
+        return $pdf . "trailer << /Size " . (count($objects) + 1) . " /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF";
+    }
+
+    private function pdfText(string $value): string
+    {
+        $value = preg_replace('/[^\x09\x0A\x0D\x20-\x7E]/', '', $value) ?? '';
+
+        return str_replace(['\\', '(', ')', "\r", "\n"], ['\\\\', '\\(', '\\)', '', ' '], $value);
     }
 
     private function escapeIcs(string $value): string

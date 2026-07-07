@@ -1212,12 +1212,29 @@ class CompatibilityController extends Controller
 
     public function updateProfile(Request $request)
     {
-        $user = MobileUser::where('email', $request->input('email'))->first();
+        $data = $this->payload($request) ?: $request->all();
+        $token = $data['api_token'] ?? $request->bearerToken();
+        $user = filled($token)
+            ? MobileUser::where('api_token_hash', hash('sha256', $token))->first()
+            : null;
+
         if (! $user) {
-            return response()->json(['status' => 'error', 'msg' => 'User not found.', 'message' => 'User not found.']);
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'Please sign in again before updating your profile.',
+                'message' => 'Please sign in again before updating your profile.',
+            ], 401);
         }
 
-        $validated = validator($request->all(), [
+        if ($user->is_blocked || $user->is_deleted) {
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'This account cannot update its profile.',
+                'message' => 'This account cannot update its profile.',
+            ], 403);
+        }
+
+        $validated = validator(array_merge($data, $request->allFiles()), [
             'fullname' => ['nullable', 'string', 'max:255'],
             'title' => ['nullable', 'string', Rule::in(array_keys(MobileUser::TITLE_OPTIONS))],
             'profile_title' => ['nullable', 'string', Rule::in(array_keys(MobileUser::TITLE_OPTIONS))],
@@ -1291,7 +1308,7 @@ class CompatibilityController extends Controller
             'status' => 'ok',
             'msg' => 'Profile updated successfully.',
             'message' => 'Profile updated successfully.',
-            'user' => $this->mobileUserPayload($user->fresh(), $user->api_token ?? null),
+            'user' => $this->mobileUserPayload($user->fresh(), $token),
         ]);
     }
 
