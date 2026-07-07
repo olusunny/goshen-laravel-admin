@@ -1690,10 +1690,11 @@
         document.getElementById('loginForm').addEventListener('submit', async (event) => {
             event.preventDefault();
             const form = event.currentTarget;
+            const data = payloadFromForm(form);
             setBusy(form, true);
             showAuthNotice('');
             try {
-                const payload = await apiPost('/api/loginUser', payloadFromForm(form));
+                const payload = await apiPost('/api/loginUser', data);
                 saveUser(payload.user);
                 notify(`Welcome back, ${payload.user?.name || 'member'}.`);
             } catch (error) {
@@ -1730,10 +1731,11 @@
         document.getElementById('verifyForm').addEventListener('submit', async (event) => {
             event.preventDefault();
             const form = event.currentTarget;
+            const data = payloadFromForm(form);
             setBusy(form, true);
             showAuthNotice('');
             try {
-                const payload = await apiPost('/api/verifyMobileEmail', payloadFromForm(form));
+                const payload = await apiPost('/api/verifyMobileEmail', data);
                 saveUser(payload.user);
                 notify('Your account is verified.');
             } catch (error) {
@@ -1778,10 +1780,11 @@
         document.getElementById('resetForm').addEventListener('submit', async (event) => {
             event.preventDefault();
             const form = event.currentTarget;
+            const data = payloadFromForm(form);
             setBusy(form, true);
             showAuthNotice('');
             try {
-                const payload = await apiPost('/api/resetMobilePassword', payloadFromForm(form));
+                const payload = await apiPost('/api/resetMobilePassword', data);
                 showAuth('login');
                 showAuthNotice(payload.message || 'Password reset successfully. Please sign in.');
             } catch (error) {
