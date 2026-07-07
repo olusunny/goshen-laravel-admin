@@ -15,6 +15,6 @@ class MemberAppController extends Controller
             FILTER_VALIDATE_BOOLEAN
         );
 
-        return view($enabled ? 'member.app' : 'member.disabled');
+        return view($enabled ? 'member.portal' : 'member.disabled');
     }
 }
