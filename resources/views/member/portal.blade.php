@@ -536,6 +536,67 @@
             gap: 8px;
         }
 
+        .wallet-balance-card {
+            background: radial-gradient(circle at 84% 14%, rgba(248,181,34,.22), transparent 30%), linear-gradient(135deg, #0c2230, #0f4b3d);
+            color: #fff;
+            border: 0;
+        }
+        .wallet-balance-card .muted { color: rgba(255,255,255,.76); }
+        .wallet-balance-card .wallet-balance {
+            display: block;
+            margin: 10px 0 4px;
+            font-size: clamp(38px, 10vw, 56px);
+            line-height: 1;
+            font-weight: 1000;
+            overflow-wrap: anywhere;
+        }
+        .wallet-actions-grid {
+            display: grid;
+            gap: 14px;
+        }
+        .wallet-mini-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .progress-track {
+            height: 10px;
+            border-radius: 99px;
+            background: #e8f0f3;
+            overflow: hidden;
+        }
+        .progress-track span {
+            display: block;
+            height: 100%;
+            width: var(--progress, 0%);
+            border-radius: inherit;
+            background: var(--gold);
+        }
+        .wallet-ledger-row {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 12px;
+            align-items: center;
+        }
+        .wallet-direction {
+            width: 38px;
+            height: 38px;
+            display: inline-grid;
+            place-items: center;
+            border-radius: 14px;
+            background: #e8f7f1;
+            color: var(--ok);
+            font-weight: 1000;
+        }
+        .wallet-direction.debit {
+            background: #fff0ef;
+            color: var(--danger);
+        }
+        .wallet-amount {
+            font-weight: 1000;
+            white-space: nowrap;
+        }
+
         .qr-holder {
             width: 152px;
             min-height: 152px;
@@ -808,6 +869,7 @@
                 <button class="nav-item" type="button" data-nav-page="retreat"><span class="nav-mark"></span>Retreat Registration</button>
                 <button class="nav-item" type="button" data-nav-page="tickets"><span class="nav-mark"></span>My Ticket</button>
                 <button class="nav-item" type="button" data-nav-page="payments"><span class="nav-mark"></span>Payments</button>
+                <button class="nav-item" type="button" data-nav-page="wallet"><span class="nav-mark"></span>Wallet</button>
                 <button class="nav-item" type="button" data-nav-page="receipts"><span class="nav-mark"></span>Receipts</button>
                 <button class="nav-item" type="button" data-nav-page="updates"><span class="nav-mark"></span>Updates</button>
                 <button class="nav-item" type="button" data-nav-page="profile"><span class="nav-mark"></span>Profile</button>
@@ -845,6 +907,7 @@
                     <button class="nav-item" type="button" data-nav-page="retreat"><span class="nav-mark"></span>Retreat Registration</button>
                     <button class="nav-item" type="button" data-nav-page="tickets"><span class="nav-mark"></span>My Ticket</button>
                     <button class="nav-item" type="button" data-nav-page="payments"><span class="nav-mark"></span>Payments</button>
+                    <button class="nav-item" type="button" data-nav-page="wallet"><span class="nav-mark"></span>Wallet</button>
                     <button class="nav-item" type="button" data-nav-page="receipts"><span class="nav-mark"></span>Receipts</button>
                     <button class="nav-item" type="button" data-nav-page="updates"><span class="nav-mark"></span>Updates</button>
                     <button class="nav-item" type="button" data-nav-page="profile"><span class="nav-mark"></span>Profile</button>
@@ -894,6 +957,16 @@
                     </div>
                 </div>
                 <div id="paymentsList" class="record-list"></div>
+            </section>
+
+            <section class="page-view" data-page-view="wallet">
+                <div class="section-head">
+                    <div>
+                        <h2>Goshen Wallet</h2>
+                        <p>Top up, save, transfer, withdraw, and review your wallet activity.</p>
+                    </div>
+                </div>
+                <div id="walletContent" class="grid"></div>
             </section>
 
             <section class="page-view" data-page-view="receipts">
@@ -952,6 +1025,7 @@
             retreat: 'Retreat',
             tickets: 'Tickets',
             payments: 'Payments',
+            wallet: 'Wallet',
             receipts: 'Receipts',
             updates: 'Updates',
             profile: 'Profile',
@@ -961,6 +1035,7 @@
         let currentUser = null;
         let eventsCache = [];
         let memberData = { registrations: [], payment_history: [], tickets: [], accommodation_allocations: [] };
+        let walletData = null;
         let activePage = 'home';
 
         const authShell = document.getElementById('authShell');
@@ -1106,6 +1181,7 @@
             showPage(pageTitles[requestedPage] ? requestedPage : 'home', false);
             loadEvents();
             loadMemberRetreatData();
+            loadWallet();
             loadUpdates();
         }
 
@@ -1230,6 +1306,22 @@
                 ['ticketsList', 'paymentsList', 'receiptsList'].forEach((id) => {
                     document.getElementById(id).innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
                 });
+            }
+        }
+
+        async function loadWallet() {
+            if (!currentUser?.api_token) return;
+            const walletContent = document.getElementById('walletContent');
+            if (!walletData) {
+                walletContent.innerHTML = '<div class="empty">Loading your Goshen wallet...</div>';
+            }
+            try {
+                const payload = await apiPost('/api/goshen-wallet', authPayload());
+                walletData = payload.data || null;
+                renderWallet();
+                renderHome();
+            } catch (error) {
+                walletContent.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
             }
         }
 
@@ -1485,7 +1577,7 @@
                 <div class="stat"><span>Registrations</span><strong>${registrations.length}</strong></div>
                 <div class="stat"><span>Tickets</span><strong>${tickets.length}</strong></div>
                 <div class="stat"><span>Outstanding</span><strong>${escapeHtml(formatMoney(outstanding, currency))}</strong></div>
-                <div class="stat"><span>Updates</span><strong id="updateCount">${document.querySelectorAll('#updatesList .record').length || 0}</strong></div>
+                <div class="stat"><span>Wallet</span><strong>${escapeHtml(walletData ? formatMoney(walletData.balance, walletData.currency) : 'Load')}</strong></div>
             `;
             document.getElementById('homeNextAction').innerHTML = payable.length
                 ? `<h3>Payment waiting</h3><p class="muted">You have a Goshen Retreat payment to complete.</p><button class="button" type="button" data-nav-page="payments">Continue payment</button>`
@@ -1496,6 +1588,180 @@
             document.getElementById('homeEventPreview').innerHTML = event
                 ? `<h3>${escapeHtml(event.name || 'Goshen Retreat')}</h3><p class="muted">${escapeHtml(eventDate(event))}</p><div class="detail-list"><div class="detail-row"><strong>Venue</strong><span>${escapeHtml(eventVenue(event))}</span></div></div>`
                 : '<div class="empty">No published retreat edition is available yet.</div>';
+        }
+
+        function walletAmount(amount, currency) {
+            return escapeHtml(formatMoney(amount, currency || walletData?.currency || 'GBP'));
+        }
+
+        function walletProgress(goal) {
+            if (!goal) return 0;
+            const raw = Number(goal.progress ?? 0);
+            if (raw > 1) return Math.max(0, Math.min(100, raw));
+            return Math.max(0, Math.min(100, raw * 100));
+        }
+
+        function renderWallet() {
+            const root = document.getElementById('walletContent');
+            const wallet = walletData;
+            if (!wallet) {
+                root.innerHTML = '<div class="empty">Unable to load your Goshen wallet.</div>';
+                return;
+            }
+
+            const currency = wallet.currency || 'GBP';
+            const primaryGoal = (wallet.goals || []).find((goal) => goal.is_primary && goal.status === 'active')
+                || (wallet.goals || []).find((goal) => goal.status === 'active');
+            const goalPercent = walletProgress(primaryGoal);
+            const plans = wallet.savings_plans || [];
+            const withdrawals = wallet.withdrawal_requests || [];
+            const ledger = wallet.ledger || [];
+
+            root.innerHTML = `
+                <section class="card wallet-balance-card">
+                    <p class="eyebrow">Goshen savings wallet</p>
+                    <strong class="wallet-balance">${walletAmount(wallet.balance, currency)}</strong>
+                    <p class="muted">Use wallet funds for eligible retreat payments, transfers, and managed withdrawals.</p>
+                    ${wallet.security_reset?.reset_required ? `<p class="muted">${escapeHtml(wallet.security_reset.message || 'Wallet security reset is pending.')}</p>` : ''}
+                </section>
+
+                <section class="wallet-actions-grid">
+                    <article class="card">
+                        <h3>Top up now</h3>
+                        <p class="muted">Add money securely with Stripe.</p>
+                        <form class="form wallet-topup-form">
+                            <div class="wallet-mini-grid">
+                                <div class="field"><label>Amount (${escapeHtml(currency)})</label><input class="input" name="amount" type="number" min="1" step="0.01" required></div>
+                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="${escapeHtml(currency)}" required></div>
+                            </div>
+                            <label class="choice"><input name="save_payment_method" type="checkbox" value="1"><span>Save card for auto top-up</span></label>
+                            <button class="button" type="submit">Top up with Stripe</button>
+                        </form>
+                    </article>
+
+                    <article class="card">
+                        <h3>Savings goal</h3>
+                        <p class="muted">Edit a saved goal or add another target.</p>
+                        <form class="form wallet-goal-form">
+                            <input type="hidden" name="goal_id" value="${escapeHtml(primaryGoal?.id || '')}">
+                            <div class="field"><label>Goal name</label><input class="input" name="goal_label" value="${escapeHtml(primaryGoal?.label || wallet.goal_label || 'Goshen Retreat savings')}" required></div>
+                            <div class="wallet-mini-grid">
+                                <div class="field"><label>Target amount</label><input class="input" name="goal_amount" type="number" min="1" step="0.01" value="${escapeHtml(primaryGoal?.target_amount || wallet.goal_amount || '')}" required></div>
+                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="${escapeHtml(primaryGoal?.currency || currency)}" required></div>
+                            </div>
+                            <div class="progress-track" aria-label="Savings goal progress"><span style="--progress:${goalPercent}%"></span></div>
+                            <button class="button" type="submit">Save selected goal</button>
+                            <button class="button outline wallet-new-goal" type="button">Add as new goal</button>
+                            ${primaryGoal ? `<button class="button subtle wallet-cancel-goal" type="button" data-goal-id="${escapeHtml(primaryGoal.id)}">Cancel selected goal</button>` : ''}
+                        </form>
+                    </article>
+
+                    <article class="card">
+                        <h3>Auto top-up plan</h3>
+                        <p class="muted">Save a fixed amount daily, weekly, or monthly.</p>
+                        <form class="form wallet-plan-form">
+                            <div class="wallet-mini-grid">
+                                <div class="field"><label>Amount (${escapeHtml(currency)})</label><input class="input" name="amount" type="number" min="1" step="0.01" required></div>
+                                <div class="field"><label>Frequency</label><select class="input" name="frequency" required><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></div>
+                            </div>
+                            <div class="field"><label>Number of top-ups (optional)</label><input class="input" name="remaining_cycles" type="number" min="1" max="520"></div>
+                            <button class="button" type="submit">Create auto top-up</button>
+                        </form>
+                        <div class="record-list" style="margin-top:14px">${plans.length ? plans.map(renderSavingsPlan).join('') : '<div class="empty">No auto top-up plan has been created yet.</div>'}</div>
+                    </article>
+
+                    <article class="card">
+                        <h3>Transfer to a member</h3>
+                        <p class="muted">Send wallet funds to another member by email, phone, or Triumphant ID.</p>
+                        <form class="form wallet-transfer-form">
+                            <div class="field"><label>Recipient</label><input class="input" name="recipient" required></div>
+                            <div class="wallet-mini-grid">
+                                <div class="field"><label>Amount</label><input class="input" name="amount" type="number" min="1" step="0.01" required></div>
+                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="${escapeHtml(currency)}" required></div>
+                            </div>
+                            <div class="field"><label>Note (optional)</label><input class="input" name="note" maxlength="240"></div>
+                            <button class="button" type="submit">Send transfer</button>
+                        </form>
+                    </article>
+
+                    <article class="card">
+                        <h3>Withdraw wallet funds</h3>
+                        <p class="muted">Submit a withdrawal request for admin review.</p>
+                        <form class="form wallet-withdrawal-form">
+                            <div class="wallet-mini-grid">
+                                <div class="field"><label>Amount</label><input class="input" name="amount" type="number" min="1" step="0.01" required></div>
+                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="${escapeHtml(currency)}" required></div>
+                            </div>
+                            <div class="field"><label>Bank name</label><input class="input" name="bank_name" required></div>
+                            <div class="field"><label>Account name</label><input class="input" name="account_name" required></div>
+                            <div class="field"><label>Account number</label><input class="input" name="account_number" required></div>
+                            <div class="wallet-mini-grid">
+                                <div class="field"><label>Sort code</label><input class="input" name="sort_code"></div>
+                                <div class="field"><label>IBAN</label><input class="input" name="iban"></div>
+                            </div>
+                            <div class="field"><label>Note for admin (optional)</label><textarea class="input" name="user_note" maxlength="500"></textarea></div>
+                            <button class="button" type="submit">Submit withdrawal request</button>
+                        </form>
+                        <div class="record-list" style="margin-top:14px">${withdrawals.length ? withdrawals.map(renderWithdrawal).join('') : '<div class="empty">No withdrawal request yet.</div>'}</div>
+                    </article>
+
+                    <article class="card">
+                        <h3>Recent activity</h3>
+                        <p class="muted">Wallet top-ups, transfers, payments, and withdrawal movements.</p>
+                        <div class="record-list">${ledger.length ? ledger.map(renderLedgerEntry).join('') : '<div class="empty">No wallet activity yet.</div>'}</div>
+                    </article>
+                </section>
+            `;
+        }
+
+        function renderSavingsPlan(plan) {
+            const next = plan.next_charge_at ? formatDateTime(plan.next_charge_at) : 'Next charge unavailable';
+            return `
+                <article class="record">
+                    <div class="record-top">
+                        <div class="record-title">
+                            <strong>${walletAmount(plan.amount, plan.currency)} ${escapeHtml(plan.frequency || '')}</strong>
+                            <span class="item-meta">Next: ${escapeHtml(next)}</span>
+                            ${statusBadge(plan.status)}
+                        </div>
+                    </div>
+                    <div class="record-actions">
+                        ${plan.status === 'paused' ? `<button class="button small wallet-plan-status" type="button" data-plan-id="${escapeHtml(plan.id)}" data-status="active">Resume</button>` : `<button class="button small subtle wallet-plan-status" type="button" data-plan-id="${escapeHtml(plan.id)}" data-status="paused">Pause</button>`}
+                        ${plan.status !== 'cancelled' ? `<button class="button small outline wallet-plan-status" type="button" data-plan-id="${escapeHtml(plan.id)}" data-status="cancelled">Cancel</button>` : ''}
+                        ${plan.status === 'setup_required' ? `<button class="button small wallet-plan-setup" type="button" data-plan-id="${escapeHtml(plan.id)}" data-amount="${escapeHtml(plan.amount)}" data-currency="${escapeHtml(plan.currency || 'GBP')}">Complete card setup</button>` : ''}
+                    </div>
+                </article>
+            `;
+        }
+
+        function renderWithdrawal(item) {
+            return `
+                <article class="record">
+                    <div class="record-top">
+                        <div class="record-title">
+                            <strong>${walletAmount(item.amount, item.currency)}</strong>
+                            <span class="item-meta">${escapeHtml(item.bank_name || 'Withdrawal request')} - ${escapeHtml(formatDateTime(item.requested_at || item.created_at))}</span>
+                            ${statusBadge(item.status)}
+                        </div>
+                    </div>
+                    ${item.status === 'pending' ? `<div class="record-actions"><button class="button small outline wallet-cancel-withdrawal" type="button" data-withdrawal-id="${escapeHtml(item.id)}">Cancel request</button></div>` : ''}
+                </article>
+            `;
+        }
+
+        function renderLedgerEntry(entry) {
+            const debit = `${entry.direction || ''}`.toLowerCase() === 'debit';
+            const sign = debit ? '-' : '+';
+            return `
+                <article class="record wallet-ledger-row">
+                    <span class="wallet-direction ${debit ? 'debit' : ''}">${debit ? '&uarr;' : '&darr;'}</span>
+                    <span class="record-title">
+                        <strong>${escapeHtml(entry.description || entry.type || 'Wallet activity')}</strong>
+                        <span class="item-meta">${escapeHtml(formatDateTime(entry.created_at))} - ${escapeHtml(entry.status || '')}</span>
+                    </span>
+                    <span class="wallet-amount">${sign}${walletAmount(entry.amount, entry.currency)}</span>
+                </article>
+            `;
         }
 
         function renderTickets() {
@@ -1644,12 +1910,42 @@
             window.location.href = url;
         }
 
+        function walletFormPayload(form) {
+            const data = payloadFromForm(form);
+            Object.keys(data).forEach((key) => {
+                const value = typeof data[key] === 'string' ? data[key].trim() : data[key];
+                if (value === '') {
+                    delete data[key];
+                } else {
+                    data[key] = key === 'currency' ? `${value}`.toUpperCase() : value;
+                }
+            });
+            return data;
+        }
+
+        async function walletTopUpCheckout(data) {
+            const payload = await apiPost('/api/goshen-wallet/top-up/checkout', authPayload(data));
+            const url = payload.checkout?.checkout_url || payload.checkout?.url || payload.checkout_url || payload.url;
+            if (!url) throw new Error('Wallet checkout link was not returned. Please try again.');
+            window.location.href = url;
+        }
+
+        function applyWalletPayload(payload, fallbackMessage) {
+            if (payload.data) {
+                walletData = payload.data;
+                renderWallet();
+                renderHome();
+            }
+            notify(payload.message || fallbackMessage);
+        }
+
         async function walletPay(bookingId, button) {
             button.disabled = true;
             try {
                 const payload = await apiPost(`/api/goshen-retreat/bookings/${encodeURIComponent(bookingId)}/wallet-pay`, authPayload());
                 notify(payload.message || 'Wallet payment completed.');
                 await loadMemberRetreatData();
+                await loadWallet();
                 showPage('tickets');
             } catch (error) {
                 notify(error.message, 'error');
@@ -1839,6 +2135,87 @@
                 submitRegistration(registration);
                 return;
             }
+            const walletTopUp = event.target.closest('.wallet-topup-form');
+            if (walletTopUp) {
+                event.preventDefault();
+                const data = walletFormPayload(walletTopUp);
+                data.save_payment_method = walletTopUp.querySelector('[name="save_payment_method"]')?.checked === true;
+                setBusy(walletTopUp, true);
+                try {
+                    await walletTopUpCheckout(data);
+                } catch (error) {
+                    notify(error.message, 'error');
+                    setBusy(walletTopUp, false);
+                }
+                return;
+            }
+            const walletGoal = event.target.closest('.wallet-goal-form');
+            if (walletGoal) {
+                event.preventDefault();
+                const data = walletFormPayload(walletGoal);
+                const goalId = data.goal_id;
+                if (!goalId) delete data.goal_id;
+                setBusy(walletGoal, true);
+                try {
+                    const url = goalId ? `/api/goshen-wallet/goals/${encodeURIComponent(goalId)}` : '/api/goshen-wallet/goal';
+                    const payload = await apiPost(url, authPayload(data));
+                    applyWalletPayload(payload, 'Savings goal updated.');
+                } catch (error) {
+                    notify(error.message, 'error');
+                } finally {
+                    setBusy(walletGoal, false);
+                }
+                return;
+            }
+            const walletPlan = event.target.closest('.wallet-plan-form');
+            if (walletPlan) {
+                event.preventDefault();
+                const data = walletFormPayload(walletPlan);
+                setBusy(walletPlan, true);
+                try {
+                    const payload = await apiPost('/api/goshen-wallet/savings-plans', authPayload(data));
+                    applyWalletPayload(payload, 'Auto top-up plan created.');
+                } catch (error) {
+                    notify(error.message, 'error');
+                } finally {
+                    setBusy(walletPlan, false);
+                }
+                return;
+            }
+            const walletTransfer = event.target.closest('.wallet-transfer-form');
+            if (walletTransfer) {
+                event.preventDefault();
+                const data = walletFormPayload(walletTransfer);
+                setBusy(walletTransfer, true);
+                try {
+                    const payload = await apiPost('/api/goshen-wallet/transfer', authPayload(data));
+                    applyWalletPayload(payload, 'Wallet transfer completed.');
+                    walletTransfer.reset();
+                    walletTransfer.querySelector('[name="currency"]').value = walletData?.currency || 'GBP';
+                } catch (error) {
+                    notify(error.message, 'error');
+                } finally {
+                    setBusy(walletTransfer, false);
+                }
+                return;
+            }
+            const walletWithdrawal = event.target.closest('.wallet-withdrawal-form');
+            if (walletWithdrawal) {
+                event.preventDefault();
+                const data = walletFormPayload(walletWithdrawal);
+                setBusy(walletWithdrawal, true);
+                try {
+                    const payload = await apiPost('/api/goshen-wallet/withdrawals', authPayload(data));
+                    applyWalletPayload(payload, 'Withdrawal request submitted.');
+                    walletWithdrawal.reset();
+                    walletWithdrawal.querySelector('[name="currency"]').value = walletData?.currency || 'GBP';
+                } catch (error) {
+                    notify(error.message, 'error');
+                } finally {
+                    setBusy(walletWithdrawal, false);
+                }
+                return;
+            }
             const voucher = event.target.closest('.voucher-pay-form');
             if (voucher) {
                 event.preventDefault();
@@ -1881,6 +2258,74 @@
             const wallet = event.target.closest('.wallet-pay-button');
             if (wallet) {
                 walletPay(wallet.dataset.bookingId, wallet);
+                return;
+            }
+            const newGoal = event.target.closest('.wallet-new-goal');
+            if (newGoal) {
+                const form = newGoal.closest('.wallet-goal-form');
+                const data = walletFormPayload(form);
+                delete data.goal_id;
+                data.is_primary = false;
+                newGoal.disabled = true;
+                try {
+                    const payload = await apiPost('/api/goshen-wallet/goals', authPayload(data));
+                    applyWalletPayload(payload, 'Savings goal added.');
+                } catch (error) {
+                    notify(error.message, 'error');
+                    newGoal.disabled = false;
+                }
+                return;
+            }
+            const cancelGoal = event.target.closest('.wallet-cancel-goal');
+            if (cancelGoal) {
+                cancelGoal.disabled = true;
+                try {
+                    const payload = await apiPost(`/api/goshen-wallet/goals/${encodeURIComponent(cancelGoal.dataset.goalId)}/cancel`, authPayload());
+                    applyWalletPayload(payload, 'Savings goal cancelled.');
+                } catch (error) {
+                    notify(error.message, 'error');
+                    cancelGoal.disabled = false;
+                }
+                return;
+            }
+            const planStatus = event.target.closest('.wallet-plan-status');
+            if (planStatus) {
+                planStatus.disabled = true;
+                try {
+                    const payload = await apiPost(`/api/goshen-wallet/savings-plans/${encodeURIComponent(planStatus.dataset.planId)}`, authPayload({ status: planStatus.dataset.status }));
+                    applyWalletPayload(payload, 'Auto top-up plan updated.');
+                } catch (error) {
+                    notify(error.message, 'error');
+                    planStatus.disabled = false;
+                }
+                return;
+            }
+            const planSetup = event.target.closest('.wallet-plan-setup');
+            if (planSetup) {
+                planSetup.disabled = true;
+                try {
+                    await walletTopUpCheckout({
+                        amount: planSetup.dataset.amount,
+                        currency: planSetup.dataset.currency || walletData?.currency || 'GBP',
+                        save_payment_method: true,
+                        savings_plan_id: planSetup.dataset.planId,
+                    });
+                } catch (error) {
+                    notify(error.message, 'error');
+                    planSetup.disabled = false;
+                }
+                return;
+            }
+            const cancelWithdrawal = event.target.closest('.wallet-cancel-withdrawal');
+            if (cancelWithdrawal) {
+                cancelWithdrawal.disabled = true;
+                try {
+                    const payload = await apiPost(`/api/goshen-wallet/withdrawals/${encodeURIComponent(cancelWithdrawal.dataset.withdrawalId)}/cancel`, authPayload());
+                    applyWalletPayload(payload, 'Withdrawal request cancelled.');
+                } catch (error) {
+                    notify(error.message, 'error');
+                    cancelWithdrawal.disabled = false;
+                }
                 return;
             }
             const download = event.target.closest('.ticket-download');
