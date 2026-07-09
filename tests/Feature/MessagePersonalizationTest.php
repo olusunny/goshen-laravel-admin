@@ -51,6 +51,18 @@ class MessagePersonalizationTest extends TestCase
         $this->assertStringContainsString('TRI-777', $rendered);
     }
 
+    public function test_personalization_replaces_double_brace_tags_without_leaking_braces(): void
+    {
+        $user = $this->member();
+
+        $rendered = app(MessagePersonalizationService::class)->renderText(
+            'Dear {{user firstname}}, your Triumphant ID is {{user: triumphant_id}}.',
+            $user,
+        );
+
+        $this->assertSame('Dear David, your Triumphant ID is TRI-777.', $rendered);
+    }
+
     public function test_inbox_fetch_renders_message_for_current_recipient(): void
     {
         $user = $this->member();
