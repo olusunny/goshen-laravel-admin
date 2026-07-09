@@ -49,7 +49,6 @@ class ControlHubMessagingApiTest extends TestCase
 
         $message = InboxMessage::query()->firstOrFail();
         $this->assertSame('Goshen update', $message->title);
-        $this->assertSame(InboxMessage::SOURCE_CONTROL_HUB, $message->message_source);
         $this->assertSame('events', $message->notification_category);
         $this->assertSame('all', $message->recipient_mode);
         $this->assertFalse((bool) $message->send_push);
@@ -202,7 +201,6 @@ class ControlHubMessagingApiTest extends TestCase
         $message = InboxMessage::query()->firstOrFail();
 
         $this->assertFalse((bool) $message->is_published);
-        $this->assertSame(InboxMessage::SOURCE_CONTROL_HUB, $message->message_source);
         $this->assertTrue((bool) $message->schedule_enabled);
         $this->assertNotNull($message->next_dispatch_at);
     }

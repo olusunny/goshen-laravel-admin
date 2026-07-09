@@ -43,3 +43,6 @@ yarn-error.log
 /storage/logs/*
 !/storage/**/.gitignore
 !/public/downloads/.gitignore
+
+/__codex_backups/
+/storage/codex-backups/
