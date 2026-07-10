@@ -16,6 +16,7 @@ use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentTransaction;
 use Personal\EventInstallments\Services\Gateways\StripeGateway;
+use Personal\EventInstallments\Services\LatePaymentRefundReconciler;
 use Personal\EventInstallments\Services\PaymentGatewayManager;
 use Personal\EventInstallments\Services\PaymentSettlementService;
 use RuntimeException;
@@ -190,7 +191,8 @@ class GoshenPaymentWebhookSafetyTest extends TestCase
         $booking->forceFill(['status' => BookingStatus::Cancelled])->save();
         $record->forceFill(['status' => InstallmentStatus::Cancelled])->save();
         $gateway = new FakeSafeStripeGateway($this->paidWebhook($transaction, 'evt_crash_safe'));
-        $controller = new CrashAfterRemoteRefundController;
+        $this->app->instance(LatePaymentRefundReconciler::class, new CrashAfterRemoteRefundReconciler);
+        $controller = new PaymentWebhookController;
         $manager = new FakeSafeGatewayManager($gateway);
 
         try {
@@ -201,6 +203,7 @@ class GoshenPaymentWebhookSafetyTest extends TestCase
         }
 
         $this->assertSame('refund_pending', $transaction->fresh()->status);
+        $this->travel(6)->minutes();
         $controller('stripe', Request::create('/', 'POST'), $manager, app(PaymentSettlementService::class));
 
         $this->assertSame(2, $gateway->refundRequests);
@@ -341,17 +344,21 @@ class FakeSafeStripeGateway extends StripeGateway
     }
 }
 
-class CrashAfterRemoteRefundController extends PaymentWebhookController
+class CrashAfterRemoteRefundReconciler extends LatePaymentRefundReconciler
 {
     private bool $crash = true;
 
-    protected function persistRefundResult(int $transactionId, int $eventId, string $refundKey, RefundResult $refund): void
-    {
+    protected function persistProviderResult(
+        int $transactionId,
+        string $leaseToken,
+        ?int $eventId,
+        RefundResult $refund,
+    ): string {
         if ($this->crash) {
             $this->crash = false;
             throw new RuntimeException('Simulated confirmation crash.');
         }
 
-        parent::persistRefundResult($transactionId, $eventId, $refundKey, $refund);
+        return parent::persistProviderResult($transactionId, $leaseToken, $eventId, $refund);
     }
 }

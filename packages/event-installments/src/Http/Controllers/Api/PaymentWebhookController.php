@@ -5,7 +5,6 @@ namespace Personal\EventInstallments\Http\Controllers\Api;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
-use Personal\EventInstallments\Data\RefundResult;
 use Personal\EventInstallments\Data\VerifiedWebhook;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Models\Booking;
@@ -13,6 +12,7 @@ use Personal\EventInstallments\Models\PaymentGatewayWebhookEvent;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentTransaction;
 use Personal\EventInstallments\Services\Gateways\StripeGateway;
+use Personal\EventInstallments\Services\LatePaymentRefundReconciler;
 use Personal\EventInstallments\Services\PaymentGatewayManager;
 use Personal\EventInstallments\Services\PaymentSettlementService;
 
@@ -115,13 +115,10 @@ class PaymentWebhookController extends Controller
             return $outcome['response'];
         }
 
-        $transaction = PaymentTransaction::query()->findOrFail($outcome['transaction_id']);
-        $refund = $paymentGateway->refund($transaction, $outcome['amount'], $outcome['refund_key']);
-        $this->persistRefundResult(
+        app(LatePaymentRefundReconciler::class)->reconcile(
             $outcome['transaction_id'],
+            $paymentGateway,
             $outcome['event_id'],
-            $outcome['refund_key'],
-            $refund,
         );
 
         return ['status' => 'processed'];
@@ -265,41 +262,6 @@ class PaymentWebhookController extends Controller
                 ]),
             ]),
         ])->save();
-    }
-
-    protected function persistRefundResult(
-        int $transactionId,
-        int $eventId,
-        string $refundKey,
-        RefundResult $refund,
-    ): void {
-        DB::transaction(function () use ($transactionId, $eventId, $refundKey, $refund): void {
-            $transaction = PaymentTransaction::query()->whereKey($transactionId)->lockForUpdate()->firstOrFail();
-            $event = PaymentGatewayWebhookEvent::query()->whereKey($eventId)->lockForUpdate()->firstOrFail();
-            $payload = $transaction->payload ?: [];
-            $reconciliation = is_array($payload['late_terminal_reconciliation'] ?? null)
-                ? $payload['late_terminal_reconciliation']
-                : [];
-
-            if (($reconciliation['refund_key'] ?? null) !== $refundKey) {
-                throw new \RuntimeException('Refund confirmation does not match the durable refund intent.');
-            }
-
-            $transaction->forceFill([
-                'status' => 'refunded',
-                'payload' => array_merge($payload, [
-                    'late_terminal_reconciliation' => array_merge($reconciliation, [
-                        'action' => 'automatic_refund',
-                        'refund_reference' => $refund->reference,
-                        'refund_status' => $refund->status,
-                        'refund_payload' => $refund->payload,
-                        'refunded_at' => now()->toIso8601String(),
-                    ]),
-                ]),
-            ])->save();
-
-            $event->forceFill(['status' => 'processed', 'processed_at' => now()])->save();
-        });
     }
 
     private function refundKey(PaymentTransaction $transaction, float $amount): string
