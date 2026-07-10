@@ -23,6 +23,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
+use Livewire\Component;
 use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\Ticket;
@@ -152,8 +153,11 @@ class GoshenTicketResource extends Resource
                     Forms\Components\Hidden::make('wallet_challenge_id'),
                     Forms\Components\TextInput::make('wallet_otp')
                         ->label('Six-digit email verification code')
-                        ->numeric()
+                        ->inputMode('numeric')
+                        ->rule('regex:/^\d{6}$/')
                         ->length(6)
+                        ->live()
+                        ->afterStateUpdated(fn (Component $livewire): mixed => $livewire->resetValidation('data.wallet_otp'))
                         ->autocomplete('one-time-code')
                         ->visible(fn (Get $get): bool => $get('payment_method') === 'wallet')
                         ->required(fn (Get $get): bool => $get('payment_method') === 'wallet')

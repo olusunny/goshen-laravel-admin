@@ -19,6 +19,7 @@ use Filament\Actions\Testing\TestAction;
 use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event as EventFacade;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
@@ -132,18 +133,34 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             ->assertHasNoActionErrors();
 
         preg_match('/\b(\d{6})\b/', (string) $sentBody, $matches);
-        $code = (string) ($matches[1] ?? '');
-        $this->assertNotSame('', $code);
-        $this->assertNotEmpty($page->get('data.wallet_challenge_id'));
+        $emailedCode = (string) ($matches[1] ?? '');
+        $this->assertNotSame('', $emailedCode);
+        $challengeId = $page->get('data.wallet_challenge_id');
+        $this->assertNotEmpty($challengeId);
+        $challenge = WebWalletVerificationChallenge::query()->findOrFail($challengeId);
+        $code = '012345';
+        $challenge->forceFill(['code_hash' => Hash::make($code)])->save();
 
-        $page->fillForm(['wallet_otp' => $code === '000000' ? '999999' : '000000'])
+        $wrongCode = '000000';
+        $page->fillForm(['wallet_otp' => $wrongCode])
             ->call('create')
             ->assertHasFormErrors(['wallet_otp']);
+        $this->assertSame($challengeId, $page->get('data.wallet_challenge_id'));
+        $this->assertSame($wrongCode, (string) $page->get('data.wallet_otp'));
+        $challenge->refresh();
+        $this->assertSame('pending', $challenge->status);
+        $this->assertSame(1, $challenge->attempts);
         $this->assertDatabaseCount('ei_bookings', 0);
 
-        $page->fillForm(['wallet_otp' => $code])
+        $page->fillForm(['wallet_otp' => $code]);
+        $this->assertSame($challengeId, $page->get('data.wallet_challenge_id'));
+        $this->assertSame($code, (string) $page->get('data.wallet_otp'));
+        $page->assertHasNoFormErrors(['wallet_otp'])
             ->call('create')
             ->assertHasNoFormErrors();
+
+        $this->assertSame('consumed', $challenge->fresh()->status);
+        $this->assertSame(1, $challenge->fresh()->attempts);
 
         $ticket = Ticket::query()->with('booking.installments.transactions')->sole();
         $this->assertSame('wallet', $ticket->booking->installments->sole()->transactions->sole()->gateway);
