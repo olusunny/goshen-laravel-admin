@@ -159,12 +159,64 @@ class WebWalletVerificationTest extends TestCase
         $this->assertSame('pending', $newer->fresh()->status);
     }
 
+    public function test_older_challenge_stays_superseded_when_newer_challenge_is_consumed_before_older_email_finishes(): void
+    {
+        [$admin, $payer, $context] = $this->challengeFixture();
+        $service = null;
+        $newer = null;
+        $newerCode = null;
+        $sendCount = 0;
+
+        $this->mock(DynamicSmtpMailer::class, function (MockInterface $mock) use (&$service, &$newer, &$newerCode, &$sendCount, $admin, $payer, $context): void {
+            $mock->shouldReceive('sendRaw')->twice()->andReturnUsing(
+                function (string $to, string $subject, string $body) use (&$service, &$newer, &$newerCode, &$sendCount, $admin, $payer, $context): void {
+                    $sendCount++;
+                    if ($sendCount === 2) {
+                        preg_match('/\b(\d{6})\b/', $body, $matches);
+                        $newerCode = $matches[1] ?? null;
+
+                        return;
+                    }
+
+                    $newer = $service->issue($admin, $payer, 'admin_ticket_issue', $context, '127.0.0.2', 'PHPUnit B');
+                    $service->consume($newer, $admin, $payer, 'admin_ticket_issue', $context, $newerCode, '127.0.0.2', 'PHPUnit B');
+                },
+            );
+        });
+        $service = app(WebWalletVerificationService::class);
+
+        $older = $service->issue($admin, $payer, 'admin_ticket_issue', $context, '127.0.0.1', 'PHPUnit A');
+
+        $this->assertNotNull($newer);
+        $this->assertSame('consumed', $newer->fresh()->status);
+        $this->assertSame('superseded', $older->fresh()->status);
+    }
+
+    public function test_successful_resend_supersedes_same_actor_challenge_after_linked_email_changes(): void
+    {
+        [$admin, $payer, $context] = $this->challengeFixture();
+        $this->mock(DynamicSmtpMailer::class, fn (MockInterface $mock) => $mock
+            ->shouldReceive('sendRaw')->twice());
+        $service = app(WebWalletVerificationService::class);
+
+        $older = $service->issue($admin, $payer, 'admin_ticket_issue', $context, '127.0.0.1', 'PHPUnit A');
+
+        User::withoutEvents(fn () => $admin->forceFill(['email' => 'renamed.ticket.admin@example.test'])->save());
+        MobileUser::withoutEvents(fn () => $payer->forceFill(['email' => 'renamed.ticket.admin@example.test'])->save());
+
+        $newer = $service->issue($admin->fresh(), $payer->fresh(), 'admin_ticket_issue', $context, '127.0.0.1', 'PHPUnit B');
+
+        $this->assertSame('superseded', $older->fresh()->status);
+        $this->assertSame('pending', $newer->fresh()->status);
+        $this->assertNotSame($older->email, $newer->email);
+    }
+
     public function test_invalid_attempts_do_not_overwrite_terminal_challenge_statuses(): void
     {
         [$admin, $payer, $context] = $this->challengeFixture();
         $service = app(WebWalletVerificationService::class);
 
-        foreach (['consumed', 'superseded', 'delivery_failed'] as $status) {
+        foreach (['consumed', 'superseded', 'delivery_failed', 'locked'] as $status) {
             $challenge = WebWalletVerificationChallenge::query()->create([
                 'user_id' => $admin->id,
                 'mobile_user_id' => $payer->id,
@@ -178,6 +230,16 @@ class WebWalletVerificationTest extends TestCase
             ]);
 
             foreach (range(1, 5) as $attempt) {
+                try {
+                    $service->consume($challenge->fresh(), $admin, $payer, 'admin_ticket_issue', $context, '000000', '127.0.0.1', 'PHPUnit');
+                } catch (ValidationException) {
+                }
+            }
+
+            $this->assertSame($status, $challenge->fresh()->status);
+            $this->assertSame(5, $challenge->fresh()->attempts);
+
+            foreach (range(1, 3) as $replay) {
                 try {
                     $service->consume($challenge->fresh(), $admin, $payer, 'admin_ticket_issue', $context, '000000', '127.0.0.1', 'PHPUnit');
                 } catch (ValidationException) {

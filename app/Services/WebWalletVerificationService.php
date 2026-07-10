@@ -66,15 +66,13 @@ final class WebWalletVerificationService
             throw new RuntimeException('The wallet verification email could not be sent.', previous: $exception);
         }
 
-        DB::transaction(function () use ($challenge, $admin, $payer, $email, $purpose, $ip): void {
+        DB::transaction(function () use ($challenge, $admin, $payer, $purpose, $ip): void {
             User::query()->lockForUpdate()->findOrFail($admin->id);
 
-            $matchingPending = WebWalletVerificationChallenge::query()
+            $sameActorPurpose = WebWalletVerificationChallenge::query()
                 ->where('user_id', $admin->id)
                 ->where('mobile_user_id', $payer->id)
-                ->where('email', $email)
-                ->where('purpose', $purpose)
-                ->where('status', 'pending');
+                ->where('purpose', $purpose);
 
             $sentAttributes = [
                 'send_count' => 1,
@@ -82,7 +80,12 @@ final class WebWalletVerificationService
                 'last_sent_ip' => $ip,
             ];
 
-            if ((clone $matchingPending)->where('id', '>', $challenge->id)->exists()) {
+            $newerSuccessfulSendExists = (clone $sameActorPurpose)
+                ->where('id', '>', $challenge->id)
+                ->whereNotNull('last_sent_at')
+                ->exists();
+
+            if ($newerSuccessfulSendExists) {
                 $challenge->forceFill($sentAttributes + [
                     'status' => 'superseded',
                     'superseded_at' => now(),
@@ -91,7 +94,8 @@ final class WebWalletVerificationService
                 return;
             }
 
-            (clone $matchingPending)
+            (clone $sameActorPurpose)
+                ->where('status', 'pending')
                 ->where('id', '<', $challenge->id)
                 ->update([
                     'status' => 'superseded',
@@ -126,7 +130,7 @@ final class WebWalletVerificationService
                 || ! hash_equals($locked->context_fingerprint, $this->fingerprint($context));
 
             if ($invalid || ! Hash::check(trim($code), $locked->code_hash)) {
-                $attempts = $locked->attempts + 1;
+                $attempts = min($locked->attempts + 1, 5);
                 $status = $locked->status;
                 if ($status === 'pending') {
                     $status = $attempts >= 5 ? 'locked' : ($locked->expires_at?->isPast() ? 'expired' : 'pending');
