@@ -17,7 +17,7 @@ class NullGateway implements PaymentGateway
     {
         return new GatewayCheckout(
             gateway: 'null',
-            reference: 'null_' . Str::ulid(),
+            reference: 'null_'.Str::ulid(),
             checkoutUrl: null,
             payload: [
                 'installment_id' => $installment->public_id,
@@ -41,13 +41,13 @@ class NullGateway implements PaymentGateway
         );
     }
 
-    public function refund(PaymentTransaction $transaction, float $amount): RefundResult
+    public function refund(PaymentTransaction $transaction, float $amount, string $idempotencyKey): RefundResult
     {
         return new RefundResult(
             gateway: 'null',
             reference: (string) ($transaction->provider_reference ?: $transaction->public_id),
             status: 'refunded',
-            payload: ['amount' => $amount],
+            payload: ['amount' => $amount, 'idempotency_key' => $idempotencyKey],
         );
     }
 }

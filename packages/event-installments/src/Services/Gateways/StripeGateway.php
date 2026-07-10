@@ -13,8 +13,8 @@ use Personal\EventInstallments\Enums\InstallmentStatus;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentTransaction;
 use RuntimeException;
-use Stripe\Exception\CardException;
 use Stripe\Exception\ApiErrorException;
+use Stripe\Exception\CardException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\StripeClient;
 use Stripe\Webhook;
@@ -24,7 +24,7 @@ class StripeGateway implements PaymentGateway
 {
     public function createCheckout(PaymentInstallment $installment): GatewayCheckout
     {
-        $reference = 'ei_' . Str::ulid();
+        $reference = 'ei_'.Str::ulid();
         $installment->loadMissing('booking.event');
         $booking = $installment->booking;
         $metadata = $this->metadata($installment, $reference);
@@ -88,7 +88,7 @@ class StripeGateway implements PaymentGateway
             throw new RuntimeException('A saved Stripe payment method is required before automatic installment charging can run.');
         }
 
-        $reference ??= 'ei_auto_' . Str::ulid();
+        $reference ??= 'ei_auto_'.Str::ulid();
         $metadata = $this->metadata($installment, $reference);
 
         try {
@@ -211,20 +211,25 @@ class StripeGateway implements PaymentGateway
         );
     }
 
-    public function refund(PaymentTransaction $transaction, float $amount): RefundResult
+    public function refund(PaymentTransaction $transaction, float $amount, string $idempotencyKey): RefundResult
     {
         $paymentIntent = $this->paymentIntentFromTransaction($transaction);
 
         try {
-            $refund = $this->stripe()->refunds->create([
+            $refund = $this->createStripeRefund([
                 'payment_intent' => $paymentIntent,
                 'amount' => $this->toMinorUnits($amount, (string) $transaction->currency),
-            ]);
+            ], ['idempotency_key' => $idempotencyKey]);
         } catch (ApiErrorException $exception) {
             throw new RuntimeException('Stripe refund failed.', 0, $exception);
         }
 
-        return new RefundResult('stripe', (string) $refund->id, (string) $refund->status, $refund->toArray());
+        return new RefundResult('stripe', (string) $refund['id'], (string) $refund['status'], $refund);
+    }
+
+    protected function createStripeRefund(array $parameters, array $options): array
+    {
+        return $this->stripe()->refunds->create($parameters, $options)->toArray();
     }
 
     private function metadata(PaymentInstallment $installment, string $reference): array
@@ -247,7 +252,7 @@ class StripeGateway implements PaymentGateway
         $metadata = is_array($installment->metadata) ? $installment->metadata : [];
         $label = trim((string) ($metadata['label'] ?? ''));
         if ($label !== '') {
-            return ($installment->booking?->event?->name ?: 'Event booking') . ' - ' . $label;
+            return ($installment->booking?->event?->name ?: 'Event booking').' - '.$label;
         }
 
         $booking = $installment->booking;
@@ -256,9 +261,9 @@ class StripeGateway implements PaymentGateway
         $installmentAmount = (float) $installment->amount;
         $isFullPayment = $totalAmount > 0 && $installmentAmount + 0.01 >= $totalAmount;
 
-        return $eventName . ($isFullPayment
+        return $eventName.($isFullPayment
             ? ' - full payment'
-            : ' - installment #' . $installment->sequence);
+            : ' - installment #'.$installment->sequence);
     }
 
     private function webhookReference(array $object): ?string
@@ -349,7 +354,7 @@ class StripeGateway implements PaymentGateway
 
     private function requiredConfig(string $key, string $message): string
     {
-        $value = config('event-installments.payments.stripe.' . $key);
+        $value = config('event-installments.payments.stripe.'.$key);
 
         if (! is_string($value) || $value === '') {
             throw new RuntimeException($message);

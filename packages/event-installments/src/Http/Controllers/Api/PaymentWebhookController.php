@@ -5,15 +5,15 @@ namespace Personal\EventInstallments\Http\Controllers\Api;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
-use Personal\EventInstallments\Contracts\PaymentGateway;
+use Personal\EventInstallments\Data\RefundResult;
 use Personal\EventInstallments\Data\VerifiedWebhook;
-use Personal\EventInstallments\Models\PaymentGatewayWebhookEvent;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Models\Booking;
+use Personal\EventInstallments\Models\PaymentGatewayWebhookEvent;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentTransaction;
-use Personal\EventInstallments\Services\PaymentGatewayManager;
 use Personal\EventInstallments\Services\Gateways\StripeGateway;
+use Personal\EventInstallments\Services\PaymentGatewayManager;
 use Personal\EventInstallments\Services\PaymentSettlementService;
 
 class PaymentWebhookController extends Controller
@@ -23,14 +23,13 @@ class PaymentWebhookController extends Controller
         Request $request,
         PaymentGatewayManager $gateways,
         PaymentSettlementService $settlements,
-    )
-    {
+    ) {
         $paymentGateway = $gateways->driver($gateway);
         $webhook = $paymentGateway->verifyWebhook($request);
         abort_unless($webhook->gateway === $gateway, 400, 'Gateway mismatch.');
 
-        return DB::transaction(function () use ($webhook, $paymentGateway, $settlements) {
-            $event = PaymentGatewayWebhookEvent::query()->firstOrCreate(
+        $outcome = DB::transaction(function () use ($webhook, $paymentGateway, $settlements): array {
+            $createdEvent = PaymentGatewayWebhookEvent::query()->firstOrCreate(
                 [
                     'gateway' => $webhook->gateway,
                     'provider_event_id' => $webhook->eventId,
@@ -41,13 +40,17 @@ class PaymentWebhookController extends Controller
                     'status' => 'received',
                 ],
             );
+            $event = PaymentGatewayWebhookEvent::query()->whereKey($createdEvent->id)->lockForUpdate()->firstOrFail();
 
             if ($event->processed_at) {
-                return ['status' => 'duplicate'];
+                return ['response' => ['status' => 'duplicate']];
             }
 
             $transactionLookup = $webhook->reference
-                ? PaymentTransaction::query()->where('gateway', $webhook->gateway)->where('provider_reference', $webhook->reference)->first()
+                ? PaymentTransaction::query()
+                    ->where('gateway', $webhook->gateway)
+                    ->where('provider_reference', $webhook->reference)
+                    ->first()
                 : null;
             $booking = $transactionLookup
                 ? Booking::query()->whereKey($transactionLookup->booking_id)->lockForUpdate()->first()
@@ -65,13 +68,17 @@ class PaymentWebhookController extends Controller
 
             if ($transaction && in_array($webhook->status, ['paid', 'succeeded', 'success'], true)) {
                 if ($booking && $this->bookingIsTerminal($booking)) {
-                    $this->reconcileLateSuccessfulPayment($transaction, $booking, $webhook, $paymentGateway);
-                    $event->forceFill([
-                        'status' => 'processed',
-                        'processed_at' => now(),
-                    ])->save();
+                    $refundIntent = $this->prepareLateSuccessfulPayment($transaction, $booking, $webhook);
 
-                    return ['status' => 'processed'];
+                    if ($refundIntent !== null) {
+                        $event->forceFill(['status' => 'refund_pending'])->save();
+
+                        return $refundIntent + ['event_id' => $event->id];
+                    }
+
+                    $event->forceFill(['status' => 'processed', 'processed_at' => now()])->save();
+
+                    return ['response' => ['status' => 'processed']];
                 }
 
                 $transaction->forceFill([
@@ -96,16 +103,28 @@ class PaymentWebhookController extends Controller
                     'payload' => $webhook->payload,
                 ])->save();
 
-                $settlements->markFailed($transaction, 'Stripe reported that this payment was not completed.');
+                $settlements->markFailed($transaction, 'The payment gateway reported that this payment was not completed.');
             }
 
-            $event->forceFill([
-                'status' => 'processed',
-                'processed_at' => now(),
-            ])->save();
+            $event->forceFill(['status' => 'processed', 'processed_at' => now()])->save();
 
-            return ['status' => 'processed'];
+            return ['response' => ['status' => 'processed']];
         });
+
+        if (isset($outcome['response'])) {
+            return $outcome['response'];
+        }
+
+        $transaction = PaymentTransaction::query()->findOrFail($outcome['transaction_id']);
+        $refund = $paymentGateway->refund($transaction, $outcome['amount'], $outcome['refund_key']);
+        $this->persistRefundResult(
+            $outcome['transaction_id'],
+            $outcome['event_id'],
+            $outcome['refund_key'],
+            $refund,
+        );
+
+        return ['status' => 'processed'];
     }
 
     private function bookingIsTerminal(Booking $booking): bool
@@ -117,12 +136,11 @@ class PaymentWebhookController extends Controller
         return in_array($status, [BookingStatus::Paid, BookingStatus::Cancelled, BookingStatus::Refunded], true);
     }
 
-    private function reconcileLateSuccessfulPayment(
+    private function prepareLateSuccessfulPayment(
         PaymentTransaction $transaction,
         Booking $booking,
         VerifiedWebhook $webhook,
-        PaymentGateway $paymentGateway,
-    ): void {
+    ): ?array {
         $transactionStatus = strtolower((string) $transaction->status);
         $payload = $transaction->payload ?: [];
         $reconciliation = is_array($payload['late_terminal_reconciliation'] ?? null)
@@ -134,21 +152,8 @@ class PaymentWebhookController extends Controller
             ->unique()
             ->values()
             ->all();
-
-        if ($transactionStatus === 'paid') {
-            $transaction->forceFill([
-                'payload' => array_merge($payload, [
-                    'late_terminal_reconciliation' => array_merge($reconciliation, [
-                        'action' => 'duplicate_notification_no_refund',
-                        'booking_status' => $this->bookingStatusValue($booking),
-                        'provider_event_ids' => $eventIds,
-                        'last_seen_at' => now()->toIso8601String(),
-                    ]),
-                ]),
-            ])->save();
-
-            return;
-        }
+        $reconciliation['booking_status'] = $this->bookingStatusValue($booking);
+        $reconciliation['previous_transaction_status'] ??= $transactionStatus;
 
         if ($transactionStatus === 'refunded' || ($reconciliation['refund_reference'] ?? null)) {
             $transaction->forceFill([
@@ -162,31 +167,149 @@ class PaymentWebhookController extends Controller
                 ]),
             ])->save();
 
-            return;
+            return null;
         }
 
-        $transaction->forceFill([
-            'provider_event_id' => $webhook->eventId,
-            'payload' => $webhook->payload,
-        ])->save();
+        if ($transactionStatus === 'refund_pending' && filled($reconciliation['refund_key'] ?? null)) {
+            $transaction->forceFill([
+                'provider_event_id' => $webhook->eventId,
+                'payload' => array_merge($payload, [
+                    'late_terminal_reconciliation' => array_merge($reconciliation, [
+                        'provider_event_ids' => $eventIds,
+                        'last_seen_at' => now()->toIso8601String(),
+                    ]),
+                ]),
+            ])->save();
+
+            return [
+                'transaction_id' => $transaction->id,
+                'amount' => (float) $reconciliation['refunded_amount'],
+                'refund_key' => (string) $reconciliation['refund_key'],
+            ];
+        }
+
+        if ($transactionStatus === 'paid') {
+            $this->markReconciliation($transaction, $webhook, $payload, $reconciliation, $eventIds, 'duplicate_notification_no_refund');
+
+            return null;
+        }
+
+        if ($transactionStatus === 'duplicate_paid' || str_starts_with($transactionStatus, 'paid_after_')) {
+            $this->markReconciliation($transaction, $webhook, $payload, $reconciliation, $eventIds, 'manual_reconciliation_required', true);
+
+            return null;
+        }
+
+        $bookingStatus = $this->bookingStatusValue($booking);
+        $isFreshCaptureState = in_array($transactionStatus, ['pending', 'expired'], true);
+        $hasSeparateCanonicalCapture = PaymentTransaction::query()
+            ->where('booking_id', $booking->id)
+            ->whereKeyNot($transaction->id)
+            ->where('status', 'paid')
+            ->exists();
+        $hasPositiveDistinctCaptureEvidence = $isFreshCaptureState
+            && (in_array($bookingStatus, [BookingStatus::Cancelled->value, BookingStatus::Refunded->value], true)
+                || ($bookingStatus === BookingStatus::Paid->value && $hasSeparateCanonicalCapture));
+
+        if (! $hasPositiveDistinctCaptureEvidence) {
+            $this->markReconciliation($transaction, $webhook, $payload, $reconciliation, $eventIds, 'manual_reconciliation_required', true);
+
+            return null;
+        }
+
         $amount = (float) ($webhook->amount ?? $transaction->amount);
-        $refund = $paymentGateway->refund($transaction, $amount);
+        $refundKey = (string) ($reconciliation['refund_key'] ?? $this->refundKey($transaction, $amount));
+        $requestedAt = (string) ($reconciliation['refund_requested_at'] ?? now()->toIso8601String());
 
         $transaction->forceFill([
-            'status' => 'refunded',
+            'status' => 'refund_pending',
+            'provider_event_id' => $webhook->eventId,
             'payload' => array_merge($webhook->payload, [
-                'late_terminal_reconciliation' => [
-                    'action' => 'automatic_refund',
-                    'booking_status' => $this->bookingStatusValue($booking),
+                'late_terminal_reconciliation' => array_merge($reconciliation, [
+                    'action' => 'refund_pending',
+                    'booking_status' => $bookingStatus,
                     'provider_event_ids' => $eventIds,
-                    'refund_reference' => $refund->reference,
-                    'refund_status' => $refund->status,
-                    'refund_payload' => $refund->payload,
+                    'refund_key' => $refundKey,
+                    'refund_requested_at' => $requestedAt,
                     'refunded_amount' => $amount,
-                    'refunded_at' => now()->toIso8601String(),
-                ],
+                    'currency' => strtoupper((string) $transaction->currency),
+                ]),
             ]),
         ])->save();
+
+        return [
+            'transaction_id' => $transaction->id,
+            'amount' => $amount,
+            'refund_key' => $refundKey,
+        ];
+    }
+
+    private function markReconciliation(
+        PaymentTransaction $transaction,
+        VerifiedWebhook $webhook,
+        array $payload,
+        array $reconciliation,
+        array $eventIds,
+        string $action,
+        bool $manual = false,
+    ): void {
+        $transaction->forceFill([
+            'status' => $manual ? 'manual_reconciliation_required' : $transaction->status,
+            'provider_event_id' => $webhook->eventId,
+            'payload' => array_merge($payload, [
+                'late_terminal_reconciliation' => array_merge($reconciliation, [
+                    'action' => $action,
+                    'provider_event_ids' => $eventIds,
+                    'last_seen_at' => now()->toIso8601String(),
+                    'capture_payload' => $webhook->payload,
+                ]),
+            ]),
+        ])->save();
+    }
+
+    protected function persistRefundResult(
+        int $transactionId,
+        int $eventId,
+        string $refundKey,
+        RefundResult $refund,
+    ): void {
+        DB::transaction(function () use ($transactionId, $eventId, $refundKey, $refund): void {
+            $transaction = PaymentTransaction::query()->whereKey($transactionId)->lockForUpdate()->firstOrFail();
+            $event = PaymentGatewayWebhookEvent::query()->whereKey($eventId)->lockForUpdate()->firstOrFail();
+            $payload = $transaction->payload ?: [];
+            $reconciliation = is_array($payload['late_terminal_reconciliation'] ?? null)
+                ? $payload['late_terminal_reconciliation']
+                : [];
+
+            if (($reconciliation['refund_key'] ?? null) !== $refundKey) {
+                throw new \RuntimeException('Refund confirmation does not match the durable refund intent.');
+            }
+
+            $transaction->forceFill([
+                'status' => 'refunded',
+                'payload' => array_merge($payload, [
+                    'late_terminal_reconciliation' => array_merge($reconciliation, [
+                        'action' => 'automatic_refund',
+                        'refund_reference' => $refund->reference,
+                        'refund_status' => $refund->status,
+                        'refund_payload' => $refund->payload,
+                        'refunded_at' => now()->toIso8601String(),
+                    ]),
+                ]),
+            ])->save();
+
+            $event->forceFill(['status' => 'processed', 'processed_at' => now()])->save();
+        });
+    }
+
+    private function refundKey(PaymentTransaction $transaction, float $amount): string
+    {
+        return 'goshen_refund_'.hash('sha256', implode('|', [
+            $transaction->gateway,
+            $transaction->public_id ?: $transaction->id,
+            number_format($amount, 2, '.', ''),
+            strtoupper((string) $transaction->currency),
+        ]));
     }
 
     private function bookingStatusValue(Booking $booking): string

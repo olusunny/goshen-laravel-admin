@@ -15,5 +15,5 @@ interface PaymentGateway
 
     public function verifyWebhook(Request $request): VerifiedWebhook;
 
-    public function refund(PaymentTransaction $transaction, float $amount): RefundResult;
+    public function refund(PaymentTransaction $transaction, float $amount, string $idempotencyKey): RefundResult;
 }

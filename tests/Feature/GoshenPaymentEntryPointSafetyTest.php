@@ -231,7 +231,7 @@ class FakeEntryPointGateway implements PaymentGateway
         throw new RuntimeException('Not used.');
     }
 
-    public function refund(PaymentTransaction $transaction, float $amount): RefundResult
+    public function refund(PaymentTransaction $transaction, float $amount, string $idempotencyKey): RefundResult
     {
         throw new RuntimeException('Not used.');
     }

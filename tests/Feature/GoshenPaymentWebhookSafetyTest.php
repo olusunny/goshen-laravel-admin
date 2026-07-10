@@ -18,8 +18,8 @@ use Personal\EventInstallments\Models\PaymentTransaction;
 use Personal\EventInstallments\Services\Gateways\StripeGateway;
 use Personal\EventInstallments\Services\PaymentGatewayManager;
 use Personal\EventInstallments\Services\PaymentSettlementService;
-use Tests\TestCase;
 use RuntimeException;
+use Tests\TestCase;
 
 class GoshenPaymentWebhookSafetyTest extends TestCase
 {
@@ -55,6 +55,7 @@ class GoshenPaymentWebhookSafetyTest extends TestCase
         [$booking, $record, $transaction] = $this->pendingPayment();
         $booking->forceFill(['status' => BookingStatus::Paid, 'paid_total' => 250])->save();
         $record->forceFill(['status' => InstallmentStatus::Paid, 'paid_amount' => 250, 'paid_at' => now()])->save();
+        $this->canonicalPaidTransaction($booking, $record);
         $gateway = new FakeSafeStripeGateway($this->paidWebhook($transaction, 'evt_late_1'));
         $controller = app(PaymentWebhookController::class);
         $manager = new FakeSafeGatewayManager($gateway);
@@ -107,13 +108,104 @@ class GoshenPaymentWebhookSafetyTest extends TestCase
             $this->assertStringContainsString('refund failed', $exception->getMessage());
         }
 
-        $this->assertSame('pending', $transaction->fresh()->status);
-        $this->assertNull($transaction->fresh()->provider_event_id);
-        $this->assertDatabaseMissing('ei_payment_gateway_webhook_events', [
+        $this->assertSame('refund_pending', $transaction->fresh()->status);
+        $this->assertSame('refund_pending', data_get($transaction->fresh()->payload, 'late_terminal_reconciliation.action'));
+        $this->assertDatabaseHas('ei_payment_gateway_webhook_events', [
             'gateway' => 'stripe',
             'provider_event_id' => 'evt_refund_retry',
+            'status' => 'refund_pending',
         ]);
         $this->assertSame(1, $gateway->refundCalls);
+    }
+
+    public function test_paid_booking_without_a_distinct_canonical_capture_requires_manual_reconciliation(): void
+    {
+        [$booking, $record, $transaction] = $this->pendingPayment();
+        $booking->forceFill(['status' => BookingStatus::Paid, 'paid_total' => 250])->save();
+        $record->forceFill(['status' => InstallmentStatus::Paid, 'paid_amount' => 250, 'paid_at' => now()])->save();
+        $gateway = new FakeSafeStripeGateway($this->paidWebhook($transaction, 'evt_ambiguous_paid'));
+
+        app(PaymentWebhookController::class)(
+            'stripe', Request::create('/', 'POST'), new FakeSafeGatewayManager($gateway), app(PaymentSettlementService::class),
+        );
+
+        $this->assertSame(0, $gateway->refundCalls);
+        $this->assertSame('manual_reconciliation_required', $transaction->fresh()->status);
+        $this->assertSame('manual_reconciliation_required', data_get($transaction->fresh()->payload, 'late_terminal_reconciliation.action'));
+    }
+
+    public function test_expired_second_capture_with_canonical_paid_transaction_is_refunded(): void
+    {
+        [$booking, $record, $transaction] = $this->pendingPayment();
+        $booking->forceFill(['status' => BookingStatus::Paid, 'paid_total' => 250])->save();
+        $record->forceFill(['status' => InstallmentStatus::Paid, 'paid_amount' => 250, 'paid_at' => now()])->save();
+        $transaction->forceFill(['status' => 'expired'])->save();
+        $this->canonicalPaidTransaction($booking, $record);
+        $gateway = new FakeSafeStripeGateway($this->paidWebhook($transaction, 'evt_expired_second_capture'));
+
+        app(PaymentWebhookController::class)(
+            'stripe', Request::create('/', 'POST'), new FakeSafeGatewayManager($gateway), app(PaymentSettlementService::class),
+        );
+
+        $this->assertSame(1, $gateway->refundCalls);
+        $this->assertSame('refunded', $transaction->fresh()->status);
+    }
+
+    public function test_pending_capture_on_refunded_booking_is_refunded(): void
+    {
+        [$booking, $record, $transaction] = $this->pendingPayment();
+        $booking->forceFill(['status' => BookingStatus::Refunded])->save();
+        $record->forceFill(['status' => InstallmentStatus::Refunded])->save();
+        $gateway = new FakeSafeStripeGateway($this->paidWebhook($transaction, 'evt_refunded_booking_capture'));
+
+        app(PaymentWebhookController::class)(
+            'stripe', Request::create('/', 'POST'), new FakeSafeGatewayManager($gateway), app(PaymentSettlementService::class),
+        );
+
+        $this->assertSame(1, $gateway->refundCalls);
+        $this->assertSame('refunded', $transaction->fresh()->status);
+    }
+
+    public function test_sole_legacy_duplicate_status_is_never_automatically_refunded(): void
+    {
+        foreach (['duplicate_paid', 'paid_after_cancelled'] as $index => $legacyStatus) {
+            [$booking, $record, $transaction] = $this->pendingPayment();
+            $booking->forceFill(['status' => BookingStatus::Paid, 'paid_total' => 250])->save();
+            $record->forceFill(['status' => InstallmentStatus::Paid, 'paid_amount' => 250, 'paid_at' => now()])->save();
+            $transaction->forceFill(['status' => $legacyStatus])->save();
+            $gateway = new FakeSafeStripeGateway($this->paidWebhook($transaction, 'evt_legacy_'.$index));
+
+            app(PaymentWebhookController::class)(
+                'stripe', Request::create('/', 'POST'), new FakeSafeGatewayManager($gateway), app(PaymentSettlementService::class),
+            );
+
+            $this->assertSame(0, $gateway->refundCalls);
+            $this->assertSame('manual_reconciliation_required', $transaction->fresh()->status);
+        }
+    }
+
+    public function test_provider_success_then_local_confirmation_failure_retries_with_same_refund_key(): void
+    {
+        [$booking, $record, $transaction] = $this->pendingPayment();
+        $booking->forceFill(['status' => BookingStatus::Cancelled])->save();
+        $record->forceFill(['status' => InstallmentStatus::Cancelled])->save();
+        $gateway = new FakeSafeStripeGateway($this->paidWebhook($transaction, 'evt_crash_safe'));
+        $controller = new CrashAfterRemoteRefundController;
+        $manager = new FakeSafeGatewayManager($gateway);
+
+        try {
+            $controller('stripe', Request::create('/', 'POST'), $manager, app(PaymentSettlementService::class));
+            $this->fail('Expected simulated local persistence failure.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('confirmation crash', $exception->getMessage());
+        }
+
+        $this->assertSame('refund_pending', $transaction->fresh()->status);
+        $controller('stripe', Request::create('/', 'POST'), $manager, app(PaymentSettlementService::class));
+
+        $this->assertSame(2, $gateway->refundRequests);
+        $this->assertSame(1, $gateway->refundCalls);
+        $this->assertSame('refunded', $transaction->fresh()->status);
     }
 
     /** @return array{0: Booking, 1: PaymentInstallment, 2: PaymentTransaction} */
@@ -121,7 +213,7 @@ class GoshenPaymentWebhookSafetyTest extends TestCase
     {
         $event = Event::query()->create([
             'name' => 'Goshen Retreat Webhook Test',
-            'slug' => 'goshen-webhook-' . str()->random(8),
+            'slug' => 'goshen-webhook-'.str()->random(8),
             'type' => EventType::Sequential,
             'timezone' => 'Africa/Lagos',
             'status' => 'published',
@@ -149,7 +241,7 @@ class GoshenPaymentWebhookSafetyTest extends TestCase
             'booking_id' => $booking->id,
             'installment_id' => $record->id,
             'gateway' => 'stripe',
-            'provider_reference' => 'webhook_' . str()->random(10),
+            'provider_reference' => 'webhook_'.str()->random(10),
             'currency' => 'NGN',
             'amount' => 250,
             'status' => 'pending',
@@ -179,13 +271,26 @@ class GoshenPaymentWebhookSafetyTest extends TestCase
             ],
         );
     }
+
+    private function canonicalPaidTransaction(Booking $booking, PaymentInstallment $record): PaymentTransaction
+    {
+        return PaymentTransaction::query()->create([
+            'booking_id' => $booking->id,
+            'installment_id' => $record->id,
+            'gateway' => 'stripe',
+            'provider_reference' => 'canonical_'.str()->random(10),
+            'currency' => 'NGN',
+            'amount' => 250,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'payload' => ['payment_intent' => 'pi_canonical'],
+        ]);
+    }
 }
 
 class FakeSafeGatewayManager extends PaymentGatewayManager
 {
-    public function __construct(private readonly PaymentGateway $gateway)
-    {
-    }
+    public function __construct(private readonly PaymentGateway $gateway) {}
 
     public function driver(string $gateway): PaymentGateway
     {
@@ -196,11 +301,14 @@ class FakeSafeGatewayManager extends PaymentGatewayManager
 class FakeSafeStripeGateway extends StripeGateway
 {
     public int $refundCalls = 0;
+
+    public int $refundRequests = 0;
+
     public bool $failRefund = false;
 
-    public function __construct(public VerifiedWebhook $webhook)
-    {
-    }
+    private array $refundsByKey = [];
+
+    public function __construct(public VerifiedWebhook $webhook) {}
 
     public function verifyWebhook(Request $request): VerifiedWebhook
     {
@@ -212,14 +320,38 @@ class FakeSafeStripeGateway extends StripeGateway
         return ['payment_customer_id' => 'cus_safe', 'payment_method_id' => 'pm_safe'];
     }
 
-    public function refund(PaymentTransaction $transaction, float $amount): RefundResult
+    public function refund(PaymentTransaction $transaction, float $amount, string $idempotencyKey): RefundResult
     {
+        $this->refundRequests++;
+
+        if (isset($this->refundsByKey[$idempotencyKey])) {
+            return $this->refundsByKey[$idempotencyKey];
+        }
+
         $this->refundCalls++;
 
         if ($this->failRefund) {
             throw new RuntimeException('Fake refund failed.');
         }
 
-        return new RefundResult('stripe', 're_safe', 'refunded', ['amount' => $amount]);
+        return $this->refundsByKey[$idempotencyKey] = new RefundResult('stripe', 're_safe', 'refunded', [
+            'amount' => $amount,
+            'idempotency_key' => $idempotencyKey,
+        ]);
+    }
+}
+
+class CrashAfterRemoteRefundController extends PaymentWebhookController
+{
+    private bool $crash = true;
+
+    protected function persistRefundResult(int $transactionId, int $eventId, string $refundKey, RefundResult $refund): void
+    {
+        if ($this->crash) {
+            $this->crash = false;
+            throw new RuntimeException('Simulated confirmation crash.');
+        }
+
+        parent::persistRefundResult($transactionId, $eventId, $refundKey, $refund);
     }
 }

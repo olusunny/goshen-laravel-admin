@@ -100,7 +100,7 @@ class StripeGatewayTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Stripe payment intent is missing');
 
-        (new StripeGateway())->refund($transaction, 10);
+        (new StripeGateway())->refund($transaction, 10, 'refund-key-without-intent');
     }
 
     private function stripeEventPayload(array $event): string

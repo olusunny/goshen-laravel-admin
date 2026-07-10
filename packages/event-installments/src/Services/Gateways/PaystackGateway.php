@@ -18,7 +18,7 @@ class PaystackGateway implements PaymentGateway
 {
     public function createCheckout(PaymentInstallment $installment): GatewayCheckout
     {
-        $reference = 'ei_' . Str::ulid();
+        $reference = 'ei_'.Str::ulid();
         $booking = $installment->booking;
 
         $response = Http::withToken($this->secret())
@@ -73,19 +73,89 @@ class PaystackGateway implements PaymentGateway
         );
     }
 
-    public function refund(PaymentTransaction $transaction, float $amount): RefundResult
+    public function refund(PaymentTransaction $transaction, float $amount, string $idempotencyKey): RefundResult
     {
-        $response = Http::withToken($this->secret())
-            ->post('https://api.paystack.co/refund', [
-                'transaction' => $transaction->provider_reference,
-                'amount' => (int) round($amount * 100),
-            ]);
+        $minorAmount = (int) round($amount * 100);
+        $merchantNote = 'Goshen refund '.$idempotencyKey;
 
-        if (! $response->successful()) {
+        if ($existing = $this->existingRefund($transaction, $minorAmount, $merchantNote)) {
+            return $existing;
+        }
+
+        try {
+            $response = Http::withToken($this->secret())
+                ->post('https://api.paystack.co/refund', [
+                    'transaction' => $transaction->provider_reference,
+                    'amount' => $minorAmount,
+                    'merchant_note' => $merchantNote,
+                ]);
+        } catch (\Throwable $exception) {
+            if ($existing = $this->existingRefund($transaction, $minorAmount, $merchantNote)) {
+                return $existing;
+            }
+
+            throw new RuntimeException('Paystack refund failed.', 0, $exception);
+        }
+
+        if (! $response->successful() || ! $response->json('status')) {
+            if ($existing = $this->existingRefund($transaction, $minorAmount, $merchantNote)) {
+                return $existing;
+            }
+
             throw new RuntimeException('Paystack refund failed.');
         }
 
-        return new RefundResult('paystack', (string) $transaction->provider_reference, 'refunded', $response->json());
+        return $this->refundResult($response->json('data', []), $response->json());
+    }
+
+    private function existingRefund(PaymentTransaction $transaction, int $minorAmount, string $merchantNote): ?RefundResult
+    {
+        try {
+            $response = Http::withToken($this->secret())
+                ->get('https://api.paystack.co/refund', ['transaction' => $transaction->provider_reference]);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! $response->successful() || ! $response->json('status')) {
+            return null;
+        }
+
+        $refunds = $response->json('data', []);
+        if (! is_array($refunds)) {
+            return null;
+        }
+
+        foreach ($refunds as $refund) {
+            if (! is_array($refund)) {
+                continue;
+            }
+
+            $refundTransaction = data_get($refund, 'transaction.reference') ?? data_get($refund, 'transaction');
+            $providerTransactionId = data_get($transaction->payload, 'data.id')
+                ?? data_get($transaction->payload, 'data.object.id');
+            $matchesTransaction = (string) $refundTransaction === (string) $transaction->provider_reference
+                || ($providerTransactionId !== null && (string) $refundTransaction === (string) $providerTransactionId);
+            $status = strtolower((string) ($refund['status'] ?? ''));
+            if ($matchesTransaction
+                && (int) ($refund['amount'] ?? 0) === $minorAmount
+                && hash_equals($merchantNote, (string) ($refund['merchant_note'] ?? ''))
+                && ! in_array($status, ['failed', 'abandoned', 'declined'], true)) {
+                return $this->refundResult($refund, $response->json());
+            }
+        }
+
+        return null;
+    }
+
+    private function refundResult(array $refund, array $payload): RefundResult
+    {
+        return new RefundResult(
+            'paystack',
+            (string) ($refund['id'] ?? $refund['reference'] ?? ''),
+            (string) ($refund['status'] ?? 'pending'),
+            $payload,
+        );
     }
 
     private function secret(): string
