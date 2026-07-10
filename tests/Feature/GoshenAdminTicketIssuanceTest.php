@@ -415,6 +415,60 @@ class GoshenAdminTicketIssuanceTest extends TestCase
         $this->assertArrayNotHasKey('wallet_otp', $booking->metadata ?? []);
     }
 
+    public function test_paid_admin_issuance_reports_full_revenue_by_voucher_and_wallet_gateway(): void
+    {
+        [$voucherMember, $voucherTicketType, $voucherAdmin] = $this->issuanceFixture();
+        $voucherTicket = app(GoshenAdminTicketIssuanceService::class)->issue(
+            $voucherMember,
+            $voucherTicketType,
+            $voucherAdmin,
+            'Voucher reporting proof',
+            'voucher',
+            $this->voucherCode($voucherTicketType, $voucherAdmin),
+        );
+
+        [$walletMember, $walletTicketType, $walletAdmin, $payer, $wallet, $challenge, $code]
+            = $this->walletIssuanceFixture(suffix: '-wallet-report');
+        $walletTicket = app(GoshenAdminTicketIssuanceService::class)->issue(
+            $walletMember,
+            $walletTicketType,
+            $walletAdmin,
+            'Front desk registration',
+            'wallet',
+            null,
+            $challenge,
+            $code,
+            '127.0.0.1',
+            'PHPUnit',
+        );
+
+        $bookings = Booking::query()
+            ->with('installments')
+            ->whereKey([$voucherTicket->booking_id, $walletTicket->booking_id])
+            ->get();
+        $transactions = PaymentTransaction::query()
+            ->whereIn('booking_id', $bookings->pluck('id'))
+            ->where('status', 'paid')
+            ->get();
+
+        $this->assertSame(300.0, round((float) $transactions->sum('amount'), 2));
+        $this->assertSame(150.0, round((float) $transactions->where('gateway', 'voucher')->sum('amount'), 2));
+        $this->assertSame(150.0, round((float) $transactions->where('gateway', 'wallet')->sum('amount'), 2));
+        $this->assertCount(2, $bookings);
+
+        foreach ($bookings as $booking) {
+            $this->assertSame(BookingStatus::Paid, $booking->status);
+            $this->assertGreaterThan(0, (float) $booking->total);
+            $this->assertSame((float) $booking->total, (float) $booking->paid_total);
+            $this->assertCount(1, $booking->installments);
+            $this->assertSame((float) $booking->total, (float) $booking->installments->first()->amount);
+            $this->assertSame((float) $booking->total, (float) $booking->installments->first()->paid_amount);
+            $this->assertArrayNotHasKey('complimentary', $booking->metadata ?? []);
+            $this->assertArrayNotHasKey('free', $booking->metadata ?? []);
+            $this->assertArrayNotHasKey('is_free', $booking->metadata ?? []);
+        }
+    }
+
     public function test_invalid_wallet_code_leaves_no_financial_records(): void
     {
         [$member, $ticketType, $admin, $payer, $wallet, $challenge, $code] = $this->walletIssuanceFixture();
@@ -957,20 +1011,20 @@ class GoshenAdminTicketIssuanceTest extends TestCase
     /**
      * @return array{MobileUser, EventTicketType, User}
      */
-    private function issuanceFixture(): array
+    private function issuanceFixture(string $suffix = ''): array
     {
         $member = MobileUser::query()->create([
             'name' => 'Ada Lovelace',
             'first_name' => 'Ada',
             'last_name' => 'Lovelace',
-            'email' => 'ada@example.test',
+            'email' => 'ada'.$suffix.'@example.test',
             'phone' => '+2348012345678',
             'is_verified' => true,
         ]);
 
         $event = Event::query()->create([
             'name' => 'Goshen 2026',
-            'slug' => 'goshen-2026',
+            'slug' => 'goshen-2026'.$suffix,
             'timezone' => 'Africa/Lagos',
             'status' => 'published',
         ]);
@@ -1039,9 +1093,12 @@ class GoshenAdminTicketIssuanceTest extends TestCase
     /**
      * @return array{MobileUser, EventTicketType, User, MobileUser, GoshenWallet, WebWalletVerificationChallenge, string}
      */
-    private function walletIssuanceFixture(float $balance = 500, string $currency = 'GBP'): array
-    {
-        [$member, $ticketType, $admin] = $this->issuanceFixture();
+    private function walletIssuanceFixture(
+        float $balance = 500,
+        string $currency = 'GBP',
+        string $suffix = '',
+    ): array {
+        [$member, $ticketType, $admin] = $this->issuanceFixture($suffix);
         $payer = app(LinkedMobileAccountService::class)->forAdmin($admin);
         $this->assertInstanceOf(MobileUser::class, $payer);
         $wallet = $payer->wallet()->firstOrFail();
