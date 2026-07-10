@@ -16,8 +16,10 @@ use App\Services\LinkedMobileAccountService;
 use App\Services\WebWalletVerificationService;
 use App\Support\AdminPermissions;
 use Filament\Actions\Testing\TestAction;
+use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event as EventFacade;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Mockery\MockInterface;
@@ -200,6 +202,65 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             ->assertHasFormErrors(['payment_method']);
 
         $this->assertDatabaseCount('web_wallet_verification_challenges', 0);
+    }
+
+    public function test_wallet_code_delivery_failure_is_a_safe_form_error_without_financial_side_effects(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $this->grantTicketIssuePermission($admin);
+        $payer = app(LinkedMobileAccountService::class)->forAdmin($admin);
+        $payer?->wallet()->firstOrFail()->forceFill(['currency' => 'GBP', 'balance' => 500])->save();
+        $sentBody = null;
+        Log::spy();
+        $this->mock(DynamicSmtpMailer::class, function (MockInterface $mock) use (&$sentBody): void {
+            $mock->shouldReceive('sendRaw')->once()->andReturnUsing(
+                function (string $to, string $subject, string $body) use (&$sentBody): never {
+                    $sentBody = $body;
+
+                    throw new \RuntimeException('SMTP diagnostic 998877 must remain private.');
+                },
+            );
+        });
+
+        $page = Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->fillForm([
+                'customer_id' => $member->id,
+                'event_id' => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'issuance_reason' => 'Front desk delivery failure',
+                'payment_method' => 'wallet',
+            ])
+            ->set('data.wallet_challenge_id', 999999)
+            ->set('data.wallet_otp', '112233')
+            ->callAction(TestAction::make('sendWalletVerificationCode')->schemaComponent('form-actions', 'content'))
+            ->assertHasFormErrors(['payment_method'])
+            ->assertNotNotified();
+
+        preg_match('/\b(\d{6})\b/', (string) $sentBody, $matches);
+        $code = (string) ($matches[1] ?? '');
+        $this->assertNotSame('', $code);
+        $this->assertNull($page->get('data.wallet_challenge_id'));
+        $this->assertNull($page->get('data.wallet_otp'));
+        $componentState = json_encode($page->get('data'), JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString($code, $componentState);
+        $this->assertStringNotContainsString('998877', $componentState);
+
+        $challenge = WebWalletVerificationChallenge::query()->sole();
+        $this->assertSame('delivery_failed', $challenge->status);
+        $this->assertNull($challenge->last_sent_at);
+        $this->assertDatabaseCount('web_wallet_verification_challenges', 1);
+        $this->assertDatabaseMissing('web_wallet_verification_challenges', ['status' => 'pending']);
+        $this->assertDatabaseCount('ei_bookings', 0);
+        $this->assertDatabaseCount((new PaymentTransaction)->getTable(), 0);
+        $this->assertDatabaseCount('goshen_wallet_ledger_entries', 0);
+        $this->assertDatabaseCount('ei_tickets', 0);
+
+        foreach (['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug'] as $level) {
+            Log::shouldNotHaveReceived($level);
+        }
+
+        Notification::assertNotNotified();
     }
 
     public function test_admin_can_issue_a_paid_ticket_with_a_voucher(): void

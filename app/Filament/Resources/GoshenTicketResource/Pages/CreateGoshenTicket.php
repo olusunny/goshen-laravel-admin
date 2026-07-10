@@ -53,6 +53,13 @@ class CreateGoshenTicket extends CreateRecord
             $this->issueWalletVerificationCode();
         } catch (ValidationException $exception) {
             $this->throwFormValidation($exception);
+        } catch (RuntimeException) {
+            $this->data['wallet_challenge_id'] = null;
+            $this->data['wallet_otp'] = null;
+
+            $this->throwFormValidation(ValidationException::withMessages([
+                'payment_method' => 'The wallet verification email could not be sent. Please try again.',
+            ]));
         }
     }
 
