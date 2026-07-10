@@ -57,16 +57,35 @@ Wallet payment is available only if the authenticated web admin resolves to one 
 
 Voucher codes are never stored in plaintext. Existing voucher verification and redemption stores only the safe suffix and usage references.
 
+## Browser Wallet Verification
+
+Flutter wallet spending is protected by a fresh biometric or wallet-PIN unlock. Browser wallet spending requires an equivalent step-up check using a six-digit numeric one-time verification code sent to the authenticated user's linked email address.
+
+The verification gate applies to browser actions that spend the authenticated user's personal wallet. It does not apply to voucher settlement or administrative support actions that do not spend the acting admin's wallet. The service is reusable for future browser wallet-payment, transfer, or withdrawal features; this implementation integrates it with paid admin ticket issuance.
+
+The verification lifecycle is:
+
+1. Validate the issuance form and resolve the authenticated web admin's linked mobile account and wallet without creating a booking or changing any balance.
+2. Generate a cryptographically random six-digit numeric code and email it through the configured SMTP service.
+3. Store only a secure hash in a dedicated verification challenge record. Bind the challenge to the web admin, payer mobile user, action purpose, recipient, event, ticket type, amount, currency, and a fingerprint of all payment-relevant inputs.
+4. Expire the challenge after ten minutes. Allow at most five failed verification attempts. Permit resend after sixty seconds and enforce an hourly send limit per admin, payer, email, and request IP.
+5. Require the admin to enter the code in the ticket-issuance page. A changed recipient, event, ticket type, payment method, amount, currency, or issuance request invalidates the challenge and requires a new code.
+6. In a short database transaction immediately before financial processing, lock the challenge and verify that it is unexpired, unused, within its attempt limit, and matches the current request fingerprint. Mark it consumed exactly once and commit that state before beginning the wallet-debit transaction.
+
+A code cannot be replayed, used for a different wallet action, or reused after a failed settlement. If email delivery fails, code verification fails, the challenge expires, or the challenge was already consumed, no booking, installment, transaction, wallet ledger entry, or ticket is created.
+
+Challenge audit data includes issuance, resend, failed verification, expiry, and successful consumption timestamps together with the web admin, payer, masked destination, purpose, IP address, and browser user-agent. The plaintext code is never logged, persisted, placed in URLs, or included in audit metadata.
+
 ## Paid Issuance Lifecycle
 
-All state changes occur in a database transaction.
+All financial state changes occur in one database transaction. For wallet payment, the one-time verification challenge is consumed in the immediately preceding transaction so that a failed financial settlement cannot make the same code usable again.
 
 1. Lock and validate the selected recipient, event, and ticket type. Reject blocked/deleted recipients, unpublished events, inactive ticket types, and a duplicate member/event/ticket-type registration.
 2. Create a normal pending booking owned by the recipient. Its subtotal and total equal the listed ticket price, and `paid_total` is zero.
 3. Create the matching booking line, attendee, and a single pending full-payment installment for the full amount.
 4. Settle the booking with the selected payment method:
    - **Voucher:** validate and redeem the code through `GoshenVoucherService`. This creates a voucher usage and paid voucher transaction, then calls `PaymentSettlementService`.
-   - **Wallet:** resolve and lock only the issuing admin's linked wallet; enforce active status, security-reset guard, currency match, and sufficient balance; debit it; create a paid `retreat_payment` ledger entry and paid wallet transaction with payer and beneficiary references; then call `PaymentSettlementService`.
+   - **Wallet:** require and atomically consume a valid browser wallet verification challenge; resolve and lock only the issuing admin's linked wallet; enforce active status, security-reset guard, currency match, and sufficient balance; debit it; create a paid `retreat_payment` ledger entry and paid wallet transaction with payer and beneficiary references; then call `PaymentSettlementService`.
 5. Rely on `PaymentSettlementService` to mark the installment and booking paid, calculate `paid_total`, issue the QR-backed ticket, send normal post-payment notifications, and execute payment-dependent referral behaviour.
 6. Add an event audit log and ticket metadata that identify the web admin issuer, recipient, payment method, payment transaction reference, payer mobile-user ID for wallet, voucher usage ID for voucher, and issuance reason.
 
@@ -88,7 +107,7 @@ This makes the ticket appear in regular sales totals and attributes gateway reve
 
 ## Error Handling
 
-The flow rejects and rolls back fully for duplicate tickets, invalid or exhausted vouchers, voucher event/currency/amount mismatches, insufficient wallet balance, wallet currency mismatches, wallet security restrictions, missing/blocked linked payer accounts, inactive ticket types, unpublished events, and payment-settlement failures.
+The flow rejects duplicate tickets, invalid or exhausted vouchers, voucher event/currency/amount mismatches, insufficient wallet balance, wallet currency mismatches, wallet security restrictions, missing/blocked linked payer accounts, invalid/expired/used wallet verification challenges, verification attempt or send-rate limits, changed request fingerprints, inactive ticket types, unpublished events, email-delivery failures, and payment-settlement failures. All financial changes roll back on failure. A wallet challenge consumed before a failed financial settlement remains consumed, requiring a new code for a retry.
 
 ## Testing and Verification
 
@@ -98,6 +117,9 @@ Focused Laravel tests will cover:
 - web-admin/mobile linkage by normalized email without creating a second mobile account or Triumphant ID;
 - voucher issuance creates normal booking, installment, transaction, voucher usage, settlement, ticket, and audit records;
 - wallet issuance debits only the issuer's same-email wallet and creates normal ledger, transaction, settlement, ticket, and audit records;
+- browser wallet verification generates only a hashed six-digit challenge, binds it to the exact payment request, enforces expiry/attempt/resend/rate limits, and consumes it once;
+- invalid, expired, replayed, over-attempt, and request-mismatched wallet codes never create or change financial records;
+- SMTP delivery failure prevents wallet issuance from proceeding;
 - sales/gateway summary includes each payment correctly;
 - invalid voucher, insufficient balance, blocked/missing linked payer, security restriction, duplicate ticket, and unauthorized access paths fail safely; and
 - issue-only administrators can create tickets but cannot manage existing tickets.
