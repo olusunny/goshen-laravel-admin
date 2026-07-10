@@ -209,6 +209,102 @@ class GoshenSingleFullPaymentTest extends TestCase
         $this->assertSame('150.00', $second->fresh()->amount);
     }
 
+    public function test_legacy_repair_ignores_valid_single_full_payment_bookings_and_their_transactions(): void
+    {
+        $pendingBooking = $this->booking(total: 300);
+        $pendingRecord = $this->paymentRecord($pendingBooking, amount: 300);
+        $pendingTransaction = PaymentTransaction::query()->create([
+            'booking_id' => $pendingBooking->id,
+            'installment_id' => $pendingRecord->id,
+            'gateway' => 'stripe',
+            'provider_reference' => 'valid_pending_' . $pendingBooking->id,
+            'currency' => 'NGN',
+            'amount' => 300,
+            'status' => 'pending',
+            'payload' => ['url' => 'https://checkout.test/valid'],
+        ]);
+
+        $paidBooking = $this->booking(total: 300, status: BookingStatus::Paid);
+        $paidBooking->forceFill(['paid_total' => 300])->save();
+        $paidRecord = $this->paymentRecord($paidBooking, amount: 300, paidAmount: 300, status: InstallmentStatus::Paid);
+        $paidTransaction = PaymentTransaction::query()->create([
+            'booking_id' => $paidBooking->id,
+            'installment_id' => $paidRecord->id,
+            'gateway' => 'stripe',
+            'provider_reference' => 'valid_paid_' . $paidBooking->id,
+            'currency' => 'NGN',
+            'amount' => 300,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'payload' => ['capture' => 'canonical'],
+        ]);
+
+        $this->runRepairMigrationTwice();
+
+        $this->assertSame('pending', $pendingTransaction->fresh()->status);
+        $this->assertSame(['url' => 'https://checkout.test/valid'], $pendingTransaction->fresh()->payload);
+        $this->assertSame('300.00', $pendingRecord->fresh()->amount);
+        $this->assertNull($pendingBooking->fresh()->metadata);
+        $this->assertSame('paid', $paidTransaction->fresh()->status);
+        $this->assertSame(['capture' => 'canonical'], $paidTransaction->fresh()->payload);
+        $this->assertSame('300.00', $paidRecord->fresh()->paid_amount);
+        $this->assertNull($paidBooking->fresh()->metadata);
+    }
+
+    public function test_legacy_repair_preflight_uses_the_exact_mismatch_target_set(): void
+    {
+        $valid = $this->booking(total: 300);
+        $validRecord = $this->paymentRecord($valid, amount: 300);
+        $validTransaction = PaymentTransaction::query()->create([
+            'booking_id' => $valid->id,
+            'installment_id' => $validRecord->id,
+            'gateway' => 'stripe',
+            'provider_reference' => 'valid_external_' . $valid->id,
+            'currency' => 'NGN',
+            'amount' => 300,
+            'status' => 'pending',
+        ]);
+
+        $affected = $this->booking(total: 300);
+        $affectedRecord = $this->paymentRecord($affected, amount: 200);
+
+        $this->runRepairMigrationTwice();
+
+        $this->assertSame('pending', $validTransaction->fresh()->status);
+        $this->assertSame('300.00', $validRecord->fresh()->amount);
+        $this->assertSame('300.00', $affectedRecord->fresh()->amount);
+        $this->assertFalse((bool) data_get($affected->fresh()->metadata, 'legacy_payment_review_required', false));
+    }
+
+    public function test_legacy_repair_rolls_back_global_changes_when_a_mismatch_target_has_live_external_checkout(): void
+    {
+        $affected = $this->booking(total: 300);
+        $affected->forceFill(['auto_charge_enabled' => true])->save();
+        $plan = $this->attachPlan($affected);
+        $record = $this->paymentRecord($affected, amount: 200);
+        PaymentTransaction::query()->create([
+            'booking_id' => $affected->id,
+            'installment_id' => $record->id,
+            'gateway' => 'stripe',
+            'provider_reference' => 'mismatch_external_' . $affected->id,
+            'currency' => 'NGN',
+            'amount' => 200,
+            'status' => 'pending',
+        ]);
+
+        try {
+            $this->runRepairMigrationTwice();
+            $this->fail('Expected exact-target preflight to abort.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('live external checkout', $exception->getMessage());
+        }
+
+        $this->assertTrue($plan->fresh()->is_active);
+        $this->assertTrue($affected->fresh()->auto_charge_enabled);
+        $this->assertSame($plan->id, $affected->fresh()->payment_plan_id);
+        $this->assertSame('200.00', $record->fresh()->amount);
+    }
+
     public function test_legacy_repair_expires_safe_pending_artifacts_even_when_history_requires_review(): void
     {
         $booking = $this->booking(total: 300);

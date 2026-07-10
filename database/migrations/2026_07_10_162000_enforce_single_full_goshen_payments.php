@@ -13,21 +13,54 @@ return new class extends Migration
             return;
         }
 
-        $this->assertNoLiveExternalCheckoutOnAffectedBookings();
+        DB::transaction(function (): void {
+            $affectedBookingIds = $this->affectedBookingIds();
+            $bookings = $affectedBookingIds->isEmpty()
+                ? collect()
+                : DB::table('ei_bookings')
+                    ->whereIn('id', $affectedBookingIds)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
 
-        if (Schema::hasTable('ei_payment_plans')) {
-            DB::table('ei_payment_plans')->where('is_active', true)->update(['is_active' => false, 'updated_at' => now()]);
-        }
+            if ($affectedBookingIds->isNotEmpty()) {
+                DB::table('ei_payment_installments')
+                    ->whereIn('booking_id', $affectedBookingIds)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
 
-        $bookingUpdates = ['payment_plan_id' => null, 'updated_at' => now()];
-        foreach (['auto_charge_enabled' => false, 'auto_charge_failed_at' => null, 'auto_charge_failure_reason' => null] as $column => $value) {
-            if (Schema::hasColumn('ei_bookings', $column)) {
-                $bookingUpdates[$column] = $value;
+                if (Schema::hasTable('ei_payment_transactions')) {
+                    DB::table('ei_payment_transactions')
+                        ->whereIn('booking_id', $affectedBookingIds)
+                        ->orderBy('id')
+                        ->lockForUpdate()
+                        ->get();
+                }
             }
-        }
-        DB::table('ei_bookings')->update($bookingUpdates);
 
-        DB::table('ei_bookings')->orderBy('id')->eachById(function (object $booking): void {
+            $this->assertNoLiveExternalCheckoutOnAffectedBookings($affectedBookingIds);
+
+            if (Schema::hasTable('ei_payment_plans')) {
+                DB::table('ei_payment_plans')
+                    ->where('is_active', true)
+                    ->update(['is_active' => false, 'updated_at' => now()]);
+            }
+
+            if (Schema::hasColumn('ei_bookings', 'auto_charge_enabled')) {
+                DB::table('ei_bookings')
+                    ->where('auto_charge_enabled', true)
+                    ->update(['auto_charge_enabled' => false, 'updated_at' => now()]);
+            }
+
+            if ($affectedBookingIds->isNotEmpty()) {
+                DB::table('ei_bookings')
+                    ->whereIn('id', $affectedBookingIds)
+                    ->whereNotNull('payment_plan_id')
+                    ->update(['payment_plan_id' => null, 'updated_at' => now()]);
+            }
+
+            $bookings->each(function (object $booking): void {
             $records = DB::table('ei_payment_installments')->where('booking_id', $booking->id)->orderBy('sequence')->orderBy('id')->get();
             if ($records->isEmpty() && (float) $booking->total <= 0) {
                 return;
@@ -37,10 +70,11 @@ return new class extends Migration
 
             $reasons = $this->reviewReasons($booking, $records);
             if ($reasons !== []) {
+                $metadata = $this->decodedJson($booking->metadata ?? null);
                 $this->updateBookingMetadata((int) $booking->id, [
                     'legacy_payment_review_required' => true,
                     'legacy_payment_review_reasons' => $reasons,
-                    'legacy_payment_review_flagged_at' => now()->toIso8601String(),
+                    'legacy_payment_review_flagged_at' => $metadata['legacy_payment_review_flagged_at'] ?? now()->toIso8601String(),
                 ]);
 
                 return;
@@ -112,7 +146,8 @@ return new class extends Migration
                 'single_full_payment' => true,
                 'legacy_payment_review_required' => false,
             ]);
-        }, 100, 'id');
+            });
+        });
     }
 
     public function down(): void
@@ -167,20 +202,70 @@ return new class extends Migration
         return array_values(array_unique($reasons));
     }
 
-    private function assertNoLiveExternalCheckoutOnAffectedBookings(): void
+    private function affectedBookingIds()
     {
-        if (! Schema::hasTable('ei_payment_transactions')) {
-            return;
-        }
+        $bookings = DB::table('ei_bookings')->orderBy('id')->get();
+        $recordsByBooking = DB::table('ei_payment_installments')
+            ->whereIn('booking_id', $bookings->pluck('id'))
+            ->orderBy('id')
+            ->get()
+            ->groupBy('booking_id');
 
-        $planBookingIds = DB::table('ei_bookings')->whereNotNull('payment_plan_id')->pluck('id');
-        $multiRecordBookingIds = DB::table('ei_payment_installments')
-            ->select('booking_id')
-            ->groupBy('booking_id')
-            ->havingRaw('COUNT(*) > 1')
-            ->pluck('booking_id');
-        $affectedBookingIds = $planBookingIds->merge($multiRecordBookingIds)->unique()->values();
-        if ($affectedBookingIds->isEmpty()) {
+        return $bookings
+            ->filter(function (object $booking) use ($recordsByBooking): bool {
+                if ($booking->payment_plan_id !== null) {
+                    return true;
+                }
+
+                $total = round((float) $booking->total, 2);
+                if ($total <= 0) {
+                    return false;
+                }
+
+                $records = $recordsByBooking->get($booking->id, collect());
+                if ($records->count() !== 1) {
+                    return true;
+                }
+
+                $record = $records->first();
+                if ((int) $record->sequence !== 1
+                    || abs(round((float) $record->amount, 2) - $total) > 0.009
+                    || strtoupper((string) $record->currency) !== strtoupper((string) $booking->currency)) {
+                    return true;
+                }
+
+                $bookingStatus = strtolower((string) $booking->status);
+                $recordStatus = strtolower((string) $record->status);
+                $bookingPaid = round((float) $booking->paid_total, 2);
+                $recordPaid = round((float) $record->paid_amount, 2);
+                $validPending = $bookingStatus === 'pending'
+                    && $recordStatus === 'pending'
+                    && abs($bookingPaid) < 0.009
+                    && abs($recordPaid) < 0.009;
+                $validPaid = $bookingStatus === 'paid'
+                    && $recordStatus === 'paid'
+                    && abs($bookingPaid - $total) < 0.009
+                    && abs($recordPaid - $total) < 0.009;
+
+                if ($validPending || $validPaid) {
+                    return false;
+                }
+
+                return in_array($bookingStatus, ['deposit_paid', 'partially_paid'], true)
+                    || ($bookingPaid > 0 && abs($bookingPaid - $total) > 0.009)
+                    || ($recordPaid > 0 && abs($recordPaid - $total) > 0.009)
+                    || abs($bookingPaid - $recordPaid) > 0.009
+                    || ($bookingStatus === 'paid' && ! $validPaid)
+                    || ($bookingStatus === 'pending' && ($bookingPaid > 0 || $recordPaid > 0))
+                    || (in_array($recordStatus, ['paid', 'refunded'], true) && ! $validPaid);
+            })
+            ->pluck('id')
+            ->values();
+    }
+
+    private function assertNoLiveExternalCheckoutOnAffectedBookings($affectedBookingIds): void
+    {
+        if (! Schema::hasTable('ei_payment_transactions') || $affectedBookingIds->isEmpty()) {
             return;
         }
 
@@ -225,8 +310,14 @@ return new class extends Migration
     private function updateBookingMetadata(int $bookingId, array $values): void
     {
         $booking = DB::table('ei_bookings')->where('id', $bookingId)->first();
+        $current = $this->decodedJson($booking?->metadata ?? null);
+        $merged = array_merge($current, $values);
+        if ($merged === $current) {
+            return;
+        }
+
         DB::table('ei_bookings')->where('id', $bookingId)->update([
-            'metadata' => $this->mergedJson($booking?->metadata ?? null, $values),
+            'metadata' => json_encode($merged),
             'updated_at' => now(),
         ]);
     }
