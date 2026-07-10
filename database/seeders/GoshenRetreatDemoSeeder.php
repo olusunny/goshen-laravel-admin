@@ -7,7 +7,6 @@ use Illuminate\Database\Seeder;
 use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\EventSchedule;
 use Personal\EventInstallments\Models\EventTicketType;
-use Personal\EventInstallments\Models\PaymentPlan;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -28,7 +27,7 @@ class GoshenRetreatDemoSeeder extends Seeder
             ]);
         }
 
-        $goshenPermissions = ['manage_goshen_retreat_event', 'manage_goshen_schedule', 'manage_goshen_ticket_type', 'manage_goshen_payment_plan', 'manage_goshen_booking', 'manage_goshen_ticket', 'manage_goshen_accommodation_allocation'];
+        $goshenPermissions = ['manage_goshen_retreat_event', 'manage_goshen_schedule', 'manage_goshen_ticket_type', 'manage_goshen_booking', 'manage_goshen_ticket', 'manage_goshen_accommodation_allocation'];
 
         foreach ($goshenPermissions as $permission) {
             Permission::query()->firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
@@ -46,7 +45,7 @@ class GoshenRetreatDemoSeeder extends Seeder
         $event = Event::query()->updateOrCreate(['slug' => 'goshen-retreat-2026'], [
             'name' => 'Goshen Retreat 2026',
             'type' => 'sequential',
-            'description' => 'Demo Goshen Retreat edition for validating registration, installment payments, tickets, and check-in workflows.',
+            'description' => 'Demo Goshen Retreat edition for validating registration, full payments, tickets, and check-in workflows.',
             'timezone' => 'Africa/Lagos',
             'venue_name' => 'Goshen Retreat Camp',
             'venue_address' => 'Mercy Camp, Nigeria',
@@ -80,15 +79,5 @@ class GoshenRetreatDemoSeeder extends Seeder
             'is_active' => true,
         ]);
 
-        PaymentPlan::query()->updateOrCreate(['event_id' => $event->id, 'name' => 'Two-part installment'], [
-            'currency' => 'NGN',
-            'deposit_type' => 'percentage',
-            'deposit_value' => 50,
-            'installment_count' => 2,
-            'interval_days' => 30,
-            'grace_days' => 3,
-            'ticket_issue_policy' => 'paid_in_full',
-            'is_active' => true,
-        ]);
     }
 }

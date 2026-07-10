@@ -1,8 +1,8 @@
 <?php
 
 return [
-    'api_routes_enabled' => env('EVENT_INSTALLMENTS_API_ROUTES_ENABLED', false),
-    'admin_routes_enabled' => env('EVENT_INSTALLMENTS_ADMIN_ROUTES_ENABLED', false),
+    'api_routes_enabled' => false,
+    'admin_routes_enabled' => false,
     'route_prefix' => env('EVENT_INSTALLMENTS_ROUTE_PREFIX', 'event-installments'),
     'api_prefix' => env('EVENT_INSTALLMENTS_API_PREFIX', 'api/v1/goshen-retreat/internal'),
 
