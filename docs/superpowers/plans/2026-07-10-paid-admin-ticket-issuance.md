@@ -15,6 +15,7 @@
 - Never create a complimentary, waived, zero-total, or zero-payment ticket through admin issuance.
 - Wallet payment must debit only the authenticated web admin's same-email `MobileUser` wallet.
 - Voucher and wallet settlement must create the normal booking, one canonical full-payment record, payment transaction, gateway-specific records, ticket, and audit trail.
+- Stripe is the only enabled external package gateway for this release. Keep Paystack dormant in code; do not expose its checkout or webhook driver until a later explicitly reviewed release.
 - Goshen registrations allow one full payment only: no payment plan, deposit, scheduled balance, or partial settlement.
 - Wallet top-ups, savings goals, and auto-top-up remain available but never create or reserve a partially paid registration.
 - The legacy `PaymentInstallment` model/table may remain only as the single canonical payable row required by existing transaction foreign keys and gateway integrations.

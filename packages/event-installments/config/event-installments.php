@@ -28,6 +28,8 @@ return [
     ],
 
     'payments' => [
+        // The host application may narrow this list, but must opt in through code rather than environment state.
+        'enabled_external_gateways' => ['stripe'],
         'default_gateway' => env('EVENT_INSTALLMENTS_PAYMENT_GATEWAY', 'null'),
         'currency' => env('EVENT_INSTALLMENTS_CURRENCY', 'USD'),
         'deposit_mode' => env('EVENT_INSTALLMENTS_DEPOSIT_MODE', 'percentage'),

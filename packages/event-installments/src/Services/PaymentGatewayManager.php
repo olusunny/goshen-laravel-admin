@@ -17,11 +17,31 @@ class PaymentGatewayManager
 
     public function driver(string $gateway): PaymentGateway
     {
+        $gateway = strtolower(trim($gateway));
+
+        if (in_array($gateway, ['stripe', 'paystack'], true)
+            && ! in_array($gateway, $this->enabledExternalGateways(), true)) {
+            throw new InvalidArgumentException("Payment gateway [{$gateway}] is disabled for this release.");
+        }
+
         return match ($gateway) {
-            'stripe' => new StripeGateway(),
-            'paystack' => new PaystackGateway(),
-            'null' => new NullGateway(),
+            'stripe' => new StripeGateway,
+            'paystack' => new PaystackGateway,
+            'null' => new NullGateway,
             default => throw new InvalidArgumentException("Unsupported payment gateway [{$gateway}]."),
         };
+    }
+
+    /** @return array<int, string> */
+    private function enabledExternalGateways(): array
+    {
+        $gateways = config('event-installments.payments.enabled_external_gateways', ['stripe']);
+
+        return collect(is_array($gateways) ? $gateways : [])
+            ->map(fn (mixed $gateway): string => strtolower(trim((string) $gateway)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 }

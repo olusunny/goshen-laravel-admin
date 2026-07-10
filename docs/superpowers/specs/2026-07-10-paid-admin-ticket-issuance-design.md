@@ -11,6 +11,8 @@ An authorized web admin can issue one ticket to a selected member only after set
 
 No complimentary, waived, zero-total, or zero-payment ticket issuance is permitted by this flow.
 
+For this release, Stripe is the only enabled external package gateway. Paystack remains implemented but dormant for a later release; voucher, wallet, and offline settlement are internal payment paths and are unaffected by the external-gateway allowlist.
+
 ## Existing Behaviour and Constraints
 
 - Flutter already has a manager-assisted member-registration screen. It creates or selects a member, requires a voucher code, and calls the normal Goshen booking endpoint with the selected member as beneficiary.
