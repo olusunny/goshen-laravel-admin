@@ -9,6 +9,7 @@ use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\InstallmentStatus;
@@ -95,31 +96,34 @@ class ViewGoshenBooking extends ViewRecord
                 ->modalDescription('Use this only after confirming the offline cash or bank payment. The selected payment record will be recorded as paid.')
                 ->modalSubmitActionLabel('Mark paid')
                 ->action(function (array $data, PaymentSettlementService $settlements, GoshenSingleFullPaymentService $fullPayments): void {
-                    $installment = $this->record->installments()
-                        ->whereKey($data['installment_id'])
-                        ->where('status', '!=', InstallmentStatus::Paid->value)
-                        ->firstOrFail();
+                    DB::transaction(function () use ($data, $settlements, $fullPayments): void {
+                        $installment = $this->record->installments()
+                            ->whereKey($data['installment_id'])
+                            ->where('status', '!=', InstallmentStatus::Paid->value)
+                            ->lockForUpdate()
+                            ->firstOrFail();
 
-                    $fullPayments->assertPayable($this->record, $installment);
+                        $fullPayments->assertPayable($this->record, $installment);
 
-                    $transaction = PaymentTransaction::query()->create([
-                        'booking_id' => $this->record->id,
-                        'installment_id' => $installment->id,
-                        'gateway' => 'offline',
-                        'provider_reference' => 'offline_' . Str::ulid(),
-                        'currency' => $installment->currency,
-                        'amount' => $installment->amount,
-                        'status' => 'paid',
-                        'payload' => [
-                            'offline_payment' => true,
-                            'admin_reference' => trim((string) ($data['reference'] ?? '')),
-                            'admin_note' => trim((string) ($data['note'] ?? '')),
-                            'marked_by_user_id' => auth()->id(),
-                            'marked_at' => now()->toIso8601String(),
-                        ],
-                    ]);
+                        $transaction = PaymentTransaction::query()->create([
+                            'booking_id' => $this->record->id,
+                            'installment_id' => $installment->id,
+                            'gateway' => 'offline',
+                            'provider_reference' => 'offline_' . Str::ulid(),
+                            'currency' => $installment->currency,
+                            'amount' => $installment->amount,
+                            'status' => 'pending',
+                            'payload' => [
+                                'offline_payment' => true,
+                                'admin_reference' => trim((string) ($data['reference'] ?? '')),
+                                'admin_note' => trim((string) ($data['note'] ?? '')),
+                                'marked_by_user_id' => auth()->id(),
+                                'marked_at' => now()->toIso8601String(),
+                            ],
+                        ]);
 
-                    $settlements->markPaid($transaction, (float) $installment->amount, (string) $installment->currency);
+                        $settlements->markPaid($transaction, (float) $installment->amount, (string) $installment->currency);
+                    });
                     $this->record->refresh();
 
                     Notification::make()
