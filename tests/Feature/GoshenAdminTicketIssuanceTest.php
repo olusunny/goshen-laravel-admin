@@ -16,12 +16,14 @@ use App\Services\LinkedMobileAccountService;
 use App\Services\WebWalletVerificationService;
 use App\Support\AdminPermissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Mockery\MockInterface;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Models\Booking;
+use Personal\EventInstallments\Models\BookingLine;
 use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\EventAuditLog;
 use Personal\EventInstallments\Models\EventTicketType;
@@ -30,6 +32,7 @@ use Personal\EventInstallments\Models\PaymentTransaction;
 use Personal\EventInstallments\Models\Ticket;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class GoshenAdminTicketIssuanceTest extends TestCase
@@ -447,6 +450,186 @@ class GoshenAdminTicketIssuanceTest extends TestCase
         $this->assertSame(0, Booking::query()->where('customer_id', $otherMember->id)->count());
     }
 
+    #[DataProvider('walletContextMutations')]
+    public function test_wallet_context_change_after_otp_consumption_rolls_back_finance(
+        string $mutation,
+    ): void {
+        [$member, $ticketType, $admin, $payer, $wallet, $challenge, $code] = $this->walletIssuanceFixture();
+        $replacementEvent = Event::query()->create([
+            'name' => 'Replacement Goshen',
+            'slug' => 'replacement-goshen-'.$mutation,
+            'timezone' => 'Africa/Lagos',
+            'status' => 'published',
+        ]);
+        $mutated = false;
+
+        EventFacade::listen(
+            'eloquent.updated: '.WebWalletVerificationChallenge::class,
+            function (WebWalletVerificationChallenge $updated) use (
+                &$mutated,
+                $mutation,
+                $member,
+                $ticketType,
+                $replacementEvent,
+            ): void {
+                if ($mutated || $updated->status !== 'consumed') {
+                    return;
+                }
+
+                $mutated = true;
+                match ($mutation) {
+                    'price' => $ticketType->forceFill(['price' => 175])->save(),
+                    'currency' => $ticketType->forceFill(['currency' => 'USD'])->save(),
+                    'event' => $ticketType->forceFill(['event_id' => $replacementEvent->id])->save(),
+                    'member' => $member->forceFill(['email' => 'changed-member@example.test'])->save(),
+                };
+            },
+        );
+
+        try {
+            app(GoshenAdminTicketIssuanceService::class)->issue(
+                $member, $ticketType, $admin, 'Front desk registration', 'wallet', null,
+                $challenge, $code, '127.0.0.1', 'PHPUnit',
+            );
+            $this->fail('Expected stale wallet authorization context failure.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('wallet_otp', $exception->errors());
+        }
+
+        $this->assertTrue($mutated);
+        $this->assertSame('consumed', $challenge->fresh()->status);
+        $this->assertSame('500.00', $wallet->fresh()->balance);
+        $this->assertDatabaseCount('ei_bookings', 0);
+        $this->assertDatabaseCount((new PaymentTransaction)->getTable(), 0);
+        $this->assertDatabaseCount('goshen_wallet_ledger_entries', 0);
+        $this->assertDatabaseCount('ei_tickets', 0);
+    }
+
+    public static function walletContextMutations(): array
+    {
+        return [
+            'price changed' => ['price'],
+            'currency changed' => ['currency'],
+            'event or ticket context changed' => ['event'],
+            'member context changed' => ['member'],
+        ];
+    }
+
+    public function test_admin_email_change_after_otp_consumption_cannot_debit_linked_wallet(): void
+    {
+        [$member, $ticketType, $admin, $payer, $wallet, $challenge, $code] = $this->walletIssuanceFixture();
+        $mutated = false;
+        EventFacade::listen(
+            'eloquent.updated: '.WebWalletVerificationChallenge::class,
+            function (WebWalletVerificationChallenge $updated) use (&$mutated, $admin): void {
+                if ($mutated || $updated->status !== 'consumed') {
+                    return;
+                }
+
+                $mutated = true;
+                $admin->forceFill(['email' => 'changed-admin@example.test'])->save();
+            },
+        );
+
+        try {
+            app(GoshenAdminTicketIssuanceService::class)->issue(
+                $member, $ticketType, $admin, 'Front desk registration', 'wallet', null,
+                $challenge, $code, '127.0.0.1', 'PHPUnit',
+            );
+            $this->fail('Expected changed admin identity failure.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('payment_method', $exception->errors());
+        }
+
+        $this->assertTrue($mutated);
+        $this->assertSame('consumed', $challenge->fresh()->status);
+        $this->assertSame('500.00', $wallet->fresh()->balance);
+        $this->assertDatabaseCount('ei_bookings', 0);
+        $this->assertDatabaseCount('goshen_wallet_ledger_entries', 0);
+    }
+
+    public function test_pending_booking_line_prevents_duplicate_admin_issuance(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $this->reservation($member, $ticketType, 1, BookingStatus::Pending);
+
+        try {
+            app(GoshenAdminTicketIssuanceService::class)->issue(
+                $member,
+                $ticketType,
+                $admin,
+                'Duplicate front desk registration',
+                'voucher',
+                $this->voucherCode($ticketType, $admin),
+            );
+            $this->fail('Expected pending registration duplicate failure.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('customer_id', $exception->errors());
+        }
+
+        $this->assertSame(1, Booking::query()->count());
+        $this->assertDatabaseCount('goshen_voucher_usages', 0);
+        $this->assertDatabaseCount('ei_tickets', 0);
+    }
+
+    public function test_sold_out_ticket_rejects_wallet_before_otp_consumption(): void
+    {
+        [$member, $ticketType, $admin, $payer, $wallet, $challenge, $code] = $this->walletIssuanceFixture();
+        $ticketType->forceFill(['capacity' => 1])->save();
+        $other = MobileUser::query()->create([
+            'name' => 'Reserved Member',
+            'email' => 'reserved@example.test',
+            'is_verified' => true,
+        ]);
+        $this->reservation($other, $ticketType, 1, BookingStatus::Pending);
+
+        try {
+            app(GoshenAdminTicketIssuanceService::class)->issue(
+                $member, $ticketType, $admin, 'Front desk registration', 'wallet', null,
+                $challenge, $code, '127.0.0.1', 'PHPUnit',
+            );
+            $this->fail('Expected sold-out ticket validation failure.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('ticket_type_id', $exception->errors());
+        }
+
+        $this->assertSame('pending', $challenge->fresh()->status);
+        $this->assertSame('500.00', $wallet->fresh()->balance);
+        $this->assertSame(1, Booking::query()->count());
+        $this->assertDatabaseCount('goshen_wallet_ledger_entries', 0);
+    }
+
+    public function test_sold_out_ticket_rejects_voucher_without_consuming_it(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $ticketType->forceFill(['capacity' => 1])->save();
+        $other = MobileUser::query()->create([
+            'name' => 'Voucher Reserved Member',
+            'email' => 'voucher-reserved@example.test',
+            'is_verified' => true,
+        ]);
+        $this->reservation($other, $ticketType, 1, BookingStatus::Pending);
+        $code = $this->voucherCode($ticketType, $admin);
+
+        try {
+            app(GoshenAdminTicketIssuanceService::class)->issue(
+                $member,
+                $ticketType,
+                $admin,
+                'Sold out voucher registration',
+                'voucher',
+                $code,
+            );
+            $this->fail('Expected sold-out ticket validation failure.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('ticket_type_id', $exception->errors());
+        }
+
+        $this->assertSame(1, Booking::query()->count());
+        $this->assertDatabaseCount('goshen_voucher_usages', 0);
+        $this->assertDatabaseCount((new PaymentTransaction)->getTable(), 0);
+    }
+
     public function test_admin_cannot_issue_a_duplicate_ticket_for_the_same_member_event_and_type(): void
     {
         [$member, $ticketType, $admin] = $this->issuanceFixture();
@@ -605,6 +788,35 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             'amount' => $ticketType->price,
             'max_uses' => 1,
         ], adminActor: $admin)['code'];
+    }
+
+    private function reservation(
+        MobileUser $member,
+        EventTicketType $ticketType,
+        int $quantity,
+        BookingStatus $status,
+    ): Booking {
+        $booking = Booking::query()->create([
+            'event_id' => $ticketType->event_id,
+            'customer_id' => $member->id,
+            'customer_name' => $member->name,
+            'customer_email' => $member->email,
+            'currency' => $ticketType->currency,
+            'subtotal' => (float) $ticketType->price * $quantity,
+            'total' => (float) $ticketType->price * $quantity,
+            'paid_total' => 0,
+            'status' => $status,
+        ]);
+        BookingLine::query()->create([
+            'booking_id' => $booking->id,
+            'ticket_type_id' => $ticketType->id,
+            'quantity' => $quantity,
+            'currency' => $ticketType->currency,
+            'unit_price' => $ticketType->price,
+            'line_total' => (float) $ticketType->price * $quantity,
+        ]);
+
+        return $booking;
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Services\GoshenAccommodationEligibility;
 use App\Services\GoshenBookingLifecycleService;
 use App\Services\GoshenReferralService;
 use App\Services\GoshenRegistrationFieldService;
+use App\Services\GoshenRegistrationAvailabilityService;
 use App\Services\GoshenRetreatNotificationService;
 use App\Services\GoshenSingleFullPaymentService;
 use App\Services\GoshenVoucherService;
@@ -1016,6 +1017,7 @@ class GoshenRetreatController extends Controller
         WalletSecurityResetService $walletSecurityResets,
         GoshenReferralService $referrals,
         GoshenVoucherService $vouchers,
+        GoshenRegistrationAvailabilityService $availability,
     ): JsonResponse {
         abort_unless($this->enabled(), 404, 'Goshen Retreat is not currently available.');
 
@@ -1098,7 +1100,7 @@ class GoshenRetreatController extends Controller
         }
 
         try {
-            return DB::transaction(function () use ($validated, $actor, $user, $ticketIssuer, $wallets, $walletSecurityResets, $referrals, $vouchers): JsonResponse {
+            return DB::transaction(function () use ($validated, $actor, $user, $ticketIssuer, $wallets, $walletSecurityResets, $referrals, $vouchers, $availability): JsonResponse {
                 $event = $this->goshenEventsQuery()
                     ->where('public_id', $validated['event_id'])
                     ->where('status', 'published')
@@ -1162,6 +1164,18 @@ class GoshenRetreatController extends Controller
                     return response()->json([
                         'status' => 'error',
                         'message' => "Please register at least {$ticketType->min_per_booking} attendee(s) for this ticket type.",
+                    ], 422);
+                }
+
+                try {
+                    [$user, $ticketType] = $availability
+                        ->lockAndAssertAvailable($user, $ticketType, $quantity);
+                } catch (ValidationException $exception) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => collect($exception->errors())->flatten()->first()
+                            ?: 'This retreat ticket is no longer available.',
+                        'errors' => $exception->errors(),
                     ], 422);
                 }
 

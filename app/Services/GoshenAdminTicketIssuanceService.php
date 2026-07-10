@@ -8,7 +8,6 @@ use App\Models\WebWalletVerificationChallenge;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Personal\EventInstallments\Enums\BookingStatus;
-use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Models\Attendee;
 use Personal\EventInstallments\Models\Booking;
 use Personal\EventInstallments\Models\BookingLine;
@@ -21,6 +20,7 @@ class GoshenAdminTicketIssuanceService
 {
     public function __construct(
         private readonly GoshenSingleFullPaymentService $fullPayments,
+        private readonly GoshenRegistrationAvailabilityService $availability,
         private readonly GoshenVoucherService $vouchers,
         private readonly LinkedMobileAccountService $linkedAccounts,
         private readonly WebWalletVerificationService $walletVerification,
@@ -39,7 +39,18 @@ class GoshenAdminTicketIssuanceService
     ): array {
         return [
             'recipient_id' => (int) $member->getKey(),
+            'recipient_context_hash' => hash('sha256', json_encode([
+                'id' => (int) $member->getKey(),
+                'email' => strtolower(trim((string) $member->email)),
+                'verified' => (bool) $member->is_verified,
+                'blocked' => (bool) $member->is_blocked,
+                'deleted' => (bool) $member->is_deleted,
+            ], JSON_THROW_ON_ERROR)),
             'event_id' => (int) $ticketType->event_id,
+            'event_context_hash' => hash('sha256', json_encode([
+                'id' => (int) $ticketType->event_id,
+                'status' => (string) $ticketType->event?->status,
+            ], JSON_THROW_ON_ERROR)),
             'ticket_type_id' => (int) $ticketType->getKey(),
             'amount' => number_format(round((float) $ticketType->price, 2), 2, '.', ''),
             'currency' => strtoupper((string) $ticketType->currency),
@@ -81,25 +92,33 @@ class GoshenAdminTicketIssuanceService
             ]);
         }
 
-        $payer = $this->linkedAccounts->forAdmin($admin);
+        $admin = User::query()->findOrFail($admin->getKey());
+        $payer = null;
+        $authorizedWalletContext = null;
 
         if ($paymentMethod === 'wallet') {
-            $preflightMember = MobileUser::query()->findOrFail($member->getKey());
-            $preflightTicketType = EventTicketType::query()
-                ->with('event')
-                ->findOrFail($ticketType->getKey());
-            $this->assertIssuanceIsValid($preflightMember, $preflightTicketType);
+            [$preflightMember, $preflightTicketType] = $this->availability
+                ->lockAndAssertAvailable($member, $ticketType, 1);
+            $this->assertPositiveListPrice($preflightTicketType);
+            $authorizedWalletContext = $this->verificationContext(
+                $preflightMember,
+                $preflightTicketType,
+                $reason,
+            );
+            $payer = $this->linkedAccounts->forAdmin($admin);
             $this->assertWalletRequestCanProceed($admin, $payer, $challenge, $walletCode);
             $this->walletVerification->consume(
                 $challenge,
                 $admin,
                 $payer,
                 'admin_ticket_issue',
-                $this->verificationContext($member, $ticketType, $reason),
+                $authorizedWalletContext,
                 trim((string) $walletCode),
                 $ip,
                 $userAgent,
             );
+        } else {
+            $payer = $this->linkedAccounts->forAdmin($admin);
         }
 
         try {
@@ -111,14 +130,27 @@ class GoshenAdminTicketIssuanceService
                 $paymentMethod,
                 $voucherCode,
                 $payer,
+                $authorizedWalletContext,
             ): Ticket {
-                $member = MobileUser::query()->lockForUpdate()->findOrFail($member->getKey());
-                $ticketType = EventTicketType::query()
-                    ->with('event')
-                    ->lockForUpdate()
-                    ->findOrFail($ticketType->getKey());
+                if ($paymentMethod === 'wallet') {
+                    $admin = User::query()->whereKey($admin->id)->lockForUpdate()->firstOrFail();
+                }
 
-                $this->assertIssuanceIsValid($member, $ticketType);
+                [$member, $ticketType] = $this->availability
+                    ->lockAndAssertAvailable($member, $ticketType, 1);
+                $this->assertPositiveListPrice($ticketType);
+
+                if ($paymentMethod === 'wallet') {
+                    $currentContext = $this->verificationContext($member, $ticketType, $reason);
+                    if (! hash_equals(
+                        $this->walletVerification->fingerprint($authorizedWalletContext ?? []),
+                        $this->walletVerification->fingerprint($currentContext),
+                    )) {
+                        throw ValidationException::withMessages([
+                            'wallet_otp' => 'The ticket request changed after wallet verification. Request a new code.',
+                        ]);
+                    }
+                }
 
                 $listPrice = round((float) $ticketType->price, 2);
                 $currency = strtoupper((string) $ticketType->currency);
@@ -251,36 +283,11 @@ class GoshenAdminTicketIssuanceService
         }
     }
 
-    private function assertIssuanceIsValid(MobileUser $member, EventTicketType $ticketType): void
+    private function assertPositiveListPrice(EventTicketType $ticketType): void
     {
-        if (! $member->canUseCommunity()) {
-            throw ValidationException::withMessages([
-                'customer_id' => 'Tickets can only be issued to active verified app members.',
-            ]);
-        }
-
-        if (! $ticketType->is_active || ! $ticketType->event || $ticketType->event->status !== 'published') {
-            throw ValidationException::withMessages([
-                'ticket_type_id' => 'Select an active ticket type for an available retreat edition.',
-            ]);
-        }
-
         if (round((float) $ticketType->price, 2) <= 0) {
             throw ValidationException::withMessages([
                 'ticket_type_id' => 'Admin-issued tickets must have a positive listed price.',
-            ]);
-        }
-
-        $duplicateExists = Ticket::query()
-            ->where('event_id', $ticketType->event_id)
-            ->where('ticket_type_id', $ticketType->id)
-            ->where('status', '!=', TicketStatus::Cancelled->value)
-            ->whereHas('booking', fn ($query) => $query->where('customer_id', $member->id))
-            ->exists();
-
-        if ($duplicateExists) {
-            throw ValidationException::withMessages([
-                'customer_id' => 'This member already has this ticket type for the selected retreat edition.',
             ]);
         }
     }

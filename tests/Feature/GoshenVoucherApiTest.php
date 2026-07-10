@@ -6,13 +6,17 @@ use App\Models\AppSetting;
 use App\Models\GoshenVoucher;
 use App\Models\GoshenVoucherUsage;
 use App\Models\MobileUser;
+use App\Models\User;
+use App\Services\GoshenAdminTicketIssuanceService;
 use App\Services\GoshenVoucherService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\EventType;
 use Personal\EventInstallments\Enums\InstallmentStatus;
 use Personal\EventInstallments\Models\Attendee;
 use Personal\EventInstallments\Models\Booking;
+use Personal\EventInstallments\Models\BookingLine;
 use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\EventSchedule;
 use Personal\EventInstallments\Models\EventTicketType;
@@ -84,6 +88,86 @@ class GoshenVoucherApiTest extends TestCase
 
         $this->assertSame(1, GoshenVoucherUsage::query()->count());
         $this->assertSame(0, Booking::query()->where('customer_id', $secondMember->id)->count());
+    }
+
+    public function test_admin_reservation_blocks_mobile_registration_without_consuming_voucher(): void
+    {
+        $member = $this->verifiedMember('admin-reserved@example.test', 'Admin Reserved', '+2348011116677');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 90);
+        $code = $this->voucherCode($event, 90);
+        $booking = Booking::query()->create([
+            'event_id' => $event->id,
+            'customer_id' => $member->id,
+            'customer_name' => $member->name,
+            'customer_email' => $member->email,
+            'currency' => 'NGN',
+            'subtotal' => 90,
+            'total' => 90,
+            'paid_total' => 0,
+            'status' => BookingStatus::Pending,
+            'metadata' => ['source' => 'filament_admin'],
+        ]);
+        BookingLine::query()->create([
+            'booking_id' => $booking->id,
+            'ticket_type_id' => $ticketType->id,
+            'quantity' => 1,
+            'currency' => 'NGN',
+            'unit_price' => 90,
+            'line_total' => 90,
+        ]);
+
+        $this->postJson('/api/goshen-retreat/bookings', [
+            'data' => $this->bookingPayload($member->issueApiToken(), $event, $ticketType, [
+                'payment_mode' => 'voucher',
+                'voucher_code' => $code,
+            ]),
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('status', 'error');
+
+        $this->assertSame(1, Booking::query()->where('customer_id', $member->id)->count());
+        $this->assertDatabaseCount('goshen_voucher_usages', 0);
+        $this->assertSame(GoshenVoucher::STATUS_ACTIVE, GoshenVoucher::query()->firstOrFail()->status);
+    }
+
+    public function test_mobile_pending_reservation_blocks_admin_issuance(): void
+    {
+        $member = $this->verifiedMember('mobile-reserved@example.test', 'Mobile Reserved', '+2348011116688');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 95);
+
+        $this->postJson('/api/goshen-retreat/bookings', [
+            'data' => $this->bookingPayload($member->issueApiToken(), $event, $ticketType, [
+                'payment_mode' => 'outright',
+            ]),
+        ])
+            ->assertOk()
+            ->assertJsonPath('booking.status', BookingStatus::Pending->value);
+
+        $admin = User::factory()->create();
+        $code = app(GoshenVoucherService::class)->createVoucher([
+            'event_id' => $event->id,
+            'currency' => 'NGN',
+            'amount' => 95,
+            'max_uses' => 1,
+        ], adminActor: $admin)['code'];
+
+        try {
+            app(GoshenAdminTicketIssuanceService::class)->issue(
+                $member,
+                $ticketType,
+                $admin,
+                'Duplicate admin attempt',
+                'voucher',
+                $code,
+            );
+            $this->fail('Expected mobile reservation to block admin issuance.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('customer_id', $exception->errors());
+        }
+
+        $this->assertSame(1, Booking::query()->where('customer_id', $member->id)->count());
+        $this->assertDatabaseCount('goshen_voucher_usages', 0);
+        $this->assertDatabaseCount('ei_tickets', 0);
     }
 
     public function test_event_manager_can_generate_vouchers_and_view_usage(): void

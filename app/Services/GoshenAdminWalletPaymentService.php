@@ -39,6 +39,7 @@ class GoshenAdminWalletPaymentService
             $beneficiary,
             $admin,
         ): PaymentTransaction {
+            $admin = User::query()->whereKey($admin->id)->lockForUpdate()->firstOrFail();
             $booking = Booking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
             $fullPaymentRecord = PaymentInstallment::query()
                 ->whereKey($fullPaymentRecord->id)
