@@ -23,6 +23,7 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+/.worktrees/
 
 # Local Codex / deployment scratch output
 /__codex_tmp_*/
