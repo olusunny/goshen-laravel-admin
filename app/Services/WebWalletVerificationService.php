@@ -66,23 +66,40 @@ final class WebWalletVerificationService
             throw new RuntimeException('The wallet verification email could not be sent.', previous: $exception);
         }
 
-        DB::transaction(function () use ($challenge, $admin, $payer, $purpose, $ip): void {
-            WebWalletVerificationChallenge::query()
+        DB::transaction(function () use ($challenge, $admin, $payer, $email, $purpose, $ip): void {
+            User::query()->lockForUpdate()->findOrFail($admin->id);
+
+            $matchingPending = WebWalletVerificationChallenge::query()
                 ->where('user_id', $admin->id)
                 ->where('mobile_user_id', $payer->id)
+                ->where('email', $email)
                 ->where('purpose', $purpose)
-                ->where('status', 'pending')
-                ->whereKeyNot($challenge->id)
+                ->where('status', 'pending');
+
+            $sentAttributes = [
+                'send_count' => 1,
+                'last_sent_at' => now(),
+                'last_sent_ip' => $ip,
+            ];
+
+            if ((clone $matchingPending)->where('id', '>', $challenge->id)->exists()) {
+                $challenge->forceFill($sentAttributes + [
+                    'status' => 'superseded',
+                    'superseded_at' => now(),
+                ])->save();
+
+                return;
+            }
+
+            (clone $matchingPending)
+                ->where('id', '<', $challenge->id)
                 ->update([
                     'status' => 'superseded',
                     'superseded_at' => now(),
                 ]);
 
-            $challenge->forceFill([
+            $challenge->forceFill($sentAttributes + [
                 'status' => 'pending',
-                'send_count' => 1,
-                'last_sent_at' => now(),
-                'last_sent_ip' => $ip,
             ])->save();
         });
 
@@ -110,9 +127,14 @@ final class WebWalletVerificationService
 
             if ($invalid || ! Hash::check(trim($code), $locked->code_hash)) {
                 $attempts = $locked->attempts + 1;
+                $status = $locked->status;
+                if ($status === 'pending') {
+                    $status = $attempts >= 5 ? 'locked' : ($locked->expires_at?->isPast() ? 'expired' : 'pending');
+                }
+
                 $locked->forceFill([
                     'attempts' => $attempts,
-                    'status' => $attempts >= 5 ? 'locked' : ($locked->expires_at?->isPast() ? 'expired' : $locked->status),
+                    'status' => $status,
                     'last_failed_at' => now(),
                     'last_failed_ip' => $ip,
                 ])->save();

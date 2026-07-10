@@ -132,6 +132,63 @@ class WebWalletVerificationTest extends TestCase
         }
     }
 
+    public function test_newer_challenge_remains_pending_when_older_email_finishes_last(): void
+    {
+        [$admin, $payer, $context] = $this->challengeFixture();
+        $service = null;
+        $newer = null;
+        $sendCount = 0;
+
+        $this->mock(DynamicSmtpMailer::class, function (MockInterface $mock) use (&$service, &$newer, &$sendCount, $admin, $payer, $context): void {
+            $mock->shouldReceive('sendRaw')->twice()->andReturnUsing(
+                function (string $to, string $subject, string $body) use (&$service, &$newer, &$sendCount, $admin, $payer, $context): void {
+                    $sendCount++;
+                    if ($sendCount === 1) {
+                        $newer = $service->issue($admin, $payer, 'admin_ticket_issue', $context, '127.0.0.2', 'PHPUnit B');
+                    }
+                },
+            );
+        });
+        $service = app(WebWalletVerificationService::class);
+
+        $older = $service->issue($admin, $payer, 'admin_ticket_issue', $context, '127.0.0.1', 'PHPUnit A');
+
+        $this->assertNotNull($newer);
+        $this->assertGreaterThan($older->id, $newer->id);
+        $this->assertSame('superseded', $older->fresh()->status);
+        $this->assertSame('pending', $newer->fresh()->status);
+    }
+
+    public function test_invalid_attempts_do_not_overwrite_terminal_challenge_statuses(): void
+    {
+        [$admin, $payer, $context] = $this->challengeFixture();
+        $service = app(WebWalletVerificationService::class);
+
+        foreach (['consumed', 'superseded', 'delivery_failed'] as $status) {
+            $challenge = WebWalletVerificationChallenge::query()->create([
+                'user_id' => $admin->id,
+                'mobile_user_id' => $payer->id,
+                'email' => strtolower($admin->email),
+                'purpose' => 'admin_ticket_issue',
+                'context' => $context,
+                'context_fingerprint' => $service->fingerprint($context),
+                'code_hash' => Hash::make('123456'),
+                'status' => $status,
+                'expires_at' => now()->addMinutes(10),
+            ]);
+
+            foreach (range(1, 5) as $attempt) {
+                try {
+                    $service->consume($challenge->fresh(), $admin, $payer, 'admin_ticket_issue', $context, '000000', '127.0.0.1', 'PHPUnit');
+                } catch (ValidationException) {
+                }
+            }
+
+            $this->assertSame($status, $challenge->fresh()->status);
+            $this->assertSame(5, $challenge->fresh()->attempts);
+        }
+    }
+
     /**
      * @return array{User, MobileUser, array<string, int|string>}
      */
