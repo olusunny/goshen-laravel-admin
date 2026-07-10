@@ -186,8 +186,7 @@ class GoshenWalletVoucherWithdrawalTest extends TestCase
 
     private function wallet(MobileUser $member, float $balance): GoshenWallet
     {
-        return GoshenWallet::query()->create([
-            'mobile_user_id' => $member->id,
+        return GoshenWallet::query()->updateOrCreate(['mobile_user_id' => $member->id], [
             'currency' => 'GBP',
             'balance' => $balance,
         ]);

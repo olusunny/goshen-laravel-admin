@@ -22,8 +22,10 @@ class GoshenVoucherService
 {
     private const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-    public function __construct(private readonly PaymentSettlementService $settlement)
-    {
+    public function __construct(
+        private readonly PaymentSettlementService $settlement,
+        private readonly GoshenSingleFullPaymentService $fullPayments,
+    ) {
     }
 
     public function normalizeCode(string $code): string
@@ -151,6 +153,8 @@ class GoshenVoucherService
                 ->where('booking_id', $booking->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            $this->fullPayments->assertPayable($booking, $installment);
 
             $bookingStatus = $booking->status?->value ?? (string) $booking->status;
             if (in_array($bookingStatus, [BookingStatus::Paid->value, BookingStatus::Cancelled->value, BookingStatus::Refunded->value], true)) {

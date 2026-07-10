@@ -12,6 +12,7 @@ use App\Services\GoshenBookingLifecycleService;
 use App\Services\GoshenReferralService;
 use App\Services\GoshenRegistrationFieldService;
 use App\Services\GoshenRetreatNotificationService;
+use App\Services\GoshenSingleFullPaymentService;
 use App\Services\GoshenVoucherService;
 use App\Services\GoshenWalletService;
 use App\Services\WalletSecurityResetService;
@@ -1332,26 +1333,20 @@ class GoshenRetreatController extends Controller
                 }
 
                 if (! $isFreeRegistration) {
-                    $installment = PaymentInstallment::query()->create([
-                        'booking_id' => $booking->id,
-                        'sequence' => 1,
-                        'currency' => $booking->currency,
-                        'amount' => $total,
-                        'paid_amount' => 0,
-                        'due_on' => now()->toDateString(),
-                        'status' => InstallmentStatus::Pending,
-                        'metadata' => [
+                    $installment = app(GoshenSingleFullPaymentService::class)->createForBooking($booking);
+                    $installment->forceFill([
+                        'metadata' => array_merge($installment->metadata ?? [], [
                             'payment_mode' => $paymentMode,
                             'label' => $optionFeeTotal > 0
                                 ? 'Full ticket and selected option payment'
                                 : ($discount['amount'] > 0 ? 'Full ticket payment after discount' : 'Full ticket payment'),
                             'discount_amount' => $discount['amount'],
                             'selected_option_fee_total' => $optionFeeTotal,
-                        ],
-                    ]);
+                        ]),
+                    ])->save();
                 }
-
                 if (! $isFreeRegistration && $paymentMode === 'wallet') {
+                    app(GoshenSingleFullPaymentService::class)->assertPayable($booking, $installment);
                     $wallet = $wallets->walletFor($user);
                     $wallet = GoshenWallet::query()->whereKey($wallet->id)->lockForUpdate()->firstOrFail();
 
@@ -1766,21 +1761,14 @@ class GoshenRetreatController extends Controller
                     throw new RuntimeException('This registration is not open for wallet payment.');
                 }
 
-                $total = (float) $booking->total;
-                $alreadyPaid = max((float) $booking->paid_total, (float) $booking->installments->sum('paid_amount'));
-                $amountDue = round(max(0, $total - $alreadyPaid), 2);
-
-                if ($amountDue <= 0) {
-                    $booking->forceFill([
-                        'paid_total' => $total,
-                        'status' => BookingStatus::Paid,
-                        'payment_expires_at' => null,
-                    ])->save();
-                    $ticketIssuer->issueForBooking($booking->refresh());
-                    $referrals->createPendingAwardForPaidBooking($booking->refresh());
-
-                    return $booking;
+                $installment = $booking->installments->first();
+                if (! $installment) {
+                    throw new RuntimeException('This registration does not have one complete payment record.');
                 }
+
+                app(GoshenSingleFullPaymentService::class)->assertPayable($booking, $installment);
+                $total = (float) $booking->total;
+                $amountDue = $total;
 
                 $wallet = $wallets->walletFor($user);
                 $wallet = GoshenWallet::query()->whereKey($wallet->id)->lockForUpdate()->firstOrFail();
@@ -1812,27 +1800,6 @@ class GoshenRetreatController extends Controller
                     ],
                     'settled_at' => now(),
                 ]);
-
-                $installment = $booking->installments()
-                    ->where('status', '!=', InstallmentStatus::Paid->value)
-                    ->orderBy('sequence')
-                    ->first();
-
-                if (! $installment) {
-                    $installment = PaymentInstallment::query()->create([
-                        'booking_id' => $booking->id,
-                        'sequence' => 1,
-                        'currency' => $booking->currency,
-                        'amount' => $amountDue,
-                        'paid_amount' => 0,
-                        'due_on' => now()->toDateString(),
-                        'status' => InstallmentStatus::Pending,
-                        'metadata' => [
-                            'payment_mode' => 'wallet',
-                            'label' => 'Full ticket payment',
-                        ],
-                    ]);
-                }
 
                 $installment->forceFill([
                     'paid_amount' => (float) $installment->amount,
@@ -2033,19 +2000,16 @@ class GoshenRetreatController extends Controller
             ], 422);
         }
 
-        $installment = $bookingModel->installments()
-            ->where('status', '!=', InstallmentStatus::Paid->value)
-            ->orderBy('sequence')
-            ->first();
-
+        $installment = $bookingModel->installments()->orderBy('sequence')->first();
         if (! $installment) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'This registration does not have an outstanding payment.',
+                'message' => 'This registration does not have one complete payment record.',
             ], 422);
         }
 
         try {
+            app(GoshenSingleFullPaymentService::class)->assertPayable($bookingModel, $installment);
             $vouchers->redeemForBooking(
                 $bookingModel,
                 $installment,
@@ -2252,6 +2216,8 @@ class GoshenRetreatController extends Controller
         }
 
         try {
+            app(GoshenSingleFullPaymentService::class)->assertPayable($booking, $installment);
+
             if ($existingCheckout = $this->activeCheckoutPayloadFor($installment)) {
                 return response()->json([
                     'status' => 'ok',
@@ -2283,6 +2249,11 @@ class GoshenRetreatController extends Controller
                     'payload' => $checkout->payload,
                 ],
             ]);
+        } catch (RuntimeException $exception) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $exception->getMessage(),
+            ], 422);
         } catch (Throwable $exception) {
             report($exception);
 

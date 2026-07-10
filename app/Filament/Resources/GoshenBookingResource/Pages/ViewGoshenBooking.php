@@ -4,6 +4,7 @@ namespace App\Filament\Resources\GoshenBookingResource\Pages;
 
 use App\Filament\Resources\GoshenBookingResource;
 use App\Services\GoshenBookingLifecycleService;
+use App\Services\GoshenSingleFullPaymentService;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -93,11 +94,13 @@ class ViewGoshenBooking extends ViewRecord
                 ->modalHeading('Mark payment as paid')
                 ->modalDescription('Use this only after confirming the offline cash or bank payment. The selected payment record will be recorded as paid.')
                 ->modalSubmitActionLabel('Mark paid')
-                ->action(function (array $data, PaymentSettlementService $settlements): void {
+                ->action(function (array $data, PaymentSettlementService $settlements, GoshenSingleFullPaymentService $fullPayments): void {
                     $installment = $this->record->installments()
                         ->whereKey($data['installment_id'])
                         ->where('status', '!=', InstallmentStatus::Paid->value)
                         ->firstOrFail();
+
+                    $fullPayments->assertPayable($this->record, $installment);
 
                     $transaction = PaymentTransaction::query()->create([
                         'booking_id' => $this->record->id,

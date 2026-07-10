@@ -59,6 +59,8 @@ class PaymentSettlementService
                 return;
             }
 
+            $this->assertSingleFullPayment($booking, $installment, $transaction, $paidAmount, $currency);
+
             if ($currency !== null && strtoupper($currency) !== strtoupper((string) $transaction->currency)) {
                 throw new InvalidArgumentException('Payment currency does not match this installment.');
             }
@@ -84,47 +86,30 @@ class PaymentSettlementService
                     'status' => InstallmentStatus::Paid,
                 ])->save();
 
-                if ((int) $installment->sequence === 1) {
-                    $this->rescheduleFutureInstallments($booking, $installment);
-                }
             }
 
             $booking->refresh();
 
-            $paidTotal = (float) PaymentInstallment::query()
-                ->where('booking_id', $booking->id)
-                ->sum('paid_amount');
-            $paidInstallments = (int) $booking->installments()->where('status', InstallmentStatus::Paid->value)->count();
-            $paymentPlan = $booking->paymentPlan;
-            $bookingStatus = $paidTotal + 0.01 >= (float) $booking->total
-                ? BookingStatus::Paid
-                : ($paidInstallments === 1 ? BookingStatus::DepositPaid : BookingStatus::PartiallyPaid);
-
             $booking->forceFill([
-                'paid_total' => $paidTotal,
-                'status' => $bookingStatus,
+                'paid_total' => (float) $booking->total,
+                'status' => BookingStatus::Paid,
                 'auto_charge_failed_at' => null,
                 'auto_charge_failure_reason' => null,
             ])->save();
 
-            $shouldIssue = $bookingStatus === BookingStatus::Paid
-                || ($paymentPlan?->ticket_issue_policy === 'deposit_paid' && $bookingStatus === BookingStatus::DepositPaid);
+            $createdTickets = $this->ticketIssuer->issueForBooking($booking);
 
-            if ($shouldIssue) {
-                $createdTickets = $this->ticketIssuer->issueForBooking($booking);
+            if (config('event-installments.ticket.email.enabled', true)) {
+                $ticketIds = collect($createdTickets)->pluck('id')->all();
 
-                if (config('event-installments.ticket.email.enabled', true)) {
-                    $ticketIds = collect($createdTickets)->pluck('id')->all();
-
-                    DB::afterCommit(function () use ($ticketIds) {
-                        Ticket::query()->whereKey($ticketIds)->get()->each(
-                            fn (Ticket $ticket) => $this->notifications->sendTicket($ticket),
-                        );
-                    });
-                }
+                DB::afterCommit(function () use ($ticketIds) {
+                    Ticket::query()->whereKey($ticketIds)->get()->each(
+                        fn (Ticket $ticket) => $this->notifications->sendTicket($ticket),
+                    );
+                });
             }
 
-            if ($bookingStatus === BookingStatus::Paid && class_exists(\App\Services\GoshenReferralService::class)) {
+            if (class_exists(\App\Services\GoshenReferralService::class)) {
                 app(\App\Services\GoshenReferralService::class)->createPendingAwardForPaidBooking(
                     $booking->fresh(['event', 'attendees']),
                 );
@@ -132,28 +117,43 @@ class PaymentSettlementService
         });
     }
 
-    private function rescheduleFutureInstallments(Booking $booking, PaymentInstallment $paidInstallment): void
+    private function assertSingleFullPayment(
+        Booking $booking,
+        ?PaymentInstallment $record,
+        PaymentTransaction $transaction,
+        ?float $paidAmount,
+        ?string $currency,
+    ): void
     {
-        $paymentPlan = $booking->paymentPlan;
-
-        if (! $paymentPlan || (int) $paymentPlan->interval_days < 1) {
-            return;
+        if (! $record || $booking->payment_plan_id !== null) {
+            throw new InvalidArgumentException('This registration must use one complete payment without a payment plan.');
         }
 
-        $anchor = $paidInstallment->paid_at ?: now();
-        $intervalDays = (int) $paymentPlan->interval_days;
+        $recordCount = (int) PaymentInstallment::query()->where('booking_id', $booking->id)->count();
+        $effectiveAmount = $paidAmount !== null && $paidAmount > 0 ? $paidAmount : (float) $transaction->amount;
+        $expectedCurrency = strtoupper((string) $booking->currency);
+        $suppliedCurrency = strtoupper((string) ($currency ?? $transaction->currency));
+        $bookingStatus = $booking->status instanceof BookingStatus
+            ? $booking->status
+            : BookingStatus::tryFrom((string) $booking->status);
 
-        $booking->installments()
-            ->where('sequence', '>', (int) $paidInstallment->sequence)
-            ->whereIn('status', [InstallmentStatus::Pending->value, InstallmentStatus::Failed->value])
-            ->orderBy('sequence')
-            ->get()
-            ->each(function (PaymentInstallment $futureInstallment) use ($anchor, $intervalDays): void {
-                $futureInstallment->forceFill([
-                    'due_on' => $anchor->copy()->addDays(((int) $futureInstallment->sequence - 1) * $intervalDays)->toDateString(),
-                    'status' => InstallmentStatus::Pending,
-                ])->save();
-            });
+        if ($recordCount !== 1
+            || (int) $record->sequence !== 1
+            || (int) $transaction->booking_id !== (int) $booking->id
+            || (int) $transaction->installment_id !== (int) $record->id
+            || (float) $booking->total <= 0
+            || (float) $booking->paid_total > 0.0001
+            || (float) $record->paid_amount > 0.0001
+            || abs((float) $record->amount - (float) $booking->total) > 0.009
+            || abs((float) $transaction->amount - (float) $booking->total) > 0.009
+            || abs($effectiveAmount - (float) $booking->total) > 0.009
+            || strtoupper((string) $record->currency) !== $expectedCurrency
+            || strtoupper((string) $transaction->currency) !== $expectedCurrency
+            || $suppliedCurrency !== $expectedCurrency
+            || in_array($bookingStatus, [BookingStatus::DepositPaid, BookingStatus::PartiallyPaid], true)
+            || (bool) data_get($booking->metadata, 'legacy_payment_review_required', false)) {
+            throw new InvalidArgumentException('Only one complete payment for the full registration total can be settled.');
+        }
     }
 
     public function markFailed(PaymentTransaction $transaction, string $reason): void

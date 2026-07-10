@@ -12,6 +12,8 @@ use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentPlan;
 use Personal\EventInstallments\Models\PaymentTransaction;
+use Personal\EventInstallments\Services\PaymentSettlementService;
+use InvalidArgumentException;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -75,6 +77,33 @@ class GoshenSingleFullPaymentTest extends TestCase
 
         $this->assertFalse($config['api_routes_enabled']);
         $this->assertFalse($config['admin_routes_enabled']);
+    }
+
+    public function test_package_settlement_rejects_a_partial_transaction_without_changing_financial_state(): void
+    {
+        $booking = $this->booking(total: 250);
+        $record = $this->paymentRecord($booking, amount: 250);
+        $transaction = PaymentTransaction::query()->create([
+            'booking_id' => $booking->id,
+            'installment_id' => $record->id,
+            'gateway' => 'stripe',
+            'provider_reference' => 'partial_' . $booking->id,
+            'currency' => 'NGN',
+            'amount' => 100,
+            'status' => 'pending',
+        ]);
+
+        try {
+            app(PaymentSettlementService::class)->markPaid($transaction, 100, 'NGN');
+            $this->fail('Expected partial settlement to be rejected.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertStringContainsString('complete payment', $exception->getMessage());
+        }
+
+        $this->assertSame('pending', $transaction->fresh()->status);
+        $this->assertSame('0.00', $record->fresh()->paid_amount);
+        $this->assertSame('0.00', $booking->fresh()->paid_total);
+        $this->assertSame(BookingStatus::Pending, $booking->fresh()->status);
     }
 
     public function test_legacy_repair_consolidates_unpaid_rows_and_expires_pending_transactions(): void
