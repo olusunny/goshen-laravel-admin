@@ -6,10 +6,13 @@ use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\InstallmentStatus;
 use Personal\EventInstallments\Models\Booking;
 use Personal\EventInstallments\Models\PaymentInstallment;
+use Personal\EventInstallments\Models\PaymentTransaction;
 use RuntimeException;
 
 class GoshenSingleFullPaymentService
 {
+    private const LOCAL_GATEWAYS = ['null', 'offline', 'voucher', 'wallet'];
+
     public function createForBooking(Booking $booking): PaymentInstallment
     {
         $booking->refresh();
@@ -92,5 +95,76 @@ class GoshenSingleFullPaymentService
         if (in_array($recordStatus, [InstallmentStatus::Paid, InstallmentStatus::Cancelled, InstallmentStatus::Refunded], true)) {
             throw new RuntimeException('This payment record is not open for payment.');
         }
+    }
+
+    public function activeExternalCheckout(PaymentInstallment $record): ?PaymentTransaction
+    {
+        $transactions = $record->transactions()
+            ->whereIn('status', ['pending', 'processing', 'requires_action'])
+            ->whereNotIn('gateway', self::LOCAL_GATEWAYS)
+            ->orderByDesc('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($transactions as $transaction) {
+            if ($this->checkoutHasExpired($transaction)) {
+                $transaction->forceFill([
+                    'status' => 'expired',
+                    'payload' => array_merge($transaction->payload ?: [], [
+                        'expired_locally_at' => now()->toIso8601String(),
+                    ]),
+                ])->save();
+
+                continue;
+            }
+
+            return $transaction;
+        }
+
+        return null;
+    }
+
+    public function assertNoLiveExternalCheckout(PaymentInstallment $record): void
+    {
+        if ($this->activeExternalCheckout($record)) {
+            throw new RuntimeException('A card checkout is already active for this registration. Complete or cancel it before using another payment method.');
+        }
+    }
+
+    public function checkoutPayload(PaymentTransaction $transaction): array
+    {
+        return [
+            'gateway' => (string) $transaction->gateway,
+            'reference' => (string) $transaction->provider_reference,
+            'checkout_url' => $this->checkoutUrl($transaction),
+            'payload' => $transaction->payload ?: [],
+        ];
+    }
+
+    private function checkoutHasExpired(PaymentTransaction $transaction): bool
+    {
+        $expiresAt = data_get($transaction->payload, 'expires_at')
+            ?? data_get($transaction->payload, 'data.expires_at');
+        if ($expiresAt === null || $expiresAt === '') {
+            return false;
+        }
+
+        if (is_numeric($expiresAt)) {
+            return now()->timestamp >= (int) $expiresAt;
+        }
+
+        try {
+            return now()->greaterThanOrEqualTo(\Illuminate\Support\Carbon::parse((string) $expiresAt));
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function checkoutUrl(PaymentTransaction $transaction): ?string
+    {
+        $url = data_get($transaction->payload, 'url')
+            ?? data_get($transaction->payload, 'data.authorization_url');
+
+        return is_string($url) && $url !== '' ? $url : null;
     }
 }

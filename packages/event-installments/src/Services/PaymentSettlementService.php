@@ -24,8 +24,12 @@ class PaymentSettlementService
         DB::transaction(function () use ($transaction, $paidAmount, $currency) {
             $transaction->refresh();
 
-            $installment = $transaction->installment()->lockForUpdate()->first();
             $booking = $transaction->booking()->lockForUpdate()->firstOrFail();
+            $installment = $transaction->installment()
+                ->where('booking_id', $booking->id)
+                ->lockForUpdate()
+                ->first();
+            $transaction = PaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
 
             $bookingStatus = $booking->status instanceof BookingStatus
                 ? $booking->status

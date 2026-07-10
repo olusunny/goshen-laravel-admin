@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\InstallmentStatus;
+use Personal\EventInstallments\Models\Booking;
 use Personal\EventInstallments\Models\PaymentTransaction;
 use Personal\EventInstallments\Services\PaymentSettlementService;
 
@@ -97,16 +98,18 @@ class ViewGoshenBooking extends ViewRecord
                 ->modalSubmitActionLabel('Mark paid')
                 ->action(function (array $data, PaymentSettlementService $settlements, GoshenSingleFullPaymentService $fullPayments): void {
                     DB::transaction(function () use ($data, $settlements, $fullPayments): void {
-                        $installment = $this->record->installments()
+                        $booking = Booking::query()->whereKey($this->record->id)->lockForUpdate()->firstOrFail();
+                        $installment = $booking->installments()
                             ->whereKey($data['installment_id'])
                             ->where('status', '!=', InstallmentStatus::Paid->value)
                             ->lockForUpdate()
                             ->firstOrFail();
 
-                        $fullPayments->assertPayable($this->record, $installment);
+                        $fullPayments->assertPayable($booking, $installment);
+                        $fullPayments->assertNoLiveExternalCheckout($installment);
 
                         $transaction = PaymentTransaction::query()->create([
-                            'booking_id' => $this->record->id,
+                            'booking_id' => $booking->id,
                             'installment_id' => $installment->id,
                             'gateway' => 'offline',
                             'provider_reference' => 'offline_' . Str::ulid(),

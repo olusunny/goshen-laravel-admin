@@ -19,6 +19,7 @@ use Personal\EventInstallments\Services\Gateways\StripeGateway;
 use Personal\EventInstallments\Services\PaymentGatewayManager;
 use Personal\EventInstallments\Services\PaymentSettlementService;
 use Tests\TestCase;
+use RuntimeException;
 
 class GoshenPaymentWebhookSafetyTest extends TestCase
 {
@@ -27,6 +28,7 @@ class GoshenPaymentWebhookSafetyTest extends TestCase
     public function test_successful_webhook_preserves_reusable_card_ids_but_never_enables_booking_auto_charge(): void
     {
         [$booking, $record, $transaction] = $this->pendingPayment();
+        $booking->forceFill(['auto_charge_enabled' => true])->save();
         $gateway = new FakeSafeStripeGateway($this->paidWebhook($transaction, 'evt_paid'));
 
         $result = app(PaymentWebhookController::class)(
@@ -46,6 +48,72 @@ class GoshenPaymentWebhookSafetyTest extends TestCase
         $this->assertSame('paid', $transaction->fresh()->status);
         $this->assertSame('250.00', $record->fresh()->paid_amount);
         $this->assertSame(0, $gateway->refundCalls);
+    }
+
+    public function test_new_late_charge_on_terminal_booking_is_refunded_once_across_distinct_webhook_events(): void
+    {
+        [$booking, $record, $transaction] = $this->pendingPayment();
+        $booking->forceFill(['status' => BookingStatus::Paid, 'paid_total' => 250])->save();
+        $record->forceFill(['status' => InstallmentStatus::Paid, 'paid_amount' => 250, 'paid_at' => now()])->save();
+        $gateway = new FakeSafeStripeGateway($this->paidWebhook($transaction, 'evt_late_1'));
+        $controller = app(PaymentWebhookController::class);
+        $manager = new FakeSafeGatewayManager($gateway);
+
+        $controller('stripe', Request::create('/', 'POST'), $manager, app(PaymentSettlementService::class));
+
+        $this->assertSame(1, $gateway->refundCalls);
+        $this->assertSame('refunded', $transaction->fresh()->status);
+        $this->assertSame('automatic_refund', data_get($transaction->fresh()->payload, 'late_terminal_reconciliation.action'));
+        $this->assertSame(BookingStatus::Paid, $booking->fresh()->status);
+
+        $gateway->webhook = $this->paidWebhook($transaction->fresh(), 'evt_late_2');
+        $controller('stripe', Request::create('/', 'POST'), $manager, app(PaymentSettlementService::class));
+
+        $this->assertSame(1, $gateway->refundCalls);
+        $this->assertCount(2, data_get($transaction->fresh()->payload, 'late_terminal_reconciliation.provider_event_ids'));
+    }
+
+    public function test_duplicate_notification_for_the_legitimate_paid_transaction_is_not_refunded(): void
+    {
+        [$booking, $record, $transaction] = $this->pendingPayment();
+        $booking->forceFill(['status' => BookingStatus::Paid, 'paid_total' => 250])->save();
+        $record->forceFill(['status' => InstallmentStatus::Paid, 'paid_amount' => 250, 'paid_at' => now()])->save();
+        $transaction->forceFill(['status' => 'paid', 'paid_at' => now()])->save();
+        $gateway = new FakeSafeStripeGateway($this->paidWebhook($transaction, 'evt_duplicate_paid'));
+
+        app(PaymentWebhookController::class)(
+            'stripe', Request::create('/', 'POST'), new FakeSafeGatewayManager($gateway), app(PaymentSettlementService::class),
+        );
+
+        $this->assertSame(0, $gateway->refundCalls);
+        $this->assertSame('paid', $transaction->fresh()->status);
+        $this->assertSame('duplicate_notification_no_refund', data_get($transaction->fresh()->payload, 'late_terminal_reconciliation.action'));
+    }
+
+    public function test_failed_late_refund_rolls_back_webhook_and_transaction_for_retry(): void
+    {
+        [$booking, $record, $transaction] = $this->pendingPayment();
+        $booking->forceFill(['status' => BookingStatus::Cancelled])->save();
+        $record->forceFill(['status' => InstallmentStatus::Cancelled])->save();
+        $gateway = new FakeSafeStripeGateway($this->paidWebhook($transaction, 'evt_refund_retry'));
+        $gateway->failRefund = true;
+
+        try {
+            app(PaymentWebhookController::class)(
+                'stripe', Request::create('/', 'POST'), new FakeSafeGatewayManager($gateway), app(PaymentSettlementService::class),
+            );
+            $this->fail('Expected the failed refund to leave the webhook retryable.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('refund failed', $exception->getMessage());
+        }
+
+        $this->assertSame('pending', $transaction->fresh()->status);
+        $this->assertNull($transaction->fresh()->provider_event_id);
+        $this->assertDatabaseMissing('ei_payment_gateway_webhook_events', [
+            'gateway' => 'stripe',
+            'provider_event_id' => 'evt_refund_retry',
+        ]);
+        $this->assertSame(1, $gateway->refundCalls);
     }
 
     /** @return array{0: Booking, 1: PaymentInstallment, 2: PaymentTransaction} */
@@ -128,6 +196,7 @@ class FakeSafeGatewayManager extends PaymentGatewayManager
 class FakeSafeStripeGateway extends StripeGateway
 {
     public int $refundCalls = 0;
+    public bool $failRefund = false;
 
     public function __construct(public VerifiedWebhook $webhook)
     {
@@ -146,6 +215,10 @@ class FakeSafeStripeGateway extends StripeGateway
     public function refund(PaymentTransaction $transaction, float $amount): RefundResult
     {
         $this->refundCalls++;
+
+        if ($this->failRefund) {
+            throw new RuntimeException('Fake refund failed.');
+        }
 
         return new RefundResult('stripe', 're_safe', 'refunded', ['amount' => $amount]);
     }

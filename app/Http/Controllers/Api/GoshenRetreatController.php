@@ -1761,12 +1761,18 @@ class GoshenRetreatController extends Controller
                     throw new RuntimeException('This registration is not open for wallet payment.');
                 }
 
-                $installment = $booking->installments->first();
+                $installment = PaymentInstallment::query()
+                    ->where('booking_id', $booking->id)
+                    ->orderBy('sequence')
+                    ->lockForUpdate()
+                    ->first();
                 if (! $installment) {
                     throw new RuntimeException('This registration does not have one complete payment record.');
                 }
 
-                app(GoshenSingleFullPaymentService::class)->assertPayable($booking, $installment);
+                $fullPayments = app(GoshenSingleFullPaymentService::class);
+                $fullPayments->assertPayable($booking, $installment);
+                $fullPayments->assertNoLiveExternalCheckout($installment);
                 $total = (float) $booking->total;
                 $amountDue = $total;
 
@@ -2216,38 +2222,45 @@ class GoshenRetreatController extends Controller
         }
 
         try {
-            app(GoshenSingleFullPaymentService::class)->assertPayable($booking, $installment);
+            $checkoutPayload = DB::transaction(function () use ($booking, $installment, $gateway): array {
+                $lockedBooking = Booking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+                $lockedRecord = PaymentInstallment::query()
+                    ->whereKey($installment->id)
+                    ->where('booking_id', $lockedBooking->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $fullPayments = app(GoshenSingleFullPaymentService::class);
+                $fullPayments->assertPayable($lockedBooking, $lockedRecord);
 
-            if ($existingCheckout = $this->activeCheckoutPayloadFor($installment)) {
-                return response()->json([
-                    'status' => 'ok',
-                    'message' => 'Checkout is ready. Please complete payment securely.',
-                    'checkout' => $existingCheckout,
+                if ($active = $fullPayments->activeExternalCheckout($lockedRecord)) {
+                    return $fullPayments->checkoutPayload($active);
+                }
+
+                $checkout = $gateway->createCheckout($lockedRecord);
+                $checkoutPayload = $checkout->payload;
+                if ($checkout->checkoutUrl
+                    && ! data_get($checkoutPayload, 'url')
+                    && ! data_get($checkoutPayload, 'data.authorization_url')) {
+                    $checkoutPayload['url'] = $checkout->checkoutUrl;
+                }
+                $transaction = PaymentTransaction::query()->create([
+                    'booking_id' => $lockedBooking->id,
+                    'installment_id' => $lockedRecord->id,
+                    'gateway' => $checkout->gateway,
+                    'provider_reference' => $checkout->reference,
+                    'currency' => $lockedRecord->currency,
+                    'amount' => $lockedRecord->amount,
+                    'status' => 'pending',
+                    'payload' => $checkoutPayload,
                 ]);
-            }
 
-            $checkout = $gateway->createCheckout($installment);
-
-            PaymentTransaction::query()->create([
-                'booking_id' => $booking->id,
-                'installment_id' => $installment->id,
-                'gateway' => $checkout->gateway,
-                'provider_reference' => $checkout->reference,
-                'currency' => $installment->currency,
-                'amount' => $installment->amount,
-                'status' => 'pending',
-                'payload' => $checkout->payload,
-            ]);
+                return $fullPayments->checkoutPayload($transaction);
+            });
 
             return response()->json([
                 'status' => 'ok',
                 'message' => 'Checkout is ready. Please complete payment securely.',
-                'checkout' => [
-                    'gateway' => $checkout->gateway,
-                    'reference' => $checkout->reference,
-                    'checkout_url' => $checkout->checkoutUrl,
-                    'payload' => $checkout->payload,
-                ],
+                'checkout' => $checkoutPayload,
             ]);
         } catch (RuntimeException $exception) {
             return response()->json([

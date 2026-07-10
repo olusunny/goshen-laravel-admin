@@ -155,6 +155,7 @@ class GoshenVoucherService
                 ->firstOrFail();
 
             $this->fullPayments->assertPayable($booking, $installment);
+            $this->fullPayments->assertNoLiveExternalCheckout($installment);
 
             $bookingStatus = $booking->status?->value ?? (string) $booking->status;
             if (in_array($bookingStatus, [BookingStatus::Paid->value, BookingStatus::Cancelled->value, BookingStatus::Refunded->value], true)) {

@@ -50,8 +50,6 @@ class GoshenBookingResource extends Resource
                     Forms\Components\Select::make('status')
                         ->options([
                             'pending' => 'Pending',
-                            'deposit_paid' => 'Deposit paid',
-                            'partially_paid' => 'Partially paid',
                             'paid' => 'Paid',
                             'cancelled' => 'Cancelled',
                             'refunded' => 'Refunded',
