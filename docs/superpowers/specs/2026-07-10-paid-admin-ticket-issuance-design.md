@@ -72,7 +72,7 @@ The verification lifecycle is:
 5. Require the admin to enter the code in the ticket-issuance page. A changed recipient, event, ticket type, payment method, amount, currency, or issuance request invalidates the challenge and requires a new code.
 6. In a short database transaction immediately before financial processing, lock the challenge and verify that it is unexpired, unused, within its attempt limit, and matches the current request fingerprint. Mark it consumed exactly once and commit that state before beginning the wallet-debit transaction.
 
-A code cannot be replayed, used for a different wallet action, or reused after a failed settlement. If email delivery fails, code verification fails, the challenge expires, or the challenge was already consumed, no booking, installment, transaction, wallet ledger entry, or ticket is created.
+A code cannot be replayed, used for a different wallet action, or reused after a failed settlement. If email delivery fails, code verification fails, the challenge expires, or the challenge was already consumed, no booking, full-payment record, transaction, wallet ledger entry, or ticket is created.
 
 Challenge audit data includes issuance, resend, failed verification, expiry, and successful consumption timestamps together with the web admin, payer, masked destination, purpose, IP address, and browser user-agent. The plaintext code is never logged, persisted, placed in URLs, or included in audit metadata.
 
@@ -82,14 +82,32 @@ All financial state changes occur in one database transaction. For wallet paymen
 
 1. Lock and validate the selected recipient, event, and ticket type. Reject blocked/deleted recipients, unpublished events, inactive ticket types, and a duplicate member/event/ticket-type registration.
 2. Create a normal pending booking owned by the recipient. Its subtotal and total equal the listed ticket price, and `paid_total` is zero.
-3. Create the matching booking line, attendee, and a single pending full-payment installment for the full amount.
+3. Create the matching booking line, attendee, and exactly one pending full-payment record for the full amount. The legacy database/model name for this record is `PaymentInstallment`, but it is not a payment schedule: `payment_plan_id` is null, sequence is one, and the amount equals the booking total.
 4. Settle the booking with the selected payment method:
    - **Voucher:** validate and redeem the code through `GoshenVoucherService`. This creates a voucher usage and paid voucher transaction, then calls `PaymentSettlementService`.
    - **Wallet:** require and atomically consume a valid browser wallet verification challenge; resolve and lock only the issuing admin's linked wallet; enforce active status, security-reset guard, currency match, and sufficient balance; debit it; create a paid `retreat_payment` ledger entry and paid wallet transaction with payer and beneficiary references; then call `PaymentSettlementService`.
-5. Rely on `PaymentSettlementService` to mark the installment and booking paid, calculate `paid_total`, issue the QR-backed ticket, send normal post-payment notifications, and execute payment-dependent referral behaviour.
+5. Rely on the guarded full-payment settlement path to mark the payment record and booking paid, calculate `paid_total`, issue the QR-backed ticket, send normal post-payment notifications, and execute payment-dependent referral behaviour. Partial, deposit, or scheduled settlement is rejected.
 6. Add an event audit log and ticket metadata that identify the web admin issuer, recipient, payment method, payment transaction reference, payer mobile-user ID for wallet, voucher usage ID for voucher, and issuance reason.
 
-The issuance service must not set `total` to zero, set a booking to paid directly, invoke `TicketIssuer` directly, set complimentary/waiver metadata, or create a ticket without a corresponding settled payment record.
+The issuance service must not set `total` to zero, set a booking to paid directly, invoke `TicketIssuer` directly, set complimentary/waiver metadata, create a payment plan or future schedule, accept a partial amount, or create a ticket without a corresponding settled full-payment record.
+
+## Single Full-Payment Platform Invariant
+
+The platform allows only one complete payment for each Goshen registration. Wallet funding, savings goals, and wallet auto-top-up remain independent balance-building features; they do not reserve a ticket, create a booking payment schedule, or permit partial registration settlement.
+
+The existing `ei_payment_installments` table and `PaymentInstallment` class remain only because payment transactions, voucher usages, checkout gateways, and reporting already reference that canonical payable row. All application payment paths must enforce:
+
+- `booking.payment_plan_id` is null;
+- exactly one payment record exists for an actionable booking;
+- its sequence is one and its amount/currency match the full booking total/currency;
+- no positive partial `paid_amount` is accepted;
+- a successful payment transaction equals the entire booking total;
+- `paid_total` moves from zero to the full total in one settlement; and
+- tickets are issued only when the booking is paid in full.
+
+Generic package API and admin routes that can create payment plans stay hard-disabled in code, regardless of environment variables. Demo seeders must not create payment plans. Active Goshen endpoints, voucher redemption, wallet payment, card checkout, and offline administrative settlement must all reject legacy multi-row or partial-payment state instead of selecting one arbitrary row.
+
+An idempotent data migration deactivates payment plans and detaches them from bookings. It consolidates only legacy bookings with no completed payment transaction, applied voucher usage, paid payment record, or issued ticket. Cancelled records remain cancelled. Any booking with completed financial history or ambiguous partial state is preserved, marked for manual review, and blocked from further automated settlement; financial history is never deleted or fabricated.
 
 ## Reporting and Data Invariants
 
@@ -97,7 +115,7 @@ For every successful paid admin issuance:
 
 - booking `subtotal` and `total` equal the charged amount;
 - booking `paid_total` equals `total` and status is paid;
-- one installment has the charged amount, paid amount, paid timestamp, and paid status;
+- exactly one canonical full-payment record has the charged amount, paid amount, paid timestamp, and paid status;
 - one paid payment transaction has gateway, amount, currency, timestamp, and reference;
 - voucher payment has a linked `GoshenVoucherUsage` record;
 - wallet payment has a matching wallet debit ledger entry; and
@@ -115,7 +133,9 @@ Focused Laravel tests will cover:
 
 - immediate wallet provisioning for new mobile users and idempotent provisioning for existing users;
 - web-admin/mobile linkage by normalized email without creating a second mobile account or Triumphant ID;
-- voucher issuance creates normal booking, installment, transaction, voucher usage, settlement, ticket, and audit records;
+- voucher issuance creates normal booking, canonical full-payment record, transaction, voucher usage, settlement, ticket, and audit records;
+- all Goshen payment entry points reject payment plans, multiple actionable payment records, and partial settlement;
+- the legacy-data migration safely normalizes only unpaid, unambiguous records and flags any financial-history conflicts for manual review;
 - wallet issuance debits only the issuer's same-email wallet and creates normal ledger, transaction, settlement, ticket, and audit records;
 - browser wallet verification generates only a hashed six-digit challenge, binds it to the exact payment request, enforces expiry/attempt/resend/rate limits, and consumes it once;
 - invalid, expired, replayed, over-attempt, and request-mismatched wallet codes never create or change financial records;

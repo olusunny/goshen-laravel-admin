@@ -4,9 +4,9 @@
 
 **Goal:** Replace complimentary admin ticket creation with voucher or OTP-authorized personal-wallet settlement while automatically linking web admins to one mobile identity, Triumphant ID, and wallet.
 
-**Architecture:** Provision one `MobileUser` and `GoshenWallet` per normalized-email identity, then protect browser wallet spending with a hashed, request-bound, single-use email challenge. The admin issuance service creates a normal pending booking and installment, delegates voucher or wallet settlement through the existing payment system, and relies on `PaymentSettlementService` to mark payment and issue the ticket.
+**Architecture:** Provision one `MobileUser` and `GoshenWallet` per normalized-email identity, then protect browser wallet spending with a hashed, request-bound, single-use email challenge. Preserve the legacy `PaymentInstallment` row only as one canonical full-payment record, hard-disable payment-plan entry points, guard every Goshen payment path against partial or multi-row settlement, and let the admin issuance service settle the complete listed price by voucher or the issuer's wallet.
 
-**Tech Stack:** Laravel 12, Filament 5, Eloquent/MySQL, PHPUnit, Spatie Permission, existing Event Installments package, existing dynamic SMTP service.
+**Tech Stack:** Laravel 12, Filament 5, Eloquent/MySQL, PHPUnit, Spatie Permission, existing event-payment package, existing dynamic SMTP service.
 
 ## Global Constraints
 
@@ -14,12 +14,15 @@
 - Keep `goshen_ticket.issue` as create-only access assignable to any web admin role.
 - Never create a complimentary, waived, zero-total, or zero-payment ticket through admin issuance.
 - Wallet payment must debit only the authenticated web admin's same-email `MobileUser` wallet.
-- Voucher and wallet settlement must create the normal booking, installment, payment transaction, gateway-specific records, ticket, and audit trail.
+- Voucher and wallet settlement must create the normal booking, one canonical full-payment record, payment transaction, gateway-specific records, ticket, and audit trail.
+- Goshen registrations allow one full payment only: no payment plan, deposit, scheduled balance, or partial settlement.
+- Wallet top-ups, savings goals, and auto-top-up remain available but never create or reserve a partially paid registration.
+- The legacy `PaymentInstallment` model/table may remain only as the single canonical payable row required by existing transaction foreign keys and gateway integrations.
 - A normalized email maps to at most one `MobileUser`, one Triumphant ID, and one wallet.
 - Browser wallet spending requires a six-digit numeric email code bound to the exact request, expiring after ten minutes, limited to five attempts, with a sixty-second resend cooldown and hourly send limit.
 - Never persist or log plaintext voucher or OTP codes.
 - Preserve unrelated untracked `.agents/` and `docs/superpowers/` files.
-- Commit and push each independently verified task to `origin/main`; deploy staging before production.
+- Commit each independently verified task on the feature branch; after whole-branch review, merge and push `origin/main`, then deploy staging before production.
 
 ## File Map
 
@@ -31,6 +34,11 @@
 - Create `app/Services/WebWalletVerificationService.php`: sends, rate-limits, verifies, audits, and consumes email codes.
 - Create `database/migrations/2026_07_10_161000_create_web_wallet_verification_challenges_table.php`: challenge storage and indexes.
 - Create `app/Services/GoshenAdminWalletPaymentService.php`: debits the issuer wallet and settles through `PaymentSettlementService`.
+- Create `app/Services/GoshenSingleFullPaymentService.php`: creates and validates the one canonical full-payment record and blocks partial/multi-row settlement.
+- Create `database/migrations/2026_07_10_162000_enforce_single_full_goshen_payments.php`: deactivates plans and safely normalizes only unambiguous unpaid legacy bookings.
+- Modify `config/event-installments.php`: hard-disable generic payment-plan API and admin routes.
+- Modify `database/seeders/GoshenRetreatDemoSeeder.php`: remove payment-plan creation and installment wording/permission grants.
+- Modify active Goshen voucher, wallet, card-checkout, and offline settlement entry points to use the full-payment guard.
 - Modify `app/Services/GoshenAdminTicketIssuanceService.php`: creates normal pending financial records and invokes voucher/wallet settlement.
 - Modify `app/Filament/Resources/GoshenTicketResource.php`: paid payment-method fields and wallet-code controls.
 - Modify `app/Filament/Resources/GoshenTicketResource/Pages/CreateGoshenTicket.php`: sends OTP and passes payment details into issuance.
@@ -525,6 +533,49 @@ git commit -m "Add email verification for web wallet spending"
 git push origin main
 ```
 
+### Task 3A: Enforce One Full Payment and Repair Legacy Plan Records
+
+**Files:**
+- Create: `app/Services/GoshenSingleFullPaymentService.php`
+- Create: `database/migrations/2026_07_10_162000_enforce_single_full_goshen_payments.php`
+- Modify: `config/event-installments.php`
+- Modify: `database/seeders/GoshenRetreatDemoSeeder.php`
+- Modify: `app/Services/GoshenVoucherService.php`
+- Modify: `app/Services/GoshenWalletService.php`
+- Modify: `app/Http/Controllers/Api/GoshenRetreatController.php`
+- Modify: `app/Filament/Resources/GoshenBookingResource/Pages/ViewGoshenBooking.php`
+- Modify package settlement only as needed to make full payment the Goshen invariant.
+- Create: `tests/Feature/GoshenSingleFullPaymentTest.php`
+
+**Interfaces:**
+- Produces: `GoshenSingleFullPaymentService::createForBooking(Booking $booking): PaymentInstallment`
+- Produces: `GoshenSingleFullPaymentService::assertPayable(Booking $booking, PaymentInstallment $record): void`
+- Produces: an idempotent repair that never deletes or invents completed financial history.
+
+- [ ] **Step 1: Write failing invariant tests**
+
+Cover creation of exactly one sequence-one record for the complete booking total with `payment_plan_id=null`; rejection of partial amounts, positive partial `paid_amount`, multiple rows, linked plans, and mismatched currency/amount; and rejection through voucher, wallet, card checkout, and offline settlement entry points. Prove wallet top-ups and savings goals still work and do not create a booking or payment row.
+
+- [ ] **Step 2: Write migration tests for every legacy class**
+
+Cover: unpaid unambiguous multi-row bookings consolidate to one full record; cancelled bookings remain cancelled; all plans become inactive and bookings are detached; pending checkout artifacts are expired/cancelled; completed transactions, applied voucher usage, paid rows, or issued tickets are preserved and marked `legacy_payment_review_required`; repeated migration execution is safe.
+
+- [ ] **Step 3: Implement the full-payment service and guard active entry points**
+
+Retain `PaymentInstallment` only as the existing canonical payable model. Never invoke `PaymentPlanService`. A payable booking must have no plan, one sequence-one row, the full total and currency, zero partial paid amount before settlement, and a transaction for the full amount. Replace all "first unpaid installment" selection in active Goshen payment flows with the guard.
+
+- [ ] **Step 4: Permanently disable plan creation**
+
+Set package API/admin route flags to literal `false`, remove payment-plan creation and installment language/permission grants from the Goshen demo seeder, and add route/config tests proving environment values cannot re-enable plan management.
+
+- [ ] **Step 5: Implement conservative legacy repair**
+
+Deactivate plans, detach bookings, and switch off scheduled auto-charge fields where present. Consolidate only when there is no paid transaction, applied voucher usage, paid row, issued ticket, or positive paid amount. Preserve and flag ambiguous/completed history for manual review. Do not delete payment transactions, voucher usages, tickets, or paid ledger entries.
+
+- [ ] **Step 6: Verify and commit**
+
+Run the focused invariant/migration tests plus existing Goshen booking, voucher, wallet, checkout, reporting, and package settlement regressions. Run `php artisan route:list --path=event-installments --no-ansi`, `php artisan migrate --pretend --no-interaction`, and `git diff --check`. Commit the verified hardening before proceeding to admin issuance.
+
 ### Task 3: Replace Complimentary Issuance with Paid Voucher and Wallet Settlement
 
 **Files:**
@@ -533,7 +584,8 @@ git push origin main
 - Rewrite: `tests/Feature/GoshenAdminTicketIssuanceTest.php`
 
 **Interfaces:**
-- Produces: `GoshenAdminWalletPaymentService::settle(Booking $booking, PaymentInstallment $installment, GoshenWallet $wallet, MobileUser $payer, MobileUser $beneficiary, User $admin): PaymentTransaction`
+- Produces: `GoshenAdminWalletPaymentService::settle(Booking $booking, PaymentInstallment $fullPaymentRecord, GoshenWallet $wallet, MobileUser $payer, MobileUser $beneficiary, User $admin): PaymentTransaction`
+- Consumes: the Task 3A one-full-payment guard; it must not create or accept a plan, deposit, partial amount, or future schedule.
 - Produces: `GoshenAdminTicketIssuanceService::verificationContext(MobileUser $member, EventTicketType $ticketType, string $reason): array`
 - Produces: `GoshenAdminTicketIssuanceService::issue(MobileUser $member, EventTicketType $ticketType, User $admin, string $reason, string $paymentMethod, ?string $voucherCode = null, ?WebWalletVerificationChallenge $challenge = null, ?string $walletCode = null, ?string $ip = null, ?string $userAgent = null): Ticket`
 
@@ -619,7 +671,7 @@ Add a zero-price test and reject admin issuance when the selected ticket price i
 
 Run: `vendor\bin\phpunit.bat tests\Feature\GoshenAdminTicketIssuanceTest.php`
 
-Expected: FAIL because the old service creates `total=0`, no installment/transaction, and directly issues a ticket.
+Expected: FAIL because the old service creates `total=0`, no full-payment record/transaction, and directly issues a ticket.
 
 - [ ] **Step 3: Implement canonical admin wallet settlement**
 
@@ -670,7 +722,7 @@ Call `WalletSecurityResetService::assertWalletActionsAllowed($payer)` before the
 
 - [ ] **Step 4: Rewrite issuance around normal pending financial records**
 
-Before the financial transaction, resolve the admin's linked payer and consume the OTP for wallet payment. Inside one financial transaction create booking `subtotal=total=listPrice`, `paid_total=0`, `status=Pending`; booking line; attendee; and one pending installment for the full amount. For voucher call:
+Before the financial transaction, resolve the admin's linked payer and consume the OTP for wallet payment. Inside one financial transaction create booking `subtotal=total=listPrice`, `paid_total=0`, `status=Pending`, `payment_plan_id=null`; booking line; attendee; and use `GoshenSingleFullPaymentService` to create one pending canonical record for the complete amount. For voucher call:
 
 ```php
 $usage = $this->vouchers->redeemForBooking(
