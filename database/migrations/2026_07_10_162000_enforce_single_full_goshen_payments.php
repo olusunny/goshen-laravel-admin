@@ -13,6 +13,8 @@ return new class extends Migration
             return;
         }
 
+        $this->assertNoLiveExternalCheckoutOnAffectedBookings();
+
         if (Schema::hasTable('ei_payment_plans')) {
             DB::table('ei_payment_plans')->where('is_active', true)->update(['is_active' => false, 'updated_at' => now()]);
         }
@@ -31,6 +33,8 @@ return new class extends Migration
                 return;
             }
 
+            $this->expireSafePendingTransactions((int) $booking->id);
+
             $reasons = $this->reviewReasons($booking, $records);
             if ($reasons !== []) {
                 $this->updateBookingMetadata((int) $booking->id, [
@@ -41,8 +45,6 @@ return new class extends Migration
 
                 return;
             }
-
-            $this->expirePendingTransactions((int) $booking->id);
 
             $status = strtolower((string) $booking->status);
             if (in_array($status, ['cancelled', 'refunded'], true)) {
@@ -121,20 +123,36 @@ return new class extends Migration
     private function reviewReasons(object $booking, $records): array
     {
         $reasons = [];
+        $metadata = $this->decodedJson($booking->metadata ?? null);
+        $repairApproved = ($metadata['single_full_payment_repair_approved'] ?? false) === true;
         if ((float) $booking->paid_total > 0) {
             $reasons[] = 'booking_paid_total';
         }
-        if (in_array(strtolower((string) $booking->status), ['deposit_paid', 'partially_paid', 'refunded'], true)) {
+        $bookingStatus = strtolower((string) $booking->status);
+        if ($bookingStatus === 'paid' && ! $repairApproved) {
+            $reasons[] = 'booking_paid_status';
+        }
+        if (in_array($bookingStatus, ['deposit_paid', 'partially_paid', 'refunded'], true)) {
             $reasons[] = 'booking_financial_status';
         }
         if ($records->contains(fn (object $record): bool => (float) $record->paid_amount > 0 || in_array(strtolower((string) $record->status), ['paid', 'refunded'], true))) {
             $reasons[] = 'payment_record_history';
         }
-        if (Schema::hasTable('ei_payment_transactions') && DB::table('ei_payment_transactions')
-            ->where('booking_id', $booking->id)
-            ->whereIn('status', ['paid', 'succeeded', 'completed', 'refunded', 'partially_refunded'])
-            ->exists()) {
-            $reasons[] = 'completed_transaction';
+        if (Schema::hasTable('ei_payment_transactions')) {
+            $hasCompletedTransaction = DB::table('ei_payment_transactions')
+                ->where('booking_id', $booking->id)
+                ->pluck('status')
+                ->contains(function (mixed $status): bool {
+                    $status = strtolower((string) $status);
+
+                    return in_array($status, [
+                        'paid', 'succeeded', 'success', 'successful', 'completed', 'captured',
+                        'settled', 'refunded', 'partially_refunded', 'duplicate_paid',
+                    ], true) || str_starts_with($status, 'paid_after_');
+                });
+            if ($hasCompletedTransaction) {
+                $reasons[] = 'completed_transaction';
+            }
         }
         if (Schema::hasTable('goshen_voucher_usages') && DB::table('goshen_voucher_usages')
             ->where('booking_id', $booking->id)
@@ -149,7 +167,38 @@ return new class extends Migration
         return array_values(array_unique($reasons));
     }
 
-    private function expirePendingTransactions(int $bookingId): void
+    private function assertNoLiveExternalCheckoutOnAffectedBookings(): void
+    {
+        if (! Schema::hasTable('ei_payment_transactions')) {
+            return;
+        }
+
+        $planBookingIds = DB::table('ei_bookings')->whereNotNull('payment_plan_id')->pluck('id');
+        $multiRecordBookingIds = DB::table('ei_payment_installments')
+            ->select('booking_id')
+            ->groupBy('booking_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->pluck('booking_id');
+        $affectedBookingIds = $planBookingIds->merge($multiRecordBookingIds)->unique()->values();
+        if ($affectedBookingIds->isEmpty()) {
+            return;
+        }
+
+        $unsafe = DB::table('ei_payment_transactions')
+            ->whereIn('booking_id', $affectedBookingIds)
+            ->whereIn('status', ['pending', 'processing', 'requires_action'])
+            ->whereNotIn('gateway', ['null', 'offline', 'voucher', 'wallet'])
+            ->orderBy('id')
+            ->first();
+
+        if ($unsafe) {
+            throw new RuntimeException(
+                "Single-full-payment repair aborted: booking {$unsafe->booking_id} has a live external checkout ({$unsafe->gateway}).",
+            );
+        }
+    }
+
+    private function expireSafePendingTransactions(int $bookingId): void
     {
         if (! Schema::hasTable('ei_payment_transactions')) {
             return;
@@ -158,6 +207,7 @@ return new class extends Migration
         DB::table('ei_payment_transactions')
             ->where('booking_id', $bookingId)
             ->whereIn('status', ['pending', 'processing', 'requires_action'])
+            ->whereIn('gateway', ['null', 'offline', 'voucher', 'wallet'])
             ->orderBy('id')
             ->get()
             ->each(function (object $transaction): void {
@@ -183,8 +233,15 @@ return new class extends Migration
 
     private function mergedJson(mixed $current, array $values): string
     {
+        $decoded = $this->decodedJson($current);
+
+        return json_encode(array_merge($decoded, $values));
+    }
+
+    private function decodedJson(mixed $current): array
+    {
         $decoded = is_string($current) ? json_decode($current, true) : (is_array($current) ? $current : []);
 
-        return json_encode(array_merge(is_array($decoded) ? $decoded : [], $values));
+        return is_array($decoded) ? $decoded : [];
     }
 };

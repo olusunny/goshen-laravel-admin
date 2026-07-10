@@ -178,6 +178,116 @@ class GoshenSingleFullPaymentTest extends TestCase
         $this->assertSame(0, $booking->installments()->where('status', InstallmentStatus::Pending->value)->count());
     }
 
+    public function test_legacy_repair_preflight_aborts_without_mutation_for_live_external_checkout(): void
+    {
+        $booking = $this->booking(total: 300);
+        $plan = $this->attachPlan($booking);
+        $first = $this->paymentRecord($booking, amount: 150);
+        $second = $this->paymentRecord($booking, amount: 150, sequence: 2);
+        $transaction = PaymentTransaction::query()->create([
+            'booking_id' => $booking->id,
+            'installment_id' => $first->id,
+            'gateway' => 'stripe',
+            'provider_reference' => 'external_live_' . $booking->id,
+            'currency' => 'NGN',
+            'amount' => 150,
+            'status' => 'pending',
+            'payload' => ['url' => 'https://checkout.test/live'],
+        ]);
+
+        try {
+            $this->runRepairMigrationTwice();
+            $this->fail('Expected external checkout preflight to abort.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('live external checkout', $exception->getMessage());
+        }
+
+        $this->assertTrue($plan->fresh()->is_active);
+        $this->assertSame($plan->id, $booking->fresh()->payment_plan_id);
+        $this->assertSame(2, $booking->installments()->count());
+        $this->assertSame('pending', $transaction->fresh()->status);
+        $this->assertSame('150.00', $second->fresh()->amount);
+    }
+
+    public function test_legacy_repair_expires_safe_pending_artifacts_even_when_history_requires_review(): void
+    {
+        $booking = $this->booking(total: 300);
+        $this->attachPlan($booking);
+        $first = $this->paymentRecord($booking, amount: 150, paidAmount: 50);
+        $this->paymentRecord($booking, amount: 150, sequence: 2);
+        $transaction = PaymentTransaction::query()->create([
+            'booking_id' => $booking->id,
+            'installment_id' => $first->id,
+            'gateway' => 'null',
+            'provider_reference' => 'safe_pending_review_' . $booking->id,
+            'currency' => 'NGN',
+            'amount' => 150,
+            'status' => 'pending',
+        ]);
+
+        $this->runRepairMigrationTwice();
+
+        $this->assertSame('expired', $transaction->fresh()->status);
+        $this->assertSame(2, $booking->installments()->count());
+        $this->assertTrue((bool) data_get($booking->fresh()->metadata, 'legacy_payment_review_required'));
+    }
+
+    public function test_paid_status_without_history_requires_explicit_repair_approval(): void
+    {
+        $booking = $this->booking(total: 300, status: BookingStatus::Paid);
+        $this->attachPlan($booking);
+        $this->paymentRecord($booking, amount: 150);
+        $this->paymentRecord($booking, amount: 150, sequence: 2);
+
+        $this->runRepairMigrationTwice();
+
+        $this->assertSame(BookingStatus::Paid, $booking->fresh()->status);
+        $this->assertSame(2, $booking->installments()->count());
+        $this->assertTrue((bool) data_get($booking->fresh()->metadata, 'legacy_payment_review_required'));
+        $this->assertContains('booking_paid_status', data_get($booking->fresh()->metadata, 'legacy_payment_review_reasons'));
+    }
+
+    public function test_explicitly_approved_paid_status_without_history_can_be_normalized(): void
+    {
+        $booking = $this->booking(total: 300, status: BookingStatus::Paid);
+        $booking->forceFill(['metadata' => ['single_full_payment_repair_approved' => true]])->save();
+        $this->attachPlan($booking);
+        $this->paymentRecord($booking, amount: 150);
+        $this->paymentRecord($booking, amount: 150, sequence: 2);
+
+        $this->runRepairMigrationTwice();
+
+        $this->assertSame(BookingStatus::Pending, $booking->fresh()->status);
+        $this->assertSame(1, $booking->installments()->count());
+        $this->assertFalse((bool) data_get($booking->fresh()->metadata, 'legacy_payment_review_required'));
+    }
+
+    public function test_duplicate_or_paid_after_transaction_history_is_preserved_for_review(): void
+    {
+        foreach (['duplicate_paid', 'paid_after_cancelled', 'successful', 'captured'] as $index => $historyStatus) {
+            $booking = $this->booking(total: 300);
+            $this->attachPlan($booking);
+            $record = $this->paymentRecord($booking, amount: 150);
+            $this->paymentRecord($booking, amount: 150, sequence: 2);
+            PaymentTransaction::query()->create([
+                'booking_id' => $booking->id,
+                'installment_id' => $record->id,
+                'gateway' => 'stripe',
+                'provider_reference' => 'history_' . $index . '_' . $booking->id,
+                'currency' => 'NGN',
+                'amount' => 150,
+                'status' => $historyStatus,
+            ]);
+        }
+
+        $this->runRepairMigrationTwice();
+
+        Booking::query()->get()->each(function (Booking $booking): void {
+            $this->assertSame(2, $booking->installments()->count());
+            $this->assertTrue((bool) data_get($booking->metadata, 'legacy_payment_review_required'));
+        });
+    }
+
     private function event(): Event
     {
         return Event::query()->create([

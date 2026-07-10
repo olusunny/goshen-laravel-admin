@@ -58,7 +58,7 @@ class PaymentWebhookController extends Controller
                         $transaction->booking?->forceFill(array_filter([
                             'payment_customer_id' => $billing['payment_customer_id'],
                             'payment_method_id' => $billing['payment_method_id'],
-                            'auto_charge_enabled' => true,
+                            'auto_charge_enabled' => false,
                         ], static fn ($value) => $value !== null))->save();
                     }
                 }
