@@ -21,16 +21,9 @@ class MergedAccountCredentialTest extends TestCase
             'password' => 'AdminPassw0rd!',
         ]);
 
-        $mobile = MobileUser::query()->create([
-            'name' => 'Shared Mobile',
-            'email' => 'shared@example.test',
-            'phone' => '+447700900001',
-            'password' => 'OldMobilePassw0rd!',
-            'gender' => 'female',
-            'member_type' => 'church_member',
-            'is_verified' => false,
-            'email_verified_at' => null,
-        ]);
+        $mobile = MobileUser::query()
+            ->whereRaw('LOWER(email) = ?', ['shared@example.test'])
+            ->firstOrFail();
 
         $admin->forceFill(['password' => Hash::make('AdminPassw0rd!')])->saveQuietly();
         $mobile->forceFill([
@@ -64,16 +57,9 @@ class MergedAccountCredentialTest extends TestCase
             'password' => 'OldAdminPassw0rd!',
         ]);
 
-        $mobile = MobileUser::query()->create([
-            'name' => 'Shared Mobile',
-            'email' => 'shared-admin@example.test',
-            'phone' => '+447700900002',
-            'password' => 'MobilePassw0rd!',
-            'gender' => 'female',
-            'member_type' => 'church_member',
-            'is_verified' => true,
-            'email_verified_at' => now(),
-        ]);
+        $mobile = MobileUser::query()
+            ->whereRaw('LOWER(email) = ?', ['shared-admin@example.test'])
+            ->firstOrFail();
 
         $admin->forceFill(['password' => Hash::make('OldAdminPassw0rd!')])->saveQuietly();
         $mobile->forceFill(['password' => Hash::make('MobilePassw0rd!')])->saveQuietly();

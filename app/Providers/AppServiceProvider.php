@@ -6,6 +6,8 @@ use App\Auth\MergedEmailUserProvider;
 use App\Models\MobileUser;
 use App\Models\User;
 use App\Services\GoshenReferralService;
+use App\Services\GoshenWalletService;
+use App\Services\LinkedMobileAccountService;
 use App\Services\MergedAccountCredentialService;
 use App\Services\StripePaymentSettings;
 use App\Services\TriumphantIdService;
@@ -50,6 +52,10 @@ class AppServiceProvider extends ServiceProvider
                 }
             }
 
+            if (Schema::hasTable('goshen_wallets')) {
+                app(GoshenWalletService::class)->walletFor($user);
+            }
+
             if (! Schema::hasTable('goshen_referral_codes')) {
                 return;
             }
@@ -83,12 +89,13 @@ class AppServiceProvider extends ServiceProvider
 
         User::saved(function (User $user): void {
             $credentials = app(MergedAccountCredentialService::class);
-            if ($credentials->isSyncing()) {
+            if ($credentials->isSyncing() || (! $user->wasRecentlyCreated && ! $user->wasChanged(['email', 'password']))) {
                 return;
             }
 
-            if ($user->wasRecentlyCreated || $user->wasChanged(['email', 'password'])) {
-                $credentials->syncMobileFromAdmin($user);
+            $mobile = app(LinkedMobileAccountService::class)->forAdmin($user);
+            if ($mobile) {
+                $credentials->syncMobileFromAdmin($user, $mobile);
             }
         });
     }
