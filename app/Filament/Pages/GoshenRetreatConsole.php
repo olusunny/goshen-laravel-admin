@@ -74,7 +74,16 @@ class GoshenRetreatConsole extends Page
     {
         $user = Auth::user();
 
-        return $user && ($user->hasRole('super_admin') || $user->can($permission));
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasRole('super_admin') || $user->can($permission)) {
+            return true;
+        }
+
+        return $permission === AdminPermissions::resourcePermission(GoshenTicketResource::class)
+            && $user->can(AdminPermissions::GOSHEN_TICKET_ISSUE);
     }
 
     private function cards(): array
@@ -119,7 +128,9 @@ class GoshenRetreatConsole extends Page
                 'title' => 'Tickets',
                 'description' => 'Track issued QR tickets, check-in status, and scanner validation records.',
                 'icon' => 'qr',
-                'url' => GoshenTicketResource::getUrl('index'),
+                'url' => GoshenTicketResource::canViewAny()
+                    ? GoshenTicketResource::getUrl('index')
+                    : GoshenTicketResource::getUrl('create'),
                 'permission' => AdminPermissions::resourcePermission(GoshenTicketResource::class),
             ],
             [
@@ -155,6 +166,7 @@ class GoshenRetreatConsole extends Page
             AdminPermissions::resourcePermission(GoshenTicketTypeResource::class),
             AdminPermissions::resourcePermission(GoshenBookingResource::class),
             AdminPermissions::resourcePermission(GoshenTicketResource::class),
+            AdminPermissions::GOSHEN_TICKET_ISSUE,
             AdminPermissions::resourcePermission(GoshenAccommodationAllocationResource::class),
             AdminPermissions::resourcePermission(GoshenReferralPointEntryResource::class),
         ];

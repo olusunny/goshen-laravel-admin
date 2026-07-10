@@ -4,21 +4,29 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\GoshenTicketResource\Pages;
+use App\Models\MobileUser;
+use App\Support\AdminPermissions;
 use BackedEnum;
 use chillerlan\QRCode\Output\QROutputInterface;
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
 use Filament\Actions;
+use Filament\Forms;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
-use Personal\EventInstallments\Services\QrPayloadService;
+use Personal\EventInstallments\Models\Event;
+use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\Ticket;
+use Personal\EventInstallments\Services\QrPayloadService;
 use Throwable;
 
 class GoshenTicketResource extends Resource
@@ -34,6 +42,82 @@ class GoshenTicketResource extends Resource
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-qr-code';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Goshen Retreat';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->schema([
+            Section::make('Ticket recipient')
+                ->description('Select an active app member. The issued ticket will appear in their Goshen account.')
+                ->schema([
+                    Forms\Components\Select::make('customer_id')
+                        ->label('App member')
+                        ->searchable()
+                        ->getSearchResultsUsing(fn (string $search): array => MobileUser::query()
+                            ->where('is_blocked', false)
+                            ->where('is_deleted', false)
+                            ->where(fn ($query) => $query
+                                ->where('name', 'like', "%{$search}%")
+                                ->orWhere('email', 'like', "%{$search}%")
+                                ->orWhere('phone', 'like', "%{$search}%")
+                                ->orWhere('triumphant_id', 'like', "%{$search}%"))
+                            ->limit(30)
+                            ->get()
+                            ->mapWithKeys(fn (MobileUser $user): array => [$user->id => static::memberOptionLabel($user)])
+                            ->all())
+                        ->getOptionLabelUsing(function ($value): ?string {
+                            $user = MobileUser::query()->find($value);
+
+                            return $user ? static::memberOptionLabel($user) : null;
+                        })
+                        ->required()
+                        ->helperText('Search by member name, Triumphant ID, email address, or phone number.'),
+                ]),
+            Section::make('Retreat ticket')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\Select::make('event_id')
+                        ->label('Retreat edition')
+                        ->options(fn (): array => Event::query()
+                            ->where('status', 'published')
+                            ->orderByDesc('id')
+                            ->pluck('name', 'id')
+                            ->all())
+                        ->searchable()
+                        ->live()
+                        ->afterStateUpdated(fn (Set $set): mixed => $set('ticket_type_id', null))
+                        ->required(),
+                    Forms\Components\Select::make('ticket_type_id')
+                        ->label('Ticket type')
+                        ->options(fn (Get $get): array => EventTicketType::query()
+                            ->where('event_id', $get('event_id'))
+                            ->where('is_active', true)
+                            ->orderBy('name')
+                            ->get()
+                            ->mapWithKeys(fn (EventTicketType $type): array => [
+                                $type->id => sprintf(
+                                    '%s · %s %s',
+                                    $type->name,
+                                    strtoupper((string) $type->currency),
+                                    number_format((float) $type->price, 2),
+                                ),
+                            ])
+                            ->all())
+                        ->searchable()
+                        ->required()
+                        ->helperText('Only active ticket types for the selected retreat edition are shown.'),
+                ]),
+            Section::make('Complimentary issuance')
+                ->description('This creates a zero-value admin booking. It does not record or imply a payment.')
+                ->schema([
+                    Forms\Components\Textarea::make('issuance_reason')
+                        ->label('Reason for issuing ticket')
+                        ->required()
+                        ->maxLength(500)
+                        ->rows(4)
+                        ->helperText('Saved in the booking and ticket audit history.'),
+                ]),
+        ]);
+    }
 
     public static function infolist(Schema $schema): Schema
     {
@@ -135,8 +219,17 @@ class GoshenTicketResource extends Resource
     {
         return [
             'index' => Pages\ListGoshenTickets::route('/'),
+            'create' => Pages\CreateGoshenTicket::route('/create'),
             'view' => Pages\ViewGoshenTicket::route('/{record}'),
         ];
+    }
+
+    public static function canCreate(): bool
+    {
+        $user = Auth::user();
+
+        return static::adminCanManageResource()
+            || ($user && $user->can(AdminPermissions::GOSHEN_TICKET_ISSUE));
     }
 
     private static function qrPreviewHtml(Ticket $record): HtmlString
@@ -158,8 +251,8 @@ class GoshenTicketResource extends Resource
             return new HtmlString(
                 '<div style="display:flex;justify-content:center;width:100%;">'
                 . '<div style="display:inline-flex;flex-direction:column;gap:1rem;align-items:center;padding:1.25rem;border:1px solid #d8e4e8;border-radius:1.25rem;background:#fff;box-shadow:0 16px 40px rgba(12,34,48,.08);max-width:380px;">'
-                . '<div style="font-weight:700;color:#0c2230;text-align:center;">'.e($record->formatted_number ?: 'Goshen ticket').'</div>'
-                . '<div style="width:280px;max-width:100%;line-height:0;">'.$svg.'</div>'
+                . '<div style="font-weight:700;color:#0c2230;text-align:center;">' . e($record->formatted_number ?: 'Goshen ticket') . '</div>'
+                . '<div style="width:280px;max-width:100%;line-height:0;">' . $svg . '</div>'
                 . '<span style="font-size:.9rem;color:#536170;text-align:center;line-height:1.45;">Scan this QR image at check-in to validate the ticket.</span>'
                 . '</div>'
                 . '</div>'
@@ -167,6 +260,15 @@ class GoshenTicketResource extends Resource
         } catch (Throwable) {
             return new HtmlString('<div style="padding:1rem;border:1px solid #f4d9a4;border-radius:1rem;background:#fff8e8;color:#7c4a03;">QR code image could not be generated for this ticket.</div>');
         }
+    }
+
+    private static function memberOptionLabel(MobileUser $user): string
+    {
+        return collect([
+            $user->name,
+            $user->triumphant_id,
+            $user->email,
+        ])->filter(fn ($value): bool => filled($value))->implode(' · ');
     }
 
     private static function qrPayload(Ticket $record): string
