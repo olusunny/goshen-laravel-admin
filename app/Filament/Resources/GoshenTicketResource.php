@@ -69,6 +69,8 @@ class GoshenTicketResource extends Resource
 
                             return $user ? static::memberOptionLabel($user) : null;
                         })
+                        ->live()
+                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
                         ->required()
                         ->helperText('Search by member name, Triumphant ID, email address, or phone number.'),
                 ]),
@@ -84,7 +86,10 @@ class GoshenTicketResource extends Resource
                             ->all())
                         ->searchable()
                         ->live()
-                        ->afterStateUpdated(fn (Set $set): mixed => $set('ticket_type_id', null))
+                        ->afterStateUpdated(function (Set $set): void {
+                            $set('ticket_type_id', null);
+                            static::clearWalletAuthorization($set);
+                        })
                         ->required(),
                     Forms\Components\Select::make('ticket_type_id')
                         ->label('Ticket type')
@@ -103,18 +108,56 @@ class GoshenTicketResource extends Resource
                             ])
                             ->all())
                         ->searchable()
+                        ->live()
+                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
                         ->required()
                         ->helperText('Only active ticket types for the selected retreat edition are shown.'),
                 ]),
-            Section::make('Complimentary issuance')
-                ->description('This creates a zero-value admin booking. It does not record or imply a payment.')
+            Section::make('Payment and authorization')
+                ->description('The full listed ticket amount must be settled by voucher or from your own linked Goshen wallet before the ticket is issued.')
+                ->columns(2)
                 ->schema([
                     Forms\Components\Textarea::make('issuance_reason')
                         ->label('Reason for issuing ticket')
                         ->required()
                         ->maxLength(500)
                         ->rows(4)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
                         ->helperText('Saved in the booking and ticket audit history.'),
+                    Forms\Components\Select::make('payment_method')
+                        ->label('Payment method')
+                        ->options([
+                            'voucher' => 'Voucher',
+                            'wallet' => 'My Goshen wallet',
+                        ])
+                        ->default('voucher')
+                        ->native(false)
+                        ->live()
+                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
+                        ->required(),
+                    Forms\Components\Placeholder::make('ticket_amount')
+                        ->label('Full ticket amount')
+                        ->content(fn (Get $get): string => static::ticketAmountLabel($get('ticket_type_id'))),
+                    Forms\Components\Placeholder::make('wallet_payer_summary')
+                        ->label('Wallet payer and availability')
+                        ->content(fn (Get $get): string => static::walletPayerSummary($get('ticket_type_id')))
+                        ->visible(fn (Get $get): bool => $get('payment_method') === 'wallet'),
+                    Forms\Components\TextInput::make('voucher_code')
+                        ->label('Goshen voucher code')
+                        ->maxLength(80)
+                        ->visible(fn (Get $get): bool => $get('payment_method') === 'voucher')
+                        ->required(fn (Get $get): bool => $get('payment_method') === 'voucher')
+                        ->helperText('The code is verified securely and is never stored in plaintext.'),
+                    Forms\Components\Hidden::make('wallet_challenge_id'),
+                    Forms\Components\TextInput::make('wallet_otp')
+                        ->label('Six-digit email verification code')
+                        ->numeric()
+                        ->length(6)
+                        ->autocomplete('one-time-code')
+                        ->visible(fn (Get $get): bool => $get('payment_method') === 'wallet')
+                        ->required(fn (Get $get): bool => $get('payment_method') === 'wallet')
+                        ->helperText('Request a fresh code below, then enter the code sent to your linked email address.'),
                 ]),
         ]);
     }
@@ -187,7 +230,7 @@ class GoshenTicketResource extends Resource
                                     $day = $checkIn->day_number ? "day {$checkIn->day_number}" : 'event';
                                     $time = $checkIn->created_at?->format('M j, Y g:i A') ?: 'time not recorded';
 
-                                    return ($index + 1) . ". {$status} · {$day} · {$time}";
+                                    return ($index + 1).". {$status} · {$day} · {$time}";
                                 })
                                 ->implode("\n");
                         })
@@ -250,12 +293,12 @@ class GoshenTicketResource extends Resource
 
             return new HtmlString(
                 '<div style="display:flex;justify-content:center;width:100%;">'
-                . '<div style="display:inline-flex;flex-direction:column;gap:1rem;align-items:center;padding:1.25rem;border:1px solid #d8e4e8;border-radius:1.25rem;background:#fff;box-shadow:0 16px 40px rgba(12,34,48,.08);max-width:380px;">'
-                . '<div style="font-weight:700;color:#0c2230;text-align:center;">' . e($record->formatted_number ?: 'Goshen ticket') . '</div>'
-                . '<div style="width:280px;max-width:100%;line-height:0;">' . $svg . '</div>'
-                . '<span style="font-size:.9rem;color:#536170;text-align:center;line-height:1.45;">Scan this QR image at check-in to validate the ticket.</span>'
-                . '</div>'
-                . '</div>'
+                .'<div style="display:inline-flex;flex-direction:column;gap:1rem;align-items:center;padding:1.25rem;border:1px solid #d8e4e8;border-radius:1.25rem;background:#fff;box-shadow:0 16px 40px rgba(12,34,48,.08);max-width:380px;">'
+                .'<div style="font-weight:700;color:#0c2230;text-align:center;">'.e($record->formatted_number ?: 'Goshen ticket').'</div>'
+                .'<div style="width:280px;max-width:100%;line-height:0;">'.$svg.'</div>'
+                .'<span style="font-size:.9rem;color:#536170;text-align:center;line-height:1.45;">Scan this QR image at check-in to validate the ticket.</span>'
+                .'</div>'
+                .'</div>'
             );
         } catch (Throwable) {
             return new HtmlString('<div style="padding:1rem;border:1px solid #f4d9a4;border-radius:1rem;background:#fff8e8;color:#7c4a03;">QR code image could not be generated for this ticket.</div>');
@@ -269,6 +312,79 @@ class GoshenTicketResource extends Resource
             $user->triumphant_id,
             $user->email,
         ])->filter(fn ($value): bool => filled($value))->implode(' · ');
+    }
+
+    private static function clearWalletAuthorization(Set $set): void
+    {
+        $set('wallet_challenge_id', null);
+        $set('wallet_otp', null);
+    }
+
+    private static function ticketAmountLabel(mixed $ticketTypeId): string
+    {
+        $ticketType = EventTicketType::query()->find($ticketTypeId);
+
+        return $ticketType
+            ? strtoupper((string) $ticketType->currency).' '.number_format((float) $ticketType->price, 2)
+            : 'Select a ticket type to see the full amount.';
+    }
+
+    private static function walletPayerSummary(mixed $ticketTypeId): string
+    {
+        $admin = Auth::user();
+        if (! $admin) {
+            return 'Sign in again to verify your linked wallet.';
+        }
+
+        $payer = MobileUser::query()
+            ->whereRaw('LOWER(email) = ?', [strtolower(trim((string) $admin->email))])
+            ->with('wallet')
+            ->first();
+        if (! $payer) {
+            return 'No linked Goshen wallet account is currently available.';
+        }
+
+        if (! $payer->canUseCommunity()) {
+            return 'Your linked wallet account is blocked or unavailable.';
+        }
+
+        $wallet = $payer->wallet;
+        if (! $wallet) {
+            return 'Your linked Goshen wallet is not available.';
+        }
+
+        $summary = sprintf(
+            '%s · %s · Balance %s %s',
+            $payer->name ?: 'Linked payer',
+            static::maskedEmail((string) $payer->email),
+            strtoupper((string) $wallet->currency),
+            number_format((float) $wallet->balance, 2),
+        );
+        $ticketType = EventTicketType::query()->find($ticketTypeId);
+        if (! $ticketType) {
+            return $summary.' · Select a ticket type to check availability.';
+        }
+
+        if ((bool) $payer->wallet_security_reset_required) {
+            return $summary.' · Wallet actions are temporarily restricted.';
+        }
+
+        if (strtoupper((string) $wallet->currency) !== strtoupper((string) $ticketType->currency)) {
+            return $summary.' · Currency does not match this ticket.';
+        }
+
+        if ((float) $wallet->balance + 0.01 < (float) $ticketType->price) {
+            return $summary.' · Balance is not enough for this ticket.';
+        }
+
+        return $summary.' · Available for this full ticket payment.';
+    }
+
+    private static function maskedEmail(string $email): string
+    {
+        [$local, $domain] = array_pad(explode('@', $email, 2), 2, '');
+
+        return substr($local, 0, 1).str_repeat('*', max(2, strlen($local) - 1)).'@'.$domain;
     }
 
     private static function qrPayload(Ticket $record): string

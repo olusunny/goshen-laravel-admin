@@ -15,6 +15,7 @@ use App\Services\GoshenVoucherService;
 use App\Services\LinkedMobileAccountService;
 use App\Services\WebWalletVerificationService;
 use App\Support\AdminPermissions;
+use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Validation\ValidationException;
@@ -30,9 +31,9 @@ use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentTransaction;
 use Personal\EventInstallments\Models\Ticket;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class GoshenAdminTicketIssuanceTest extends TestCase
@@ -52,6 +53,153 @@ class GoshenAdminTicketIssuanceTest extends TestCase
     public function test_ticket_issuance_permission_is_available_to_admin_roles(): void
     {
         $this->assertArrayHasKey('goshen_ticket.issue', AdminPermissions::all());
+    }
+
+    public function test_paid_ticket_page_exposes_only_voucher_and_my_wallet_controls(): void
+    {
+        [, , $admin] = $this->issuanceFixture();
+        $this->grantTicketIssuePermission($admin);
+
+        Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->assertSchemaComponentExists('payment_method')
+            ->assertSchemaComponentExists('voucher_code')
+            ->assertSchemaComponentExists('wallet_challenge_id')
+            ->assertSchemaComponentExists('wallet_otp')
+            ->assertSee('Voucher')
+            ->assertSee('My Goshen wallet')
+            ->assertDontSee('Complimentary')
+            ->assertDontSee('zero-value');
+    }
+
+    public function test_filament_voucher_submission_creates_a_normal_paid_ticket(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $this->grantTicketIssuePermission($admin);
+        $code = $this->voucherCode($ticketType, $admin);
+
+        Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->fillForm([
+                'customer_id' => $member->id,
+                'event_id' => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'issuance_reason' => 'Front desk voucher registration',
+                'payment_method' => 'voucher',
+                'voucher_code' => $code,
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $ticket = Ticket::query()->with('booking.installments.transactions')->sole();
+        $this->assertSame(BookingStatus::Paid, $ticket->booking->status);
+        $this->assertSame('150.00', $ticket->booking->total);
+        $this->assertSame('voucher', $ticket->booking->installments->sole()->transactions->sole()->gateway);
+        $this->assertStringNotContainsString($code, json_encode([
+            $ticket->metadata,
+            $ticket->booking->metadata,
+        ], JSON_THROW_ON_ERROR));
+    }
+
+    public function test_filament_wallet_action_sends_code_wrong_code_fails_then_correct_code_pays(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $this->grantTicketIssuePermission($admin);
+        $payer = app(LinkedMobileAccountService::class)->forAdmin($admin);
+        $wallet = $payer?->wallet()->firstOrFail();
+        $wallet?->forceFill(['currency' => 'GBP', 'balance' => 500])->save();
+        $sentBody = null;
+        $this->mock(DynamicSmtpMailer::class, function (MockInterface $mock) use (&$sentBody): void {
+            $mock->shouldReceive('sendRaw')->once()->andReturnUsing(
+                function (string $to, string $subject, string $body) use (&$sentBody): void {
+                    $sentBody = $body;
+                },
+            );
+        });
+
+        $page = Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->fillForm([
+                'customer_id' => $member->id,
+                'event_id' => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'issuance_reason' => 'Front desk wallet registration',
+                'payment_method' => 'wallet',
+            ])
+            ->callAction(TestAction::make('sendWalletVerificationCode')->schemaComponent('form-actions', 'content'))
+            ->assertHasNoActionErrors();
+
+        preg_match('/\b(\d{6})\b/', (string) $sentBody, $matches);
+        $code = (string) ($matches[1] ?? '');
+        $this->assertNotSame('', $code);
+        $this->assertNotEmpty($page->get('data.wallet_challenge_id'));
+
+        $page->fillForm(['wallet_otp' => $code === '000000' ? '999999' : '000000'])
+            ->call('create')
+            ->assertHasFormErrors(['wallet_otp']);
+        $this->assertDatabaseCount('ei_bookings', 0);
+
+        $page->fillForm(['wallet_otp' => $code])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $ticket = Ticket::query()->with('booking.installments.transactions')->sole();
+        $this->assertSame('wallet', $ticket->booking->installments->sole()->transactions->sole()->gateway);
+        $this->assertSame('350.00', $wallet?->fresh()->balance);
+        $this->assertStringNotContainsString($code, json_encode([
+            $ticket->metadata,
+            $ticket->booking->metadata,
+            $ticket->booking->installments->sole()->transactions->sole()->payload,
+        ], JSON_THROW_ON_ERROR));
+    }
+
+    public function test_changing_wallet_payment_context_clears_challenge_and_otp(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $this->grantTicketIssuePermission($admin);
+        $payer = app(LinkedMobileAccountService::class)->forAdmin($admin);
+        $payer?->wallet()->firstOrFail()->forceFill(['currency' => 'GBP', 'balance' => 500])->save();
+        $this->mock(DynamicSmtpMailer::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('sendRaw')->once();
+        });
+
+        $page = Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->fillForm([
+                'customer_id' => $member->id,
+                'event_id' => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'issuance_reason' => 'Original reason',
+                'payment_method' => 'wallet',
+            ])
+            ->callAction(TestAction::make('sendWalletVerificationCode')->schemaComponent('form-actions', 'content'));
+
+        $this->assertNotEmpty($page->get('data.wallet_challenge_id'));
+        $page->set('data.wallet_otp', '123456');
+        $page->set('data.issuance_reason', 'Changed reason');
+        $this->assertNull($page->get('data.wallet_challenge_id'));
+        $this->assertNull($page->get('data.wallet_otp'));
+    }
+
+    public function test_wallet_code_action_rejects_an_unavailable_linked_payer(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $this->grantTicketIssuePermission($admin);
+        app(LinkedMobileAccountService::class)->forAdmin($admin)?->forceFill(['is_blocked' => true])->save();
+
+        Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->fillForm([
+                'customer_id' => $member->id,
+                'event_id' => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'issuance_reason' => 'Blocked payer attempt',
+                'payment_method' => 'wallet',
+            ])
+            ->callAction(TestAction::make('sendWalletVerificationCode')->schemaComponent('form-actions', 'content'))
+            ->assertHasFormErrors(['payment_method']);
+
+        $this->assertDatabaseCount('web_wallet_verification_challenges', 0);
     }
 
     public function test_admin_can_issue_a_paid_ticket_with_a_voucher(): void
@@ -778,6 +926,14 @@ class GoshenAdminTicketIssuanceTest extends TestCase
         $admin = User::factory()->create();
 
         return [$member, $ticketType, $admin];
+    }
+
+    private function grantTicketIssuePermission(User $admin): void
+    {
+        $permission = Permission::findOrCreate(AdminPermissions::GOSHEN_TICKET_ISSUE, 'web');
+        $role = Role::findOrCreate('ticket_form_issuer_'.$admin->id, 'web');
+        $role->givePermissionTo($permission);
+        $admin->assignRole($role);
     }
 
     private function voucherCode(EventTicketType $ticketType, User $admin): string
