@@ -46,9 +46,48 @@ class AccountWalletProvisioningTest extends TestCase
             'is_deleted' => false,
         ]);
 
+        $this->assertSame(1, GoshenWallet::query()->where('mobile_user_id', $mobile->id)->count());
+
         app(GoshenWalletService::class)->walletFor($mobile);
         app(GoshenWalletService::class)->walletFor($mobile);
 
         $this->assertSame(1, GoshenWallet::query()->where('mobile_user_id', $mobile->id)->count());
+    }
+
+    public function test_wallet_backfill_provisions_active_users_idempotently_and_excludes_deleted_users(): void
+    {
+        $activeWithoutWallet = MobileUser::withoutEvents(fn (): MobileUser => MobileUser::query()->create([
+            'name' => 'Active Without Wallet',
+            'email' => 'active.without.wallet@example.test',
+            'password' => 'StrongPassw0rd!',
+            'is_deleted' => false,
+        ]));
+
+        $activeWithWallet = MobileUser::withoutEvents(fn (): MobileUser => MobileUser::query()->create([
+            'name' => 'Active With Wallet',
+            'email' => 'active.with.wallet@example.test',
+            'password' => 'StrongPassw0rd!',
+            'is_deleted' => false,
+        ]));
+        GoshenWallet::query()->create([
+            'mobile_user_id' => $activeWithWallet->id,
+            'currency' => 'GBP',
+            'balance' => 0,
+        ]);
+
+        $deletedWithoutWallet = MobileUser::withoutEvents(fn (): MobileUser => MobileUser::query()->create([
+            'name' => 'Deleted Without Wallet',
+            'email' => 'deleted.without.wallet@example.test',
+            'password' => 'StrongPassw0rd!',
+            'is_deleted' => true,
+        ]));
+
+        $migration = require database_path('migrations/2026_07_10_160000_backfill_goshen_wallets_for_mobile_users.php');
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(1, GoshenWallet::query()->where('mobile_user_id', $activeWithoutWallet->id)->count());
+        $this->assertSame(1, GoshenWallet::query()->where('mobile_user_id', $activeWithWallet->id)->count());
+        $this->assertSame(0, GoshenWallet::query()->where('mobile_user_id', $deletedWithoutWallet->id)->count());
     }
 }
