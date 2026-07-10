@@ -161,7 +161,10 @@ class MobileUserResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->defaultSort('created_at', 'desc')
+            ->heading('Registered users')
+            ->description(fn (): string => self::registeredUsersTableSummary())
+            ->defaultSort(fn (Builder $query, string $direction): Builder => self::applyTriumphantIdTableSort($query, $direction))
+            ->defaultSortOptionLabel('Triumphant ID')
             ->columns([
                 Tables\Columns\ImageColumn::make('avatar')
                     ->label('Photo')
@@ -199,7 +202,7 @@ class MobileUserResource extends Resource
                     ->label('Triumphant ID')
                     ->badge()
                     ->searchable()
-                    ->sortable()
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => self::applyTriumphantIdTableSort($query, $direction))
                     ->copyable(),
                 Tables\Columns\TextColumn::make('title')
                     ->label('Title')
@@ -327,6 +330,32 @@ class MobileUserResource extends Resource
                     Actions\DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    public static function registeredUsersTableSummary(): string
+    {
+        $baseQuery = MobileUser::query()->where('is_deleted', false);
+
+        $total = (clone $baseQuery)->count();
+        $male = (clone $baseQuery)->whereRaw('LOWER(gender) = ?', ['male'])->count();
+        $female = (clone $baseQuery)->whereRaw('LOWER(gender) = ?', ['female'])->count();
+
+        return sprintf(
+            'Available registered users: %s | Male: %s | Female: %s',
+            number_format($total),
+            number_format($male),
+            number_format($female),
+        );
+    }
+
+    public static function applyTriumphantIdTableSort(Builder $query, string $direction = 'asc'): Builder
+    {
+        $direction = strtolower($direction) === 'desc' ? 'desc' : 'asc';
+
+        return $query
+            ->orderByRaw('triumphant_id_sequence IS NULL')
+            ->orderBy('triumphant_id_sequence', $direction)
+            ->orderBy('id');
     }
 
     public static function infolist(Schema $schema): Schema
