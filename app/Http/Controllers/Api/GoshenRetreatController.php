@@ -4,14 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\AppSetting;
 use App\Models\GoshenAccommodationAllocation;
+use App\Models\GoshenVoucher;
 use App\Models\GoshenVoucherUsage;
 use App\Models\GoshenWallet;
 use App\Models\MobileUser;
 use App\Services\GoshenAccommodationEligibility;
 use App\Services\GoshenBookingLifecycleService;
 use App\Services\GoshenReferralService;
-use App\Services\GoshenRegistrationFieldService;
 use App\Services\GoshenRegistrationAvailabilityService;
+use App\Services\GoshenRegistrationFieldService;
 use App\Services\GoshenRetreatNotificationService;
 use App\Services\GoshenSingleFullPaymentService;
 use App\Services\GoshenVoucherService;
@@ -2078,6 +2079,7 @@ class GoshenRetreatController extends Controller
             'label' => ['nullable', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:1'],
             'currency' => ['required', 'string', 'size:3'],
+            'purpose' => ['required', Rule::in(array_keys(GoshenVoucher::purposeOptions()))],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:200'],
             'max_uses' => ['nullable', 'integer', 'min:1', 'max:100'],
             'starts_at' => ['nullable', 'date'],
@@ -2093,7 +2095,9 @@ class GoshenRetreatController extends Controller
         }
 
         $validated = $validator->validated();
-        if (filled($validated['event_id'] ?? null)) {
+        if (($validated['purpose'] ?? null) === GoshenVoucher::PURPOSE_WALLET_FUNDING) {
+            $validated['event_id'] = null;
+        } elseif (filled($validated['event_id'] ?? null)) {
             $event = $this->eventFromKey((string) $validated['event_id']);
             if (! $event || ! $this->isGoshenEvent($event)) {
                 return response()->json([

@@ -183,6 +183,7 @@ class GoshenVoucherApiTest extends TestCase
                 'label' => 'Offline cash batch',
                 'amount' => 40,
                 'currency' => 'NGN',
+                'purpose' => GoshenVoucher::PURPOSE_PAYMENTS,
                 'quantity' => 2,
                 'max_uses' => 1,
             ],
@@ -213,6 +214,47 @@ class GoshenVoucherApiTest extends TestCase
             ->assertJsonPath('data.0.source', 'mobile_registration');
     }
 
+    public function test_event_manager_can_generate_wallet_funding_vouchers_without_event_scope(): void
+    {
+        $manager = $this->manager('wallet-funding-voucher-manager@example.test');
+
+        $this->postJson('/api/goshen-retreat/vouchers/generate', [
+            'data' => [
+                'api_token' => $manager->issueApiToken(),
+                'purpose' => GoshenVoucher::PURPOSE_WALLET_FUNDING,
+                'amount' => 25,
+                'currency' => 'GBP',
+                'quantity' => 1,
+            ],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('data.0.voucher.purpose', GoshenVoucher::PURPOSE_WALLET_FUNDING);
+
+        $voucher = GoshenVoucher::query()->firstOrFail();
+        $this->assertNull($voucher->event_id);
+        $this->assertSame(GoshenVoucher::PURPOSE_WALLET_FUNDING, $voucher->purpose);
+    }
+
+    public function test_invalid_voucher_purpose_is_rejected_by_generation_api(): void
+    {
+        $manager = $this->manager('invalid-purpose-voucher-manager@example.test');
+
+        $this->postJson('/api/goshen-retreat/vouchers/generate', [
+            'data' => [
+                'api_token' => $manager->issueApiToken(),
+                'purpose' => 'wallet',
+                'amount' => 25,
+                'currency' => 'GBP',
+                'quantity' => 1,
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('status', 'error');
+
+        $this->assertSame(0, GoshenVoucher::query()->count());
+    }
+
     public function test_regular_member_cannot_generate_vouchers(): void
     {
         $member = $this->verifiedMember('not-manager@example.test', 'Not Manager', '+2348011112266');
@@ -224,6 +266,7 @@ class GoshenVoucherApiTest extends TestCase
                 'event_id' => $event->public_id,
                 'amount' => 40,
                 'currency' => 'NGN',
+                'purpose' => GoshenVoucher::PURPOSE_PAYMENTS,
                 'quantity' => 1,
             ],
         ])
@@ -376,7 +419,7 @@ class GoshenVoucherApiTest extends TestCase
     {
         $event = Event::query()->create([
             'name' => 'Goshen Retreat 2026',
-            'slug' => 'goshen-retreat-2026-' . str()->random(6),
+            'slug' => 'goshen-retreat-2026-'.str()->random(6),
             'type' => EventType::Sequential,
             'timezone' => 'Africa/Lagos',
             'status' => 'published',
@@ -396,7 +439,7 @@ class GoshenVoucherApiTest extends TestCase
         $ticketType = EventTicketType::query()->create([
             'event_id' => $event->id,
             'name' => 'Adult',
-            'sku' => 'ADULT-' . str()->random(6),
+            'sku' => 'ADULT-'.str()->random(6),
             'currency' => 'NGN',
             'price' => $price,
             'min_per_booking' => 1,
