@@ -615,6 +615,25 @@
             line-height: 1.1;
             overflow-wrap: anywhere;
         }
+        .event-countdown .stats-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .event-countdown .stat {
+            min-height: 112px;
+            padding: 12px 8px;
+            display: grid;
+            align-content: center;
+            justify-items: center;
+            text-align: center;
+        }
+        .event-countdown .stat strong {
+            margin-top: 0;
+            font-size: clamp(24px, 8vw, 34px);
+        }
+        .event-countdown .stat span {
+            margin-top: 4px;
+        }
 
         .badge {
             display: inline-flex;
@@ -697,29 +716,48 @@
             font-weight: 900;
             text-decoration: none;
         }
-        .past-video-grid {
+        .past-video-slider {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            grid-auto-flow: column;
+            grid-auto-columns: clamp(220px, 72vw, 320px);
             gap: 12px;
+            margin: 0 -6px;
+            padding: 4px 6px 10px;
+            overflow-x: auto;
+            overscroll-behavior-inline: contain;
+            scroll-snap-type: inline mandatory;
+            scrollbar-width: thin;
         }
         .past-video-card {
             display: grid;
             gap: 10px;
+            align-content: start;
             border: 1px solid var(--line);
             border-radius: 20px;
             padding: 10px;
             background: var(--field);
             color: inherit;
             text-decoration: none;
+            scroll-snap-align: start;
         }
+        .past-video-card iframe,
         .past-video-card img {
             width: 100%;
             aspect-ratio: 16 / 9;
-            object-fit: cover;
             border-radius: 14px;
+            border: 0;
             background: linear-gradient(135deg, #0c2230, #14513f);
         }
+        .past-video-card img {
+            object-fit: cover;
+        }
         .past-video-card strong { overflow-wrap: anywhere; }
+        .past-video-card .item-meta {
+            display: -webkit-box;
+            overflow: hidden;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
 
         .detail-list {
             display: grid;
@@ -1199,6 +1237,12 @@
                 <p class="eyebrow">MFM Triumphant Church</p>
                 <h1>Welcome to Goshen Retreat</h1>
                 <p>Sign in or create your account to manage registration, tickets, payments, and retreat updates.</p>
+            </div>
+
+            <div class="theme-mode-switch" role="radiogroup" aria-label="Theme preference">
+                <button type="button" data-theme-mode="light" aria-label="Use light mode">Sun</button>
+                <button type="button" data-theme-mode="dark" aria-label="Use dark mode">Moon</button>
+                <button type="button" data-theme-mode="device" aria-label="Use device theme">Auto</button>
             </div>
 
             <div class="segmented" role="tablist" aria-label="Member access">
@@ -2081,27 +2125,81 @@
             const videos = Array.isArray(event?.past_videos)
                 ? event.past_videos
                 : (Array.isArray(event?.pastVideos) ? event.pastVideos : []);
-            const validVideos = videos.filter((video) => video?.youtube_url || video?.url || video?.thumbnail_url);
+            const validVideos = videos
+                .map((video) => ({ ...video, embedUrl: youtubeEmbedUrl(video) }))
+                .filter((video) => video.embedUrl);
             if (!validVideos.length) return '';
 
             return `
                 <section class="card">
                     <h3>Past Goshen videos</h3>
-                    <div class="past-video-grid">
+                    <div class="past-video-slider" aria-label="Past Goshen videos slider">
                         ${validVideos.map((video) => {
-                            const href = video.youtube_url || video.url || '#';
-                            const thumb = video.thumbnail_url || video.thumbnailUrl || '';
+                            const title = video.title || 'Goshen Retreat video';
                             return `
-                                <a class="past-video-card" href="${escapeHtml(href)}" target="_blank" rel="noopener">
-                                    ${thumb ? `<img src="${escapeHtml(thumb)}" alt="">` : ''}
-                                    <strong>${escapeHtml(video.title || 'Goshen Retreat video')}</strong>
+                                <article class="past-video-card">
+                                    <iframe
+                                        src="${escapeHtml(video.embedUrl)}"
+                                        title="${escapeHtml(title)}"
+                                        loading="lazy"
+                                        referrerpolicy="strict-origin-when-cross-origin"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                        allowfullscreen></iframe>
+                                    <strong>${escapeHtml(title)}</strong>
                                     ${video.description ? `<span class="item-meta">${escapeHtml(video.description)}</span>` : ''}
-                                </a>
+                                </article>
                             `;
                         }).join('')}
                     </div>
                 </section>
             `;
+        }
+
+        function youtubeEmbedUrl(video) {
+            const id = youtubeVideoId(
+                video?.youtube_video_id
+                || video?.youtubeVideoId
+                || video?.youtube_id
+                || video?.youtubeId
+                || video?.video_id
+                || video?.videoId
+                || video?.youtube_url
+                || video?.youtubeUrl
+                || video?.url
+                || video?.video_url
+                || video?.videoUrl
+                || ''
+            );
+
+            return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?rel=0&modestbranding=1&playsinline=1` : '';
+        }
+
+        function youtubeVideoId(value) {
+            const raw = `${value || ''}`.trim();
+            if (!raw) return '';
+            if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
+
+            try {
+                const normalized = raw.startsWith('//') ? `https:${raw}` : raw;
+                const url = new URL(normalized);
+                const host = url.hostname.replace(/^www\./, '').toLowerCase();
+                if (host === 'youtu.be') {
+                    return youtubeVideoId(url.pathname.split('/').filter(Boolean)[0] || '');
+                }
+                if (host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')) {
+                    const fromQuery = url.searchParams.get('v');
+                    if (fromQuery) return youtubeVideoId(fromQuery);
+
+                    const parts = url.pathname.split('/').filter(Boolean);
+                    const marker = parts.findIndex((part) => ['embed', 'shorts', 'live', 'v'].includes(part));
+                    if (marker >= 0 && parts[marker + 1]) return youtubeVideoId(parts[marker + 1]);
+                }
+            } catch (error) {
+                const match = raw.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?.*?v=|embed\/|shorts\/|live\/|v\/))([A-Za-z0-9_-]{11})/i);
+                if (match?.[1]) return match[1];
+            }
+
+            return '';
         }
 
         async function loadEvents() {
