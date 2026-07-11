@@ -28,6 +28,8 @@ class Event extends Model
         'status',
         'sales_start_at',
         'sales_end_at',
+        'start_date',
+        'end_date',
         'settings',
     ];
 
@@ -35,6 +37,8 @@ class Event extends Model
         'type' => EventType::class,
         'sales_start_at' => 'datetime',
         'sales_end_at' => 'datetime',
+        'start_date' => 'date',
+        'end_date' => 'date',
         'settings' => 'array',
     ];
 

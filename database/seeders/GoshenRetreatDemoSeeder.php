@@ -53,6 +53,8 @@ class GoshenRetreatDemoSeeder extends Seeder
             'status' => 'published',
             'sales_start_at' => now()->subDay(),
             'sales_end_at' => now()->addMonths(3),
+            'start_date' => now()->addMonth()->toDateString(),
+            'end_date' => now()->addMonth()->addDay()->toDateString(),
         ]);
 
         EventSchedule::query()->updateOrCreate(['event_id' => $event->id, 'day_number' => 1], [

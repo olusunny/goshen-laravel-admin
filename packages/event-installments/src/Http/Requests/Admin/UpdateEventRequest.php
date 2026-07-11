@@ -29,6 +29,8 @@ class UpdateEventRequest extends FormRequest
             'status' => ['required', Rule::in(['draft', 'published', 'archived'])],
             'sales_start_at' => ['nullable', 'date'],
             'sales_end_at' => ['nullable', 'date', 'after_or_equal:sales_start_at'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
         ];
     }
 }

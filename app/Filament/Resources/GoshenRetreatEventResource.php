@@ -136,6 +136,13 @@ class GoshenRetreatEventResource extends Resource
                     Forms\Components\Textarea::make('venue_address')
                         ->rows(3)
                         ->columnSpanFull(),
+                    Forms\Components\DatePicker::make('start_date')
+                        ->label('Event starts')
+                        ->helperText('The first calendar date of this Goshen Retreat edition.'),
+                    Forms\Components\DatePicker::make('end_date')
+                        ->label('Event ends')
+                        ->rules(['nullable', 'date', 'after_or_equal:start_date'])
+                        ->helperText('The final calendar date of this Goshen Retreat edition.'),
                     Forms\Components\DateTimePicker::make('sales_start_at')
                         ->label('Registration opens'),
                     Forms\Components\DateTimePicker::make('sales_end_at')
@@ -194,6 +201,8 @@ class GoshenRetreatEventResource extends Resource
                 Tables\Columns\TextColumn::make('name')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('status')->badge()->sortable(),
                 Tables\Columns\TextColumn::make('type')->badge()->sortable(),
+                Tables\Columns\TextColumn::make('start_date')->label('Starts')->date()->sortable(),
+                Tables\Columns\TextColumn::make('end_date')->label('Ends')->date()->sortable(),
                 Tables\Columns\TextColumn::make('sales_start_at')->dateTime()->sortable(),
                 Tables\Columns\TextColumn::make('sales_end_at')->dateTime()->sortable(),
                 Tables\Columns\TextColumn::make('registration_status')

@@ -5,12 +5,13 @@ namespace Personal\EventInstallments\Http\Requests\Admin;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Personal\EventInstallments\Enums\EventType;
+use Personal\EventInstallments\Models\Event;
 
 class StoreEventRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('create', \Personal\EventInstallments\Models\Event::class) ?? false;
+        return $this->user()?->can('create', Event::class) ?? false;
     }
 
     public function rules(): array
@@ -27,6 +28,8 @@ class StoreEventRequest extends FormRequest
             'status' => ['required', Rule::in(['draft', 'published', 'archived'])],
             'sales_start_at' => ['nullable', 'date'],
             'sales_end_at' => ['nullable', 'date', 'after_or_equal:sales_start_at'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
         ];
     }
 }

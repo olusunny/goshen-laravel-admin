@@ -50,6 +50,14 @@
             <label for="sales_end_at">Sales End</label>
             <input id="sales_end_at" name="sales_end_at" type="datetime-local" value="{{ old('sales_end_at', optional($event->sales_end_at)->format('Y-m-d\TH:i')) }}">
         </div>
+        <div>
+            <label for="start_date">Event Start Date</label>
+            <input id="start_date" name="start_date" type="date" value="{{ old('start_date', optional($event->start_date)->format('Y-m-d')) }}">
+        </div>
+        <div>
+            <label for="end_date">Event End Date</label>
+            <input id="end_date" name="end_date" type="date" value="{{ old('end_date', optional($event->end_date)->format('Y-m-d')) }}">
+        </div>
     </div>
 </div>
 
