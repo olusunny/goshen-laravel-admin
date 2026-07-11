@@ -129,6 +129,7 @@ class GoshenVoucherService
         }
 
         try {
+            $this->assertVoucherPurpose($voucher, GoshenVoucher::PURPOSE_PAYMENTS);
             $this->assertVoucherCanPay($voucher, $event, $amount, $currency);
         } catch (RuntimeException $exception) {
             return $this->verificationPayload(false, $exception->getMessage(), $voucher);

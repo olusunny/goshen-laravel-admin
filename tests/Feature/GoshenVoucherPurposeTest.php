@@ -70,6 +70,22 @@ class GoshenVoucherPurposeTest extends TestCase
         $this->assertVoucherAndBookingStateUnchanged($voucher['voucher'], $booking, $installment);
     }
 
+    public function test_wallet_funding_voucher_is_rejected_by_payment_verification(): void
+    {
+        $voucher = app(GoshenVoucherService::class)->createVoucher([
+            'amount' => 25,
+            'currency' => 'GBP',
+            'purpose' => GoshenVoucher::PURPOSE_WALLET_FUNDING,
+        ]);
+
+        $verification = app(GoshenVoucherService::class)->verify($voucher['code'], amount: 25, currency: 'GBP');
+
+        $this->assertFalse($verification['valid']);
+        $this->assertSame('This voucher is only valid for wallet funding.', $verification['message']);
+        $this->assertSame(GoshenVoucher::PURPOSE_WALLET_FUNDING, $verification['voucher']['purpose']);
+        $this->assertSame(0, GoshenVoucherUsage::query()->count());
+    }
+
     public function test_payment_voucher_cannot_credit_a_wallet(): void
     {
         $member = $this->member();
