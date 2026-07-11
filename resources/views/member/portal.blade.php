@@ -468,8 +468,39 @@
             padding: 14px;
             margin-bottom: 20px;
         }
+        .user-chip-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .user-chip-main {
+            min-width: 0;
+        }
         .user-chip strong { display: block; }
         .user-chip span { color: rgba(255,255,255,.7); font-size: 13px; overflow-wrap: anywhere; }
+        .header-logout-button {
+            min-height: 38px;
+            border: 1px solid rgba(255,255,255,.18);
+            border-radius: 13px;
+            padding: 0 12px;
+            background: rgba(255, 255, 255, .08);
+            color: #ffd6d6;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            cursor: pointer;
+            font-weight: 1000;
+            white-space: nowrap;
+        }
+        .header-logout-button:hover {
+            background: rgba(180, 35, 24, .22);
+            color: #fff;
+        }
+        .header-logout-button .nav-icon {
+            width: 20px;
+            height: 20px;
+        }
 
         .nav-list {
             display: grid;
@@ -866,6 +897,25 @@
             display: grid;
             gap: 14px;
         }
+        .profile-card-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 8px;
+        }
+        .profile-card-head h3 {
+            margin-bottom: 4px;
+        }
+        .profile-card-head p {
+            margin-bottom: 0;
+        }
+        .profile-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
         .profile-section-title {
             margin: 10px 0 0;
             font-size: 18px;
@@ -904,6 +954,15 @@
             border-color: var(--line);
         }
         .drawer .user-chip span { color: var(--muted); }
+        .drawer .header-logout-button {
+            border-color: var(--line);
+            background: var(--card);
+            color: var(--danger);
+        }
+        .drawer .header-logout-button:hover {
+            background: rgba(180, 35, 24, .10);
+            color: var(--danger);
+        }
         .drawer .nav-item { color: var(--ink); }
         .drawer .nav-item.active, .drawer .nav-item:hover {
             background: var(--field);
@@ -1189,8 +1248,13 @@
                 </div>
             </div>
             <div class="user-chip">
-                <strong id="sidebarUserName">Member</strong>
-                <span id="sidebarUserEmail">Signed in</span>
+                <div class="user-chip-header">
+                    <div class="user-chip-main">
+                        <strong id="sidebarUserName">Member</strong>
+                        <span id="sidebarUserEmail">Signed in</span>
+                    </div>
+                    <button id="sidebarLogout" class="header-logout-button" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#icon-logout"></use></svg>Sign out</button>
+                </div>
             </div>
             <div class="theme-mode-switch" role="radiogroup" aria-label="Theme preference">
                 <button type="button" data-theme-mode="light" aria-label="Use light mode">Sun</button>
@@ -1206,7 +1270,6 @@
                 <button class="nav-item" type="button" data-nav-page="receipts"><svg class="nav-icon" aria-hidden="true"><use href="#icon-receipt"></use></svg>Receipts</button>
                 <button class="nav-item" type="button" data-nav-page="updates"><svg class="nav-icon" aria-hidden="true"><use href="#icon-bell"></use></svg>Updates</button>
                 <button class="nav-item" type="button" data-nav-page="profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg>Profile</button>
-                <button id="sidebarLogout" class="nav-item logout" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#icon-logout"></use></svg>Sign out</button>
                 <button class="nav-item" type="button" data-nav-page="support"><svg class="nav-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Support</button>
             </nav>
         </aside>
@@ -1230,8 +1293,13 @@
                     </div>
                 </div>
                 <div class="user-chip">
-                    <strong id="drawerUserName">Member</strong>
-                    <span id="drawerUserEmail">Signed in</span>
+                    <div class="user-chip-header">
+                        <div class="user-chip-main">
+                            <strong id="drawerUserName">Member</strong>
+                            <span id="drawerUserEmail">Signed in</span>
+                        </div>
+                        <button id="drawerLogout" class="header-logout-button" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#icon-logout"></use></svg>Sign out</button>
+                    </div>
                 </div>
                 <div class="theme-mode-switch" role="radiogroup" aria-label="Theme preference">
                     <button type="button" data-theme-mode="light" aria-label="Use light mode">Sun</button>
@@ -1247,7 +1315,6 @@
                     <button class="nav-item" type="button" data-nav-page="receipts"><svg class="nav-icon" aria-hidden="true"><use href="#icon-receipt"></use></svg>Receipts</button>
                     <button class="nav-item" type="button" data-nav-page="updates"><svg class="nav-icon" aria-hidden="true"><use href="#icon-bell"></use></svg>Updates</button>
                     <button class="nav-item" type="button" data-nav-page="profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg>Profile</button>
-                    <button id="drawerLogout" class="nav-item logout" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#icon-logout"></use></svg>Sign out</button>
                     <button class="nav-item" type="button" data-nav-page="support"><svg class="nav-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Support</button>
                 </nav>
             </div>
@@ -1379,6 +1446,7 @@
         let activeWalletTab = localStorage.getItem(walletTabKey) || 'overview';
         let churchGroupsCache = [];
         let handledReturnNotice = false;
+        let profileEditMode = false;
 
         const authShell = document.getElementById('authShell');
         const portalShell = document.getElementById('portalShell');
@@ -1693,12 +1761,14 @@
                 throw new Error('The server did not return a login session.');
             }
             currentUser = { ...user, saved_at: new Date().toISOString() };
+            profileEditMode = false;
             localStorage.setItem(storageKey, JSON.stringify(currentUser));
             showPortal();
         }
 
         function clearUser(message) {
             currentUser = null;
+            profileEditMode = false;
             localStorage.removeItem(storageKey);
             showAuth('login');
             if (message) notify(message, 'error');
@@ -1726,6 +1796,7 @@
         }
 
         function showPage(page, push = true) {
+            const previousPage = activePage;
             activePage = pageTitles[page] ? page : 'home';
             document.querySelectorAll('[data-page-view]').forEach((view) => {
                 view.classList.toggle('active', view.dataset.pageView === activePage);
@@ -1734,6 +1805,10 @@
                 button.classList.toggle('active', button.dataset.navPage === activePage);
             });
             document.getElementById('mobileTitle').textContent = pageTitles[activePage];
+            if (activePage === 'profile' && (previousPage !== 'profile' || push)) {
+                profileEditMode = false;
+                renderProfile();
+            }
             if (push) history.pushState(null, '', activePage === 'home' ? '/app' : `/app/${activePage}`);
             closeDrawer();
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2628,21 +2703,63 @@
                 .join('');
         }
 
-        function renderProfile() {
-            const user = currentUser || {};
-            const nameParts = splitName(user.name || '');
-            const firstName = user.first_name || nameParts.first;
-            const lastName = user.last_name || nameParts.last;
-            document.getElementById('profileCard').innerHTML = `
-                <h3>${escapeHtml(user.name || 'Member')}</h3>
-                <div class="detail-list">
-                    <div class="detail-row"><strong>Triumphant ID</strong><span>${escapeHtml(user.triumphant_id || 'Not assigned yet')}</span></div>
-                    <div class="detail-row"><strong>Email</strong><span>${escapeHtml(user.email || '')}</span></div>
-                    <div class="detail-row"><strong>Phone</strong><span>${escapeHtml(user.phone || '')}</span></div>
-                    <div class="detail-row"><strong>Church group</strong><span>${escapeHtml(user.group_name || 'Not selected')}</span></div>
-                    <div class="detail-row"><strong>Residence</strong><span>${escapeHtml([user.country_of_residence, user.state_county_province].filter(Boolean).join(', ') || 'Not provided')}</span></div>
+        function displayProfileValue(value, fallback = 'Not provided') {
+            const text = `${value ?? ''}`.trim();
+            return text || fallback;
+        }
+
+        function titleCaseLabel(value) {
+            return displayProfileValue(value)
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, (letter) => letter.toUpperCase());
+        }
+
+        function profileDetailRow(label, value, fallback = 'Not provided') {
+            return `<div class="detail-row"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(displayProfileValue(value, fallback))}</span></div>`;
+        }
+
+        function renderProfileView(user, firstName, lastName) {
+            const fullName = displayProfileValue(
+                user.name || [firstName, user.middle_name, lastName].filter(Boolean).join(' '),
+                'Member',
+            );
+            const residence = [user.country_of_residence, user.state_county_province].filter(Boolean).join(', ');
+            return `
+                <div class="profile-card-head">
+                    <div>
+                        <h3>${escapeHtml(fullName)}</h3>
+                        <p class="muted">Review the member information currently attached to your Goshen account.</p>
+                    </div>
+                    <button class="button small outline profile-edit-button" type="button">Edit profile</button>
                 </div>
-                <h4 class="profile-section-title">Edit profile</h4>
+                <div class="detail-list">
+                    ${profileDetailRow('Triumphant ID', user.triumphant_id, 'Not assigned yet')}
+                    ${profileDetailRow('Email', user.email)}
+                    ${profileDetailRow('Phone', user.phone)}
+                    ${profileDetailRow('Title', user.title || user.profile_title)}
+                    ${profileDetailRow('First name', firstName)}
+                    ${profileDetailRow('Middle name', user.middle_name)}
+                    ${profileDetailRow('Last name', lastName)}
+                    ${profileDetailRow('Gender', titleCaseLabel(user.gender))}
+                    ${profileDetailRow('Marital status', user.marital_status)}
+                    ${profileDetailRow('Member type', titleCaseLabel(user.member_type || 'church_member'))}
+                    ${profileDetailRow('Church group', user.group_name, 'Not selected')}
+                    ${profileDetailRow('Residence', residence)}
+                    ${profileDetailRow('Address', user.address)}
+                    ${profileDetailRow('About me', user.about_me)}
+                </div>
+            `;
+        }
+
+        function renderProfileEditForm(user, firstName, lastName) {
+            return `
+                <div class="profile-card-head">
+                    <div>
+                        <h3>Edit profile</h3>
+                        <p class="muted">Update the details used for registration, tickets, and payment records.</p>
+                    </div>
+                    <button class="button small outline profile-cancel-edit" type="button">Cancel</button>
+                </div>
                 <form class="form profile-update-form">
                     <input type="hidden" name="email" value="${escapeHtml(user.email || '')}">
                     <div class="form-grid profile-form-grid">
@@ -2699,9 +2816,22 @@
                             <textarea class="input" name="about_me">${escapeHtml(user.about_me || '')}</textarea>
                         </div>
                     </div>
-                    <button class="button" type="submit">Save profile</button>
+                    <div class="profile-actions">
+                        <button class="button small" type="submit">Save profile</button>
+                        <button class="button small outline profile-cancel-edit" type="button">Cancel</button>
+                    </div>
                 </form>
             `;
+        }
+
+        function renderProfile() {
+            const user = currentUser || {};
+            const nameParts = splitName(user.name || '');
+            const firstName = user.first_name || nameParts.first;
+            const lastName = user.last_name || nameParts.last;
+            document.getElementById('profileCard').innerHTML = profileEditMode
+                ? renderProfileEditForm(user, firstName, lastName)
+                : renderProfileView(user, firstName, lastName);
         }
 
         function renderSupport() {
@@ -3059,6 +3189,7 @@
                     currentUser = { ...currentUser, ...(payload.user || {}), api_token: payload.user?.api_token || currentUser.api_token };
                     localStorage.setItem(storageKey, JSON.stringify(currentUser));
                     updateUserIdentity();
+                    profileEditMode = false;
                     renderProfile();
                     notify(payload.message || 'Profile updated successfully.');
                     await loadMemberRetreatData();
@@ -3092,6 +3223,18 @@
         });
 
         document.getElementById('portalMain').addEventListener('click', async (event) => {
+            const editProfile = event.target.closest('.profile-edit-button');
+            if (editProfile) {
+                profileEditMode = true;
+                renderProfile();
+                return;
+            }
+            const cancelProfileEdit = event.target.closest('.profile-cancel-edit');
+            if (cancelProfileEdit) {
+                profileEditMode = false;
+                renderProfile();
+                return;
+            }
             const quantityButton = event.target.closest('.attendee-quantity-decrease, .attendee-quantity-increase');
             if (quantityButton) {
                 const form = quantityButton.closest('.registration-form');
