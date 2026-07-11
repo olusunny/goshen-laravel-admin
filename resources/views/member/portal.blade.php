@@ -1891,12 +1891,54 @@
             ];
         }
 
+        function normalizedTicketLimit(value, fallback) {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+        }
+
+        function eventTicketById(event, ticketId) {
+            const tickets = Array.isArray(event?.ticket_types) ? event.ticket_types : [];
+            return tickets.find((ticket) => `${ticket.public_id || ticket.id || ''}` === `${ticketId || ''}`)
+                || tickets[0]
+                || null;
+        }
+
+        function ticketMinimum(ticket) {
+            return Math.max(1, normalizedTicketLimit(ticket?.min_per_booking, 1));
+        }
+
+        function ticketMaximum(ticket) {
+            const max = normalizedTicketLimit(ticket?.max_per_booking, 20);
+            return Math.max(ticketMinimum(ticket), Math.min(20, max));
+        }
+
+        function ticketDefaultQuantity(ticket) {
+            return Math.max(ticketMinimum(ticket), 1);
+        }
+
+        function clampTicketQuantity(value, ticket) {
+            const min = ticketMinimum(ticket);
+            const max = ticketMaximum(ticket);
+            const parsed = normalizedTicketLimit(value, min);
+            return Math.max(min, Math.min(max, parsed));
+        }
+
+        function ticketQuantityHint(ticket) {
+            const min = ticketMinimum(ticket);
+            const max = ticketMaximum(ticket);
+            return min === max
+                ? `This ticket requires ${min} attendee${min === 1 ? '' : 's'}.`
+                : `This ticket allows ${min} to ${max} attendee${max === 1 ? '' : 's'} per booking.`;
+        }
+
         function renderRegistrationForm(event) {
             const tickets = Array.isArray(event.ticket_types) ? event.ticket_types : [];
             if (!tickets.length) {
                 return '<div class="empty">Ticket types are not available yet for this retreat edition.</div>';
             }
-            const ticketOptions = tickets.map((ticket) => `<option value="${escapeHtml(ticket.public_id)}">${escapeHtml(ticket.name || 'Ticket')} - ${escapeHtml(formatMoney(ticket.price, ticket.currency))}</option>`).join('');
+            const ticketOptions = tickets.map((ticket) => `<option value="${escapeHtml(ticket.public_id)}">${escapeHtml(ticket.name || 'Ticket')} - ${escapeHtml(formatMoney(ticket.price, ticket.currency))} · ${escapeHtml(ticketQuantityHint(ticket))}</option>`).join('');
+            const firstTicket = tickets[0] || {};
+            const initialQuantity = ticketDefaultQuantity(firstTicket);
             return `
                 <form class="form registration-form" data-event-id="${escapeHtml(event.public_id)}">
                     <div class="form-grid">
@@ -1906,7 +1948,8 @@
                         </div>
                         <div class="field">
                             <label>Attendees</label>
-                            <input class="input attendee-quantity" name="quantity" type="number" min="1" max="20" value="1" required>
+                            <input class="input attendee-quantity" name="quantity" type="number" min="${escapeHtml(ticketMinimum(firstTicket))}" max="${escapeHtml(ticketMaximum(firstTicket))}" value="${escapeHtml(initialQuantity)}" required>
+                            <span class="hint attendee-quantity-hint">${escapeHtml(ticketQuantityHint(firstTicket))}</span>
                         </div>
                         <div class="field">
                             <label>Payment method</label>
@@ -1920,8 +1963,12 @@
                             <label>Voucher code</label>
                             <input class="input" name="voucher_code" autocomplete="off">
                         </div>
+                        <div class="field">
+                            <label>Referral code (optional)</label>
+                            <input class="input" name="referral_code" maxlength="32" autocomplete="off">
+                        </div>
                     </div>
-                    <div class="attendee-fields">${renderAttendeeFields(1, event)}</div>
+                    <div class="attendee-fields">${renderAttendeeFields(initialQuantity, event)}</div>
                     <label class="choice">
                         <input type="checkbox" name="uk_privacy_consent" value="1" required>
                         <span>I agree that MFM Triumphant Church may process my registration, attendee, payment, ticket, and travel-support information for Goshen Retreat administration in line with UK data protection requirements.</span>
@@ -1936,21 +1983,22 @@
             return { first: parts[0] || '', last: parts.slice(1).join(' ') };
         }
 
-        function renderAttendeeFields(quantity, event) {
+        function renderAttendeeFields(quantity, event, existingAttendees = []) {
             const total = Math.max(1, Math.min(20, Number(quantity || 1)));
             const fields = registrationFieldsFor(event);
             const name = splitName(currentUser?.name || '');
             const cards = [];
             for (let index = 0; index < total; index += 1) {
+                const existing = existingAttendees[index] || {};
                 cards.push(`
                     <div class="attendee-card" data-attendee-index="${index}">
                         <strong>Attendee ${index + 1}${index === 0 ? ' - account holder' : ''}</strong>
                         <div class="form-grid">
-                            <div class="field"><label>First name</label><input class="input attendee-first-name" value="${escapeHtml(index === 0 ? name.first : '')}" required></div>
-                            <div class="field"><label>Last name</label><input class="input attendee-last-name" value="${escapeHtml(index === 0 ? name.last : '')}"></div>
-                            <div class="field"><label>Email</label><input class="input attendee-email" type="email" value="${escapeHtml(index === 0 ? currentUser?.email || '' : '')}"></div>
-                            <div class="field"><label>Phone</label><input class="input attendee-phone" type="tel" value="${escapeHtml(index === 0 ? currentUser?.phone || '' : '')}"></div>
-                            ${fields.map((field) => renderRegistrationField(field, index)).join('')}
+                            <div class="field"><label>First name</label><input class="input attendee-first-name" value="${escapeHtml(existing.first_name ?? (index === 0 ? name.first : ''))}" required></div>
+                            <div class="field"><label>Last name</label><input class="input attendee-last-name" value="${escapeHtml(existing.last_name ?? (index === 0 ? name.last : ''))}"></div>
+                            <div class="field"><label>Email</label><input class="input attendee-email" type="email" value="${escapeHtml(existing.email ?? (index === 0 ? currentUser?.email || '' : ''))}"></div>
+                            <div class="field"><label>Phone</label><input class="input attendee-phone" type="tel" value="${escapeHtml(existing.phone ?? (index === 0 ? currentUser?.phone || '' : ''))}"></div>
+                            ${fields.map((field) => renderRegistrationField(field, index, existing.custom_fields || existing)).join('')}
                         </div>
                     </div>
                 `);
@@ -1966,31 +2014,48 @@
             return option && typeof option === 'object' ? (option.label ?? option.value ?? 'Option') : option;
         }
 
-        function renderRegistrationField(field, attendeeIndex) {
+        function optionFeeLabel(option) {
+            const amount = Number(option?.fee_amount ?? option?.fee ?? 0);
+            if (!Number.isFinite(amount) || amount <= 0) return '';
+            return ` + ${formatMoney(amount, option?.currency || option?.fee_currency || 'GBP')}`;
+        }
+
+        function fieldValueForExisting(existingFields, key) {
+            return `${(existingFields || {})[key] ?? ''}`;
+        }
+
+        function renderRegistrationField(field, attendeeIndex, existingFields = {}) {
             const key = `${field.key || ''}`.trim();
             const label = escapeHtml(field.label || key);
             const type = `${field.type || 'text'}`.toLowerCase();
             const required = field.is_required ? 'required' : '';
             const options = Array.isArray(field.options) ? field.options : [];
+            const currentValue = fieldValueForExisting(existingFields, key);
 
             if (['select', 'single_select'].includes(type)) {
-                return `<div class="field"><label>${label}</label><select class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" ${required}>${options.map((option) => `<option value="${escapeHtml(optionValue(option))}">${escapeHtml(optionLabel(option))}</option>`).join('')}</select></div>`;
+                return `<div class="field"><label>${label}</label><select class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" ${required}>${options.map((option) => {
+                    const value = `${optionValue(option)}`;
+                    const selected = value === currentValue ? 'selected' : '';
+                    return `<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(`${optionLabel(option)}${optionFeeLabel(option)}`)}</option>`;
+                }).join('')}</select></div>`;
             }
 
             if (type === 'textarea') {
-                return `<div class="field"><label>${label}</label><textarea class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" ${required}></textarea></div>`;
+                return `<div class="field"><label>${label}</label><textarea class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" ${required}>${escapeHtml(currentValue)}</textarea></div>`;
             }
 
             if (['image_select', 'color_select'].includes(type)) {
                 const radioName = `attendee_${attendeeIndex}_${key}`;
                 return `<div class="field"><label>${label}</label><div class="choice-grid">${options.filter((option) => `${optionValue(option)}` !== '').map((option) => {
+                    const value = `${optionValue(option)}`;
                     const image = option?.image_url ? `<img src="${escapeHtml(option.image_url)}" alt="">` : '';
                     const swatch = option?.color_hex ? `<span class="swatch" style="background:${escapeHtml(option.color_hex)}"></span>` : '';
-                    return `<label class="choice"><input class="attendee-dynamic-control" data-field-key="${escapeHtml(key)}" type="radio" name="${escapeHtml(radioName)}" value="${escapeHtml(optionValue(option))}" ${required}>${image || swatch}<span>${escapeHtml(optionLabel(option))}</span></label>`;
+                    const checked = value === currentValue ? 'checked' : '';
+                    return `<label class="choice"><input class="attendee-dynamic-control" data-field-key="${escapeHtml(key)}" type="radio" name="${escapeHtml(radioName)}" value="${escapeHtml(value)}" ${required} ${checked}>${image || swatch}<span>${escapeHtml(`${optionLabel(option)}${optionFeeLabel(option)}`)}</span></label>`;
                 }).join('')}</div></div>`;
             }
 
-            return `<div class="field"><label>${label}</label><input class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" ${required}></div>`;
+            return `<div class="field"><label>${label}</label><input class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" value="${escapeHtml(currentValue)}" ${required}></div>`;
         }
 
         function collectDynamicFields(card) {
@@ -2007,25 +2072,57 @@
             return fields;
         }
 
-        async function submitRegistration(form) {
-            if (!form.reportValidity()) return;
-            const values = payloadFromForm(form);
-            const attendees = [...form.querySelectorAll('.attendee-card')].map((card) => {
+        function collectAttendeeDrafts(form) {
+            return [...form.querySelectorAll('.attendee-card')].map((card) => {
                 const dynamic = collectDynamicFields(card);
                 return {
                     first_name: card.querySelector('.attendee-first-name')?.value || '',
                     last_name: card.querySelector('.attendee-last-name')?.value || '',
-                    email: card.querySelector('.attendee-email')?.value || currentUser.email || '',
-                    phone: card.querySelector('.attendee-phone')?.value || currentUser.phone || '',
-                    ...dynamic,
+                    email: card.querySelector('.attendee-email')?.value || '',
+                    phone: card.querySelector('.attendee-phone')?.value || '',
                     custom_fields: dynamic,
+                    ...dynamic,
                 };
             });
+        }
+
+        function syncRegistrationQuantity(form, eventModel, preferredQuantity = null) {
+            const select = form.querySelector('[name="ticket_type_id"]');
+            const quantityInput = form.querySelector('.attendee-quantity');
+            if (!select || !quantityInput) return;
+
+            const ticket = eventTicketById(eventModel, select.value);
+            const nextQuantity = clampTicketQuantity(preferredQuantity ?? quantityInput.value, ticket);
+            quantityInput.min = `${ticketMinimum(ticket)}`;
+            quantityInput.max = `${ticketMaximum(ticket)}`;
+            quantityInput.value = `${nextQuantity}`;
+
+            const hint = form.querySelector('.attendee-quantity-hint');
+            if (hint) hint.textContent = ticketQuantityHint(ticket);
+
+            form.querySelector('.attendee-fields').innerHTML = renderAttendeeFields(
+                nextQuantity,
+                eventModel,
+                collectAttendeeDrafts(form),
+            );
+        }
+
+        async function submitRegistration(form) {
+            const eventModel = eventsCache.find((item) => `${item.public_id}` === `${form.dataset.eventId}`);
+            syncRegistrationQuantity(form, eventModel);
+            if (!form.reportValidity()) return;
+            const values = payloadFromForm(form);
+            const attendees = collectAttendeeDrafts(form).map((attendee) => ({
+                ...attendee,
+                email: attendee.email || currentUser.email || '',
+                phone: attendee.phone || currentUser.phone || '',
+            }));
             const payload = authPayload({
                 event_id: form.dataset.eventId,
                 ticket_type_id: values.ticket_type_id,
                 payment_mode: values.payment_mode || 'outright',
                 voucher_code: values.voucher_code || '',
+                referral_code: values.referral_code || '',
                 quantity: Number(values.quantity || 1),
                 uk_privacy_consent: form.querySelector('input[name="uk_privacy_consent"]')?.checked === true,
                 privacy_policy_version: 'uk-gdpr-2026-06',
@@ -2726,7 +2823,7 @@
             if (quantity) {
                 const form = quantity.closest('.registration-form');
                 const eventModel = eventsCache.find((item) => `${item.public_id}` === `${form.dataset.eventId}`);
-                form.querySelector('.attendee-fields').innerHTML = renderAttendeeFields(quantity.value, eventModel);
+                syncRegistrationQuantity(form, eventModel, quantity.value);
             }
             const mode = event.target.closest('.payment-mode');
             if (mode) {
@@ -2734,6 +2831,16 @@
                 form.querySelector('.voucher-field').hidden = mode.value !== 'voucher';
                 form.querySelector('[name="voucher_code"]').required = mode.value === 'voucher';
             }
+        });
+
+        document.getElementById('portalMain').addEventListener('change', (event) => {
+            const ticketSelect = event.target.closest('.registration-form [name="ticket_type_id"]');
+            if (!ticketSelect) return;
+
+            const form = ticketSelect.closest('.registration-form');
+            const eventModel = eventsCache.find((item) => `${item.public_id}` === `${form.dataset.eventId}`);
+            const ticket = eventTicketById(eventModel, ticketSelect.value);
+            syncRegistrationQuantity(form, eventModel, ticketDefaultQuantity(ticket));
         });
 
         document.getElementById('portalMain').addEventListener('submit', async (event) => {
