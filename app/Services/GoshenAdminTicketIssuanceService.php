@@ -132,6 +132,8 @@ class GoshenAdminTicketIssuanceService
                 $voucherCode,
                 $payer,
                 $authorizedWalletContext,
+                $paymentAmount,
+                $extraMetadata,
             ): Ticket {
                 if ($paymentMethod === 'wallet') {
                     $admin = User::query()->whereKey($admin->id)->lockForUpdate()->firstOrFail();
