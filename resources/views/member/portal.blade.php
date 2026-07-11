@@ -634,6 +634,7 @@
         .event-media {
             margin: -20px -20px 18px;
             min-height: 190px;
+            position: relative;
             background: linear-gradient(135deg, #eaf4f2, #fff6de);
             border-radius: var(--radius) var(--radius) 0 0;
             overflow: hidden;
@@ -645,6 +646,80 @@
             object-fit: cover;
             display: block;
         }
+        .event-media::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(12, 34, 48, .14), transparent 36%, rgba(12, 34, 48, .72));
+            pointer-events: none;
+        }
+        .event-media-pill {
+            position: absolute;
+            z-index: 1;
+            left: 16px;
+            top: 16px;
+            display: inline-flex;
+            align-items: center;
+            min-height: 30px;
+            border-radius: 999px;
+            padding: 0 12px;
+            background: var(--gold);
+            color: #0c2230;
+            font-size: 13px;
+            font-weight: 1000;
+        }
+        .event-media-date {
+            position: absolute;
+            z-index: 1;
+            right: 16px;
+            bottom: 16px;
+            max-width: min(80%, 420px);
+            border-radius: 999px;
+            padding: 8px 12px;
+            background: rgba(12, 34, 48, .88);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 900;
+            line-height: 1.35;
+            text-align: right;
+        }
+        .event-description {
+            margin-top: 10px;
+            color: var(--muted);
+            line-height: 1.58;
+        }
+        .inline-action {
+            display: inline-flex;
+            align-items: center;
+            width: max-content;
+            margin-top: 8px;
+            color: var(--brand-2);
+            font-weight: 900;
+            text-decoration: none;
+        }
+        .past-video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 12px;
+        }
+        .past-video-card {
+            display: grid;
+            gap: 10px;
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 10px;
+            background: var(--field);
+            color: inherit;
+            text-decoration: none;
+        }
+        .past-video-card img {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #0c2230, #14513f);
+        }
+        .past-video-card strong { overflow-wrap: anywhere; }
 
         .detail-list {
             display: grid;
@@ -1904,6 +1979,10 @@
             return event?.feature_image_url || event?.image_url || event?.cover_image_url || event?.media_url || '';
         }
 
+        function eventDescription(event) {
+            return `${event?.description || ''}`.trim();
+        }
+
         function eventStartValue(event) {
             return event?.start_date || event?.startDate || event?.starts_at || event?.start_at || event?.sales_start_at || null;
         }
@@ -1921,6 +2000,19 @@
 
         function eventVenue(event) {
             return [event?.venue_name, event?.venue_address].filter(Boolean).join(' - ') || 'Venue details will be shared by the church.';
+        }
+
+        function eventMapsUrl(event) {
+            const venue = [event?.venue_name, event?.venue_address].filter(Boolean).join(' ');
+            return venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}` : '';
+        }
+
+        function eventInquiryPhone(event) {
+            const raw = `${event?.inquiry_phone || event?.inquiryPhone || event?.inquiry_phone_number || ''}`.trim();
+            if (!raw) return '';
+            const hasLeadingPlus = raw.startsWith('+');
+            const digits = raw.replace(/\D+/g, '');
+            return digits ? `${hasLeadingPlus ? '+' : ''}${digits}` : '';
         }
 
         function eventCountdownTarget(event) {
@@ -1980,6 +2072,33 @@
                                 </div>
                             </article>
                         `).join('')}
+                    </div>
+                </section>
+            `;
+        }
+
+        function renderPastVideos(event) {
+            const videos = Array.isArray(event?.past_videos)
+                ? event.past_videos
+                : (Array.isArray(event?.pastVideos) ? event.pastVideos : []);
+            const validVideos = videos.filter((video) => video?.youtube_url || video?.url || video?.thumbnail_url);
+            if (!validVideos.length) return '';
+
+            return `
+                <section class="card">
+                    <h3>Past Goshen videos</h3>
+                    <div class="past-video-grid">
+                        ${validVideos.map((video) => {
+                            const href = video.youtube_url || video.url || '#';
+                            const thumb = video.thumbnail_url || video.thumbnailUrl || '';
+                            return `
+                                <a class="past-video-card" href="${escapeHtml(href)}" target="_blank" rel="noopener">
+                                    ${thumb ? `<img src="${escapeHtml(thumb)}" alt="">` : ''}
+                                    <strong>${escapeHtml(video.title || 'Goshen Retreat video')}</strong>
+                                    ${video.description ? `<span class="item-meta">${escapeHtml(video.description)}</span>` : ''}
+                                </a>
+                            `;
+                        }).join('')}
                     </div>
                 </section>
             `;
@@ -2065,12 +2184,19 @@
 
         function renderEventCard(event) {
             const image = eventImage(event);
+            const description = eventDescription(event);
             const schedules = Array.isArray(event.schedules) ? event.schedules : [];
             const tickets = Array.isArray(event.ticket_types) ? event.ticket_types : [];
             const registrationOpen = Boolean(event.registration?.open ?? event.registration_open ?? true);
+            const mapsUrl = eventMapsUrl(event);
+            const inquiryPhone = eventInquiryPhone(event);
             return `
                 <article class="card">
-                    <div class="event-media">${image ? `<img src="${escapeHtml(image)}" alt="">` : ''}</div>
+                    <div class="event-media">
+                        ${image ? `<img src="${escapeHtml(image)}" alt="">` : ''}
+                        <span class="event-media-pill">Goshen Retreat</span>
+                        <span class="event-media-date">${escapeHtml(eventDate(event))}</span>
+                    </div>
                     <div class="record-top">
                         <div class="record-title">
                             <span class="badge ${registrationOpen ? 'ok' : 'danger'}">${registrationOpen ? 'Registration open' : 'Registration closed'}</span>
@@ -2078,12 +2204,15 @@
                             <span class="item-meta">${escapeHtml(eventDate(event))}</span>
                         </div>
                     </div>
+                    ${description ? `<p class="event-description">${escapeHtml(description)}</p>` : ''}
                     <div class="detail-list">
                         <div class="detail-row"><strong>Date</strong><span>${escapeHtml(eventDate(event))}</span></div>
-                        <div class="detail-row"><strong>Venue</strong><span>${escapeHtml(eventVenue(event))}</span></div>
+                        <div class="detail-row"><strong>Venue</strong><span>${escapeHtml(eventVenue(event))}</span>${mapsUrl ? `<a class="inline-action" href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener">Open in maps</a>` : ''}</div>
+                        ${inquiryPhone ? `<div class="detail-row"><strong>Retreat inquiry</strong><span>${escapeHtml(inquiryPhone)}</span><a class="inline-action" href="tel:${escapeHtml(inquiryPhone)}">Call inquiry line</a></div>` : ''}
                         ${schedules.length ? `<div class="detail-row"><strong>Schedule</strong>${schedules.slice(0, 4).map((schedule) => `<span>${escapeHtml(schedule.title || 'Session')} - ${escapeHtml(formatDateTime(schedule.starts_at))}</span>`).join('')}</div>` : ''}
                     </div>
                     ${eventCountdownMarkup(event)}
+                    ${renderPastVideos(event)}
                     ${renderTicketTypeCards(tickets)}
                     ${registrationOpen ? renderRegistrationForm(event) : `<div class="empty">${escapeHtml(event.registration?.message || 'Registration is currently closed for this retreat edition.')}</div>`}
                 </article>
