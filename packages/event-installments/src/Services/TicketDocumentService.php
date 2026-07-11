@@ -106,6 +106,7 @@ class TicketDocumentService
     {
         $attendee = trim(($ticket->attendee?->first_name ?? '') . ' ' . ($ticket->attendee?->last_name ?? ''));
         $number = $ticket->formatted_number ?: $ticket->ticket_number;
+        $amountPaid = $this->amountPaidLabel($ticket);
 
         return <<<HTML
 <!doctype html>
@@ -126,6 +127,7 @@ class TicketDocumentService
             <div><strong>Ticket:</strong> {$this->escapeHtml($number)}</div>
             <div><strong>Attendee:</strong> {$this->escapeHtml($attendee ?: 'Guest')}</div>
             <div><strong>Type:</strong> {$this->escapeHtml($ticket->ticketType->name)}</div>
+            <div><strong>Amount paid:</strong> {$this->escapeHtml($amountPaid)}</div>
             <div><strong>Status:</strong> {$this->escapeHtml($ticket->status->value)}</div>
         </div>
     </div>
@@ -145,6 +147,7 @@ HTML;
         $number = $ticket->formatted_number ?: $ticket->ticket_number ?: $ticket->public_id;
         $event = $ticket->event?->name ?: 'Goshen Retreat';
         $type = $ticket->ticketType?->name ?: 'Ticket';
+        $amountPaid = $this->amountPaidLabel($ticket);
         $status = $ticket->status instanceof \BackedEnum
             ? $ticket->status->value
             : (string) $ticket->status;
@@ -155,6 +158,7 @@ HTML;
             'Ticket: ' . $number,
             'Attendee: ' . ($attendee ?: 'Guest'),
             'Type: ' . $type,
+            'Amount paid: ' . $amountPaid,
             'Status: ' . $status,
             '',
             'Open the Goshen web app ticket page to scan the live QR code.',
@@ -201,6 +205,25 @@ HTML;
         $value = preg_replace('/[^\x09\x0A\x0D\x20-\x7E]/', '', $value) ?? '';
 
         return str_replace(['\\', '(', ')', "\r", "\n"], ['\\\\', '\\(', '\\)', '', ' '], $value);
+    }
+
+    private function amountPaidLabel(Ticket $ticket): string
+    {
+        $ticket->loadMissing('booking.installments');
+        $metadata = is_array($ticket->metadata) ? $ticket->metadata : [];
+        $amount = $metadata['amount_paid'] ?? $metadata['historical_paid_amount'] ?? null;
+        if (! is_numeric($amount) || (float) $amount <= 0) {
+            $booking = $ticket->booking;
+            $amount = $booking
+                ? max((float) $booking->paid_total, (float) $booking->installments->sum('paid_amount'))
+                : 0;
+        }
+
+        $currency = strtoupper((string) ($ticket->booking?->currency ?: $ticket->ticketType?->currency ?: 'GBP'));
+
+        return (float) $amount > 0
+            ? trim($currency . ' ' . number_format((float) $amount, 2))
+            : 'Not recorded';
     }
 
     private function escapeIcs(string $value): string

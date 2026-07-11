@@ -69,6 +69,8 @@ class GoshenAdminTicketIssuanceService
         ?string $walletCode = null,
         ?string $ip = null,
         ?string $userAgent = null,
+        ?float $paymentAmount = null,
+        array $extraMetadata = [],
     ): Ticket {
         $reason = trim($reason);
         $paymentMethod = strtolower(trim($paymentMethod));
@@ -152,14 +154,27 @@ class GoshenAdminTicketIssuanceService
                 }
 
                 $listPrice = round((float) $ticketType->price, 2);
+                $paymentTotal = $paymentAmount === null
+                    ? $listPrice
+                    : round((float) $paymentAmount, 2);
+                if ($paymentTotal <= 0) {
+                    throw ValidationException::withMessages([
+                        'payment_amount' => 'The payment amount must be greater than zero.',
+                    ]);
+                }
+
                 $currency = strtoupper((string) $ticketType->currency);
-                $metadata = [
+                $metadata = array_filter(array_merge([
                     'source' => 'filament_admin',
                     'issued_by_admin_id' => $admin->id,
                     'beneficiary_mobile_user_id' => $member->id,
                     'payment_method' => $paymentMethod,
                     'issuance_reason' => $reason,
-                ];
+                    'listed_ticket_price' => $listPrice,
+                    'amount_paid' => $paymentTotal,
+                    'historical_paid_amount' => $paymentAmount === null ? null : $paymentTotal,
+                    'historical_discount_amount' => $paymentAmount === null ? null : max(0, round($listPrice - $paymentTotal, 2)),
+                ], $extraMetadata), fn ($value): bool => $value !== null && $value !== '');
 
                 $booking = Booking::query()->create([
                     'event_id' => $ticketType->event_id,
@@ -169,8 +184,8 @@ class GoshenAdminTicketIssuanceService
                     'customer_email' => $member->email,
                     'customer_phone' => $member->phone,
                     'currency' => $currency,
-                    'subtotal' => $listPrice,
-                    'total' => $listPrice,
+                    'subtotal' => $paymentTotal,
+                    'total' => $paymentTotal,
                     'paid_total' => 0,
                     'status' => BookingStatus::Pending,
                     'metadata' => $metadata,
@@ -181,9 +196,13 @@ class GoshenAdminTicketIssuanceService
                     'ticket_type_id' => $ticketType->id,
                     'quantity' => 1,
                     'currency' => $currency,
-                    'unit_price' => $listPrice,
-                    'line_total' => $listPrice,
-                    'metadata' => ['source' => 'filament_admin_ticket_issue'],
+                    'unit_price' => $paymentTotal,
+                    'line_total' => $paymentTotal,
+                    'metadata' => [
+                        'source' => 'filament_admin_ticket_issue',
+                        'listed_ticket_price' => $listPrice,
+                        'amount_paid' => $paymentTotal,
+                    ],
                 ]);
 
                 $attendee = Attendee::query()->create([

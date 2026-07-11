@@ -3748,7 +3748,7 @@ class GoshenRetreatController extends Controller
 
     private function ticketPayload(Ticket $ticket): array
     {
-        $ticket->loadMissing('checkIns');
+        $ticket->loadMissing('booking.installments', 'checkIns');
 
         $payload = null;
         $encoded = null;
@@ -3766,6 +3766,9 @@ class GoshenRetreatController extends Controller
             $encoded = null;
         }
 
+        $paidAmount = $this->ticketPaidAmount($ticket);
+        $currency = strtoupper((string) ($ticket->booking?->currency ?: $ticket->ticketType?->currency ?: 'GBP'));
+
         return [
             'public_id' => $ticket->public_id,
             'ticket_number' => $ticket->formatted_number ?: $ticket->ticket_number,
@@ -3775,6 +3778,10 @@ class GoshenRetreatController extends Controller
             'event_name' => $ticket->event?->name,
             'ticket_type' => $ticket->ticketType?->name,
             'attendee_name' => trim(($ticket->attendee?->first_name ?? '').' '.($ticket->attendee?->last_name ?? '')),
+            'currency' => $currency,
+            'amount_paid' => $paidAmount,
+            'paid_amount' => $paidAmount,
+            'amount_paid_label' => trim($currency.' '.number_format($paidAmount, 2)),
             'qr_payload' => $payload,
             'qr_encoded' => $encoded,
             'document_urls' => $ticket->public_id ? [
@@ -3783,6 +3790,27 @@ class GoshenRetreatController extends Controller
                 'qr' => '/api/goshen-retreat/tickets/'.rawurlencode($ticket->public_id).'/qr.svg',
             ] : [],
         ];
+    }
+
+    private function ticketPaidAmount(Ticket $ticket): float
+    {
+        $metadata = is_array($ticket->metadata) ? $ticket->metadata : [];
+        $metadataAmount = $metadata['amount_paid'] ?? $metadata['historical_paid_amount'] ?? null;
+        if (is_numeric($metadataAmount) && (float) $metadataAmount > 0) {
+            return round((float) $metadataAmount, 2);
+        }
+
+        $booking = $ticket->booking;
+        if (! $booking) {
+            return 0.0;
+        }
+
+        $computedPaidTotal = $booking->relationLoaded('installments')
+            ? (float) $booking->installments->sum('paid_amount')
+            : (float) $booking->installments()->sum('paid_amount');
+        $paidTotal = max((float) $booking->paid_total, $computedPaidTotal);
+
+        return round($paidTotal, 2);
     }
 
     private function generateTicketDocument(TicketDocumentService $documents, Ticket $ticket, string $type): TicketDocument
@@ -3955,9 +3983,11 @@ class GoshenRetreatController extends Controller
 
     private function scannerTicketPayload(Ticket $ticket): array
     {
-        $ticket->loadMissing(['event.schedules', 'booking', 'attendee', 'ticketType', 'checkIns']);
+        $ticket->loadMissing(['event.schedules', 'booking.installments', 'attendee', 'ticketType', 'checkIns']);
 
         $multidayStatus = is_array($ticket->multiday_status) ? $ticket->multiday_status : [];
+        $paidAmount = $this->ticketPaidAmount($ticket);
+        $currency = strtoupper((string) ($ticket->booking?->currency ?: $ticket->ticketType?->currency ?: 'GBP'));
 
         return [
             'public_id' => $ticket->public_id,
@@ -3983,6 +4013,10 @@ class GoshenRetreatController extends Controller
             'ticket_type' => $ticket->ticketType?->name,
             'attendee_name' => trim(($ticket->attendee?->first_name ?? '').' '.($ticket->attendee?->last_name ?? '')),
             'booking_status' => $ticket->booking?->status?->value ?? $ticket->booking?->status,
+            'currency' => $currency,
+            'amount_paid' => $paidAmount,
+            'paid_amount' => $paidAmount,
+            'amount_paid_label' => trim($currency.' '.number_format($paidAmount, 2)),
             'checked_in_days' => $ticket->checkIns
                 ->where('status', TicketStatus::CheckedIn)
                 ->map(fn ($checkIn): array => [

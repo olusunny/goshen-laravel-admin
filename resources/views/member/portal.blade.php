@@ -2802,12 +2802,15 @@
         function renderTicket(ticket) {
             const urls = ticket.document_urls || {};
             const ticketNumber = ticket.ticket_number || ticket.public_id || 'Ticket';
+            const paidAmount = Number(ticket.amount_paid ?? ticket.paid_amount ?? 0);
+            const paidLabel = ticket.amount_paid_label || (paidAmount > 0 ? formatMoney(paidAmount, ticket.currency || 'GBP') : 'Not recorded');
             return `
                 <article class="record ticket-card">
                     <div class="ticket-summary">
                         ${statusBadge(ticket.status)}
                         <strong>${escapeHtml(ticketNumber)}</strong>
                         <span class="item-meta">${escapeHtml(ticket.attendee_name || 'Attendee')} - ${escapeHtml(ticket.ticket_type || 'Goshen Retreat')}</span>
+                        <span class="item-meta">Amount paid: ${escapeHtml(paidLabel)}</span>
                     </div>
                     <div class="ticket-qr-stage">
                         <div class="qr-holder" data-qr-url="${escapeHtml(urls.qr || '')}">QR</div>
@@ -2817,6 +2820,7 @@
                         <div class="ticket-detail"><span>Ticket holder</span><strong>${escapeHtml(ticket.attendee_name || currentUser?.name || 'Attendee')}</strong></div>
                         <div class="ticket-detail"><span>Ticket type</span><strong>${escapeHtml(ticket.ticket_type || 'Goshen Retreat')}</strong></div>
                         <div class="ticket-detail"><span>Issued for</span><strong>${escapeHtml(ticket.event?.name || ticket.event_name || 'Goshen Retreat')}</strong></div>
+                        <div class="ticket-detail"><span>Amount paid</span><strong>${escapeHtml(paidLabel)}</strong></div>
                         <div class="ticket-detail"><span>Ticket number</span><strong>${escapeHtml(ticketNumber)}</strong></div>
                     </div>
                     <div class="record-actions">
