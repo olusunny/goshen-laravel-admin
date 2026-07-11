@@ -198,6 +198,8 @@ class ImportGoshenPaidMagicTickets extends Command
 
     private function headerKey(string $header): string
     {
+        $header = preg_replace('/^\xEF\xBB\xBF/', '', $header) ?? $header;
+
         return strtolower((string) preg_replace('/[^a-z0-9]+/i', '_', trim($header)));
     }
 
