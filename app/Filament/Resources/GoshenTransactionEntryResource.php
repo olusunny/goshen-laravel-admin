@@ -16,6 +16,8 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 use UnitEnum;
 
 class GoshenTransactionEntryResource extends Resource
@@ -89,10 +91,12 @@ class GoshenTransactionEntryResource extends Resource
                     TextEntry::make('payer_user_agent_hash')->label('User-agent hash')->copyable()->placeholder('Not captured'),
                 ]),
             Section::make('Metadata')
+                ->description('Recorded source details, formatted for review instead of raw JSON.')
                 ->schema([
-                    TextEntry::make('metadata')
+                    TextEntry::make('metadata_summary')
                         ->label('Source metadata')
-                        ->state(fn (GoshenTransactionEntry $record): string => json_encode($record->metadata ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}')
+                        ->state(fn (GoshenTransactionEntry $record): HtmlString => self::metadataSummary($record))
+                        ->html()
                         ->copyable()
                         ->columnSpanFull(),
                 ]),
@@ -229,5 +233,119 @@ class GoshenTransactionEntryResource extends Resource
             'index' => Pages\ListGoshenTransactionEntries::route('/'),
             'view' => Pages\ViewGoshenTransactionEntry::route('/{record}'),
         ];
+    }
+
+    private static function metadataSummary(GoshenTransactionEntry $record): HtmlString
+    {
+        $metadata = $record->metadata ?? [];
+
+        if (! is_array($metadata) || $metadata === []) {
+            return new HtmlString('<span class="text-gray-500 dark:text-gray-400">No extra metadata was recorded for this transaction.</span>');
+        }
+
+        return self::detailRows(self::flattenMetadata($metadata));
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, string>
+     */
+    private static function flattenMetadata(array $metadata, ?string $prefix = null): array
+    {
+        $rows = [];
+
+        foreach ($metadata as $key => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $label = collect([$prefix, self::readableMetadataLabel((string) $key)])
+                ->filter()
+                ->implode(' ');
+
+            if (is_array($value)) {
+                $rows = [
+                    ...$rows,
+                    ...self::flattenMetadata($value, $label),
+                ];
+
+                continue;
+            }
+
+            $rows[$label] = self::formatMetadataValue($value);
+        }
+
+        return $rows === []
+            ? ['Recorded details' => 'No extra metadata was recorded for this transaction.']
+            : $rows;
+    }
+
+    private static function readableMetadataLabel(string $key): string
+    {
+        $labels = [
+            'admin_email' => 'Admin email',
+            'admin_name' => 'Admin name',
+            'admin_user_id' => 'Admin user ID',
+            'beneficiary_mobile_user_id' => 'Beneficiary mobile user ID',
+            'booking_id' => 'Booking ID',
+            'booking_public_id' => 'Booking public ID',
+            'event_name' => 'Event name',
+            'external_reference' => 'External reference',
+            'ledger_metadata' => 'Ledger',
+            'note' => 'Note',
+            'payer_admin_user_id' => 'Payer admin user ID',
+            'payer_mobile_user_id' => 'Payer mobile user ID',
+            'purpose_type' => 'Purpose type',
+            'request_ip' => 'Request IP',
+            'request_user_agent' => 'Request user agent',
+            'source' => 'Source',
+            'voucher_code_suffix' => 'Voucher code suffix',
+            'voucher_id' => 'Voucher ID',
+            'wallet_balance_after' => 'Wallet balance after',
+            'wallet_balance_before' => 'Wallet balance before',
+            'wallet_id' => 'Wallet ID',
+            'wallet_ledger_entry_id' => 'Wallet ledger entry ID',
+            'wallet_type' => 'Wallet type',
+        ];
+
+        return $labels[$key] ?? Str::of($key)->replace('_', ' ')->title()->toString();
+    }
+
+    private static function formatMetadataValue(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+
+        if (is_float($value) || is_int($value)) {
+            return (string) $value;
+        }
+
+        return Str::of((string) $value)
+            ->replace('_', ' ')
+            ->trim()
+            ->toString();
+    }
+
+    /**
+     * @param  array<string, string>  $rows
+     */
+    private static function detailRows(array $rows): HtmlString
+    {
+        $html = collect($rows)
+            ->map(function (mixed $value, string $label): string {
+                $label = e($label);
+                $value = e((string) $value);
+
+                return <<<HTML
+                    <div class="border-b border-gray-200 px-4 py-3 last:border-b-0 dark:border-gray-700" style="display: grid; grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr); gap: 1rem; align-items: start;">
+                        <dt class="text-sm font-semibold text-gray-500 dark:text-gray-400">{$label}</dt>
+                        <dd class="m-0 whitespace-pre-line break-words text-sm font-semibold text-gray-950 dark:text-white">{$value}</dd>
+                    </div>
+                HTML;
+            })
+            ->implode('');
+
+        return new HtmlString('<dl class="overflow-hidden rounded-2xl border border-gray-200 bg-white/70 shadow-sm dark:border-gray-700 dark:bg-gray-900/40">'.$html.'</dl>');
     }
 }
