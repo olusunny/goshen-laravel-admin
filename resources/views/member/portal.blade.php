@@ -426,6 +426,8 @@
         .nav-list {
             display: grid;
             gap: 8px;
+            overflow-y: auto;
+            overscroll-behavior: contain;
         }
         .nav-item {
             min-height: 48px;
@@ -443,6 +445,14 @@
         }
         .nav-item:hover, .nav-item.active {
             background: rgba(248, 181, 34, .16);
+            color: #fff;
+        }
+        .nav-item.logout {
+            margin-top: 10px;
+            color: #ffd6d6;
+        }
+        .nav-item.logout:hover {
+            background: rgba(180, 35, 24, .22);
             color: #fff;
         }
         .nav-icon {
@@ -851,6 +861,13 @@
             background: var(--field);
             color: var(--brand-2);
         }
+        .drawer .nav-item.logout {
+            color: var(--danger);
+        }
+        .drawer .nav-item.logout:hover {
+            background: rgba(180, 35, 24, .10);
+            color: var(--danger);
+        }
 
         .bottom-nav {
             position: fixed;
@@ -960,6 +977,9 @@
         <symbol id="icon-help" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"/>
             <path d="M9.7 9a2.5 2.5 0 1 1 4.1 1.9c-.9.7-1.8 1.3-1.8 2.6M12 17h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-logout" viewBox="0 0 24 24">
+            <path d="M10 6H6.8A1.8 1.8 0 0 0 5 7.8v8.4A1.8 1.8 0 0 0 6.8 18H10M14 8l4 4-4 4M8 12h10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
         </symbol>
     </svg>
 
@@ -1138,11 +1158,9 @@
                 <button class="nav-item" type="button" data-nav-page="receipts"><svg class="nav-icon" aria-hidden="true"><use href="#icon-receipt"></use></svg>Receipts</button>
                 <button class="nav-item" type="button" data-nav-page="updates"><svg class="nav-icon" aria-hidden="true"><use href="#icon-bell"></use></svg>Updates</button>
                 <button class="nav-item" type="button" data-nav-page="profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg>Profile</button>
+                <button id="sidebarLogout" class="nav-item logout" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#icon-logout"></use></svg>Sign out</button>
                 <button class="nav-item" type="button" data-nav-page="support"><svg class="nav-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Support</button>
             </nav>
-            <div style="margin-top:24px">
-                <button id="sidebarLogout" class="button outline" type="button">Sign out</button>
-            </div>
         </aside>
 
         <header class="mobile-topbar">
@@ -1181,9 +1199,9 @@
                     <button class="nav-item" type="button" data-nav-page="receipts"><svg class="nav-icon" aria-hidden="true"><use href="#icon-receipt"></use></svg>Receipts</button>
                     <button class="nav-item" type="button" data-nav-page="updates"><svg class="nav-icon" aria-hidden="true"><use href="#icon-bell"></use></svg>Updates</button>
                     <button class="nav-item" type="button" data-nav-page="profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg>Profile</button>
+                    <button id="drawerLogout" class="nav-item logout" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#icon-logout"></use></svg>Sign out</button>
                     <button class="nav-item" type="button" data-nav-page="support"><svg class="nav-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Support</button>
                 </nav>
-                <button id="drawerLogout" class="button dark" type="button">Sign out</button>
             </div>
         </div>
 
