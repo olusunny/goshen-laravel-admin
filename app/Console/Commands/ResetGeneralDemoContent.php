@@ -67,19 +67,7 @@ class ResetGeneralDemoContent extends Command
             return self::SUCCESS;
         }
 
-        $this->dropFinancialWriteGuards();
-
-        try {
-            DB::transaction(function (): void {
-                foreach (self::DELETE_ORDER as $table) {
-                    if (Schema::hasTable($table)) {
-                        DB::table($table)->delete();
-                    }
-                }
-            });
-        } finally {
-            $this->installFinancialWriteGuards();
-        }
+        $this->deleteDemoRows();
 
         $this->info('Reset complete.');
         $this->line('After reset:');
@@ -125,132 +113,32 @@ class ResetGeneralDemoContent extends Command
         );
     }
 
-    private function dropFinancialWriteGuards(): void
-    {
-        if (! in_array(DB::getDriverName(), ['mysql', 'mariadb', 'sqlite'], true)) {
-            return;
-        }
-
-        DB::unprepared('DROP TRIGGER IF EXISTS donations_prevent_completed_update');
-        DB::unprepared('DROP TRIGGER IF EXISTS donations_prevent_completed_delete');
-        DB::unprepared('DROP TRIGGER IF EXISTS fundraising_contributions_prevent_succeeded_update');
-        DB::unprepared('DROP TRIGGER IF EXISTS fundraising_contributions_prevent_succeeded_delete');
-    }
-
-    private function installFinancialWriteGuards(): void
+    private function deleteDemoRows(): void
     {
         $driver = DB::getDriverName();
 
-        if ($driver === 'sqlite') {
-            $this->installSqliteFinancialWriteGuards();
+        if (in_array($driver, ['mysql', 'mariadb'], true)) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
+            try {
+                foreach (self::DELETE_ORDER as $table) {
+                    if (Schema::hasTable($table)) {
+                        DB::table($table)->truncate();
+                    }
+                }
+            } finally {
+                DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            }
 
             return;
         }
 
-        if (in_array($driver, ['mysql', 'mariadb'], true)) {
-            $this->installMysqlFinancialWriteGuards();
-        }
-    }
-
-    private function installSqliteFinancialWriteGuards(): void
-    {
-        if (Schema::hasTable('donations')) {
-            DB::unprepared("
-                CREATE TRIGGER donations_prevent_completed_update
-                BEFORE UPDATE ON donations
-                FOR EACH ROW
-                WHEN LOWER(COALESCE(OLD.status, '')) IN ('paid', 'success', 'completed') OR OLD.paid_at IS NOT NULL
-                BEGIN
-                    SELECT RAISE(ABORT, 'Completed giving records are locked and cannot be edited or deleted.');
-                END
-            ");
-
-            DB::unprepared("
-                CREATE TRIGGER donations_prevent_completed_delete
-                BEFORE DELETE ON donations
-                FOR EACH ROW
-                WHEN LOWER(COALESCE(OLD.status, '')) IN ('paid', 'success', 'completed') OR OLD.paid_at IS NOT NULL
-                BEGIN
-                    SELECT RAISE(ABORT, 'Completed giving records are locked and cannot be edited or deleted.');
-                END
-            ");
-        }
-
-        if (Schema::hasTable('fundraising_campaign_contributions')) {
-            DB::unprepared("
-                CREATE TRIGGER fundraising_contributions_prevent_succeeded_update
-                BEFORE UPDATE ON fundraising_campaign_contributions
-                FOR EACH ROW
-                WHEN LOWER(COALESCE(OLD.status, '')) = 'succeeded' OR OLD.succeeded_at IS NOT NULL
-                BEGIN
-                    SELECT RAISE(ABORT, 'Succeeded fundraising contributions are locked and cannot be edited or deleted.');
-                END
-            ");
-
-            DB::unprepared("
-                CREATE TRIGGER fundraising_contributions_prevent_succeeded_delete
-                BEFORE DELETE ON fundraising_campaign_contributions
-                FOR EACH ROW
-                WHEN LOWER(COALESCE(OLD.status, '')) = 'succeeded' OR OLD.succeeded_at IS NOT NULL
-                BEGIN
-                    SELECT RAISE(ABORT, 'Succeeded fundraising contributions are locked and cannot be edited or deleted.');
-                END
-            ");
-        }
-    }
-
-    private function installMysqlFinancialWriteGuards(): void
-    {
-        if (Schema::hasTable('donations')) {
-            DB::unprepared("
-                CREATE TRIGGER donations_prevent_completed_update
-                BEFORE UPDATE ON donations
-                FOR EACH ROW
-                BEGIN
-                    IF LOWER(COALESCE(OLD.status, '')) IN ('paid', 'success', 'completed') OR OLD.paid_at IS NOT NULL THEN
-                        SIGNAL SQLSTATE '45000'
-                            SET MESSAGE_TEXT = 'Completed giving records are locked and cannot be edited or deleted.';
-                    END IF;
-                END
-            ");
-
-            DB::unprepared("
-                CREATE TRIGGER donations_prevent_completed_delete
-                BEFORE DELETE ON donations
-                FOR EACH ROW
-                BEGIN
-                    IF LOWER(COALESCE(OLD.status, '')) IN ('paid', 'success', 'completed') OR OLD.paid_at IS NOT NULL THEN
-                        SIGNAL SQLSTATE '45000'
-                            SET MESSAGE_TEXT = 'Completed giving records are locked and cannot be edited or deleted.';
-                    END IF;
-                END
-            ");
-        }
-
-        if (Schema::hasTable('fundraising_campaign_contributions')) {
-            DB::unprepared("
-                CREATE TRIGGER fundraising_contributions_prevent_succeeded_update
-                BEFORE UPDATE ON fundraising_campaign_contributions
-                FOR EACH ROW
-                BEGIN
-                    IF LOWER(COALESCE(OLD.status, '')) = 'succeeded' OR OLD.succeeded_at IS NOT NULL THEN
-                        SIGNAL SQLSTATE '45000'
-                            SET MESSAGE_TEXT = 'Succeeded fundraising contributions are locked and cannot be edited or deleted.';
-                    END IF;
-                END
-            ");
-
-            DB::unprepared("
-                CREATE TRIGGER fundraising_contributions_prevent_succeeded_delete
-                BEFORE DELETE ON fundraising_campaign_contributions
-                FOR EACH ROW
-                BEGIN
-                    IF LOWER(COALESCE(OLD.status, '')) = 'succeeded' OR OLD.succeeded_at IS NOT NULL THEN
-                        SIGNAL SQLSTATE '45000'
-                            SET MESSAGE_TEXT = 'Succeeded fundraising contributions are locked and cannot be edited or deleted.';
-                    END IF;
-                END
-            ");
-        }
+        DB::transaction(function (): void {
+            foreach (self::DELETE_ORDER as $table) {
+                if (Schema::hasTable($table)) {
+                    DB::table($table)->delete();
+                }
+            }
+        });
     }
 }
