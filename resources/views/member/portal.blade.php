@@ -1908,12 +1908,12 @@
         }
 
         function ticketMaximum(ticket) {
-            const max = normalizedTicketLimit(ticket?.max_per_booking, 20);
+            const max = normalizedTicketLimit(ticket?.max_per_booking, 10);
             return Math.max(ticketMinimum(ticket), Math.min(20, max));
         }
 
         function ticketDefaultQuantity(ticket) {
-            return Math.max(ticketMinimum(ticket), 1);
+            return clampTicketQuantity(ticketMinimum(ticket), ticket);
         }
 
         function clampTicketQuantity(value, ticket) {
@@ -1968,7 +1968,7 @@
                             <input class="input" name="referral_code" maxlength="32" autocomplete="off">
                         </div>
                     </div>
-                    <div class="attendee-fields">${renderAttendeeFields(initialQuantity, event)}</div>
+                    <div class="attendee-fields">${renderAttendeeFields(initialQuantity, event, [], firstTicket)}</div>
                     <label class="choice">
                         <input type="checkbox" name="uk_privacy_consent" value="1" required>
                         <span>I agree that MFM Triumphant Church may process my registration, attendee, payment, ticket, and travel-support information for Goshen Retreat administration in line with UK data protection requirements.</span>
@@ -1983,9 +1983,10 @@
             return { first: parts[0] || '', last: parts.slice(1).join(' ') };
         }
 
-        function renderAttendeeFields(quantity, event, existingAttendees = []) {
+        function renderAttendeeFields(quantity, event, existingAttendees = [], ticket = null) {
             const total = Math.max(1, Math.min(20, Number(quantity || 1)));
             const fields = registrationFieldsFor(event);
+            const currency = ticket?.currency || event?.currency || 'GBP';
             const name = splitName(currentUser?.name || '');
             const cards = [];
             for (let index = 0; index < total; index += 1) {
@@ -1998,7 +1999,7 @@
                             <div class="field"><label>Last name</label><input class="input attendee-last-name" value="${escapeHtml(existing.last_name ?? (index === 0 ? name.last : ''))}"></div>
                             <div class="field"><label>Email</label><input class="input attendee-email" type="email" value="${escapeHtml(existing.email ?? (index === 0 ? currentUser?.email || '' : ''))}"></div>
                             <div class="field"><label>Phone</label><input class="input attendee-phone" type="tel" value="${escapeHtml(existing.phone ?? (index === 0 ? currentUser?.phone || '' : ''))}"></div>
-                            ${fields.map((field) => renderRegistrationField(field, index, existing.custom_fields || existing)).join('')}
+                            ${fields.map((field) => renderRegistrationField(field, index, existing.custom_fields || existing, currency)).join('')}
                         </div>
                     </div>
                 `);
@@ -2014,17 +2015,41 @@
             return option && typeof option === 'object' ? (option.label ?? option.value ?? 'Option') : option;
         }
 
-        function optionFeeLabel(option) {
+        function optionFeeLabel(option, currency = 'GBP') {
             const amount = Number(option?.fee_amount ?? option?.fee ?? 0);
             if (!Number.isFinite(amount) || amount <= 0) return '';
-            return ` + ${formatMoney(amount, option?.currency || option?.fee_currency || 'GBP')}`;
+            return ` + ${formatMoney(amount, option?.currency || option?.fee_currency || currency)}`;
+        }
+
+        function attendeeFieldIdentity(key) {
+            const normalized = `${key || ''}`
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/g, '');
+            const aliases = {
+                age: 'age_group',
+                agegroup: 'age_group',
+                free_bus: 'free_church_bus_interest',
+                freechurchbus: 'free_church_bus_interest',
+                free_church_bus: 'free_church_bus_interest',
+                free_church_bus_consent: 'free_church_bus_interest',
+                church_bus: 'free_church_bus_interest',
+                bus_interest: 'free_church_bus_interest',
+                volunteer: 'volunteer_department',
+                volunteer_choice: 'volunteer_department',
+                volunteer_department_choice: 'volunteer_department',
+            };
+            return aliases[normalized] || normalized;
         }
 
         function fieldValueForExisting(existingFields, key) {
-            return `${(existingFields || {})[key] ?? ''}`;
+            const canonicalKey = attendeeFieldIdentity(key);
+            return `${(existingFields || {})[key] ?? (existingFields || {})[canonicalKey] ?? ''}`;
         }
 
-        function renderRegistrationField(field, attendeeIndex, existingFields = {}) {
+        function renderRegistrationField(field, attendeeIndex, existingFields = {}, currency = 'GBP') {
             const key = `${field.key || ''}`.trim();
             const label = escapeHtml(field.label || key);
             const type = `${field.type || 'text'}`.toLowerCase();
@@ -2036,7 +2061,7 @@
                 return `<div class="field"><label>${label}</label><select class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" ${required}>${options.map((option) => {
                     const value = `${optionValue(option)}`;
                     const selected = value === currentValue ? 'selected' : '';
-                    return `<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(`${optionLabel(option)}${optionFeeLabel(option)}`)}</option>`;
+                    return `<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(`${optionLabel(option)}${optionFeeLabel(option, currency)}`)}</option>`;
                 }).join('')}</select></div>`;
             }
 
@@ -2051,7 +2076,7 @@
                     const image = option?.image_url ? `<img src="${escapeHtml(option.image_url)}" alt="">` : '';
                     const swatch = option?.color_hex ? `<span class="swatch" style="background:${escapeHtml(option.color_hex)}"></span>` : '';
                     const checked = value === currentValue ? 'checked' : '';
-                    return `<label class="choice"><input class="attendee-dynamic-control" data-field-key="${escapeHtml(key)}" type="radio" name="${escapeHtml(radioName)}" value="${escapeHtml(value)}" ${required} ${checked}>${image || swatch}<span>${escapeHtml(`${optionLabel(option)}${optionFeeLabel(option)}`)}</span></label>`;
+                    return `<label class="choice"><input class="attendee-dynamic-control" data-field-key="${escapeHtml(key)}" type="radio" name="${escapeHtml(radioName)}" value="${escapeHtml(value)}" ${required} ${checked}>${image || swatch}<span>${escapeHtml(`${optionLabel(option)}${optionFeeLabel(option, currency)}`)}</span></label>`;
                 }).join('')}</div></div>`;
             }
 
@@ -2063,11 +2088,16 @@
             card.querySelectorAll('.attendee-dynamic-control[data-field-key]').forEach((input) => {
                 const key = input.dataset.fieldKey;
                 if (!key) return;
+                const canonicalKey = attendeeFieldIdentity(key);
                 if (input.type === 'radio') {
-                    if (input.checked) fields[key] = input.value || '';
+                    if (input.checked) {
+                        fields[key] = input.value || '';
+                        if (canonicalKey !== key) fields[canonicalKey] = input.value || '';
+                    }
                     return;
                 }
                 fields[key] = input.value || '';
+                if (canonicalKey !== key) fields[canonicalKey] = input.value || '';
             });
             return fields;
         }
@@ -2104,6 +2134,7 @@
                 nextQuantity,
                 eventModel,
                 collectAttendeeDrafts(form),
+                ticket,
             );
         }
 
@@ -2839,8 +2870,7 @@
 
             const form = ticketSelect.closest('.registration-form');
             const eventModel = eventsCache.find((item) => `${item.public_id}` === `${form.dataset.eventId}`);
-            const ticket = eventTicketById(eventModel, ticketSelect.value);
-            syncRegistrationQuantity(form, eventModel, ticketDefaultQuantity(ticket));
+            syncRegistrationQuantity(form, eventModel);
         });
 
         document.getElementById('portalMain').addEventListener('submit', async (event) => {
