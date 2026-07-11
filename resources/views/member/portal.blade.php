@@ -659,6 +659,33 @@
         }
         .detail-row:first-child { border-top: 0; padding-top: 0; }
         .detail-row span, .item-meta { color: var(--muted); line-height: 1.5; }
+        .profile-triumphant-id {
+            display: grid;
+            justify-items: center;
+            gap: 8px;
+            width: min(100%, 440px);
+            margin: 18px auto 16px;
+            padding: 20px 18px;
+            border: 1px solid var(--line);
+            border-radius: 26px;
+            background: linear-gradient(135deg, var(--gold-2), var(--field));
+            box-shadow: var(--soft-shadow);
+            text-align: center;
+        }
+        .profile-triumphant-id span {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 900;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+        }
+        .profile-triumphant-id strong {
+            color: var(--brand-2);
+            font-size: clamp(36px, 9vw, 58px);
+            line-height: .95;
+            letter-spacing: .08em;
+            overflow-wrap: anywhere;
+        }
 
         .attendee-card {
             background: var(--field);
@@ -2723,6 +2750,7 @@
                 user.name || [firstName, user.middle_name, lastName].filter(Boolean).join(' '),
                 'Member',
             );
+            const triumphantId = displayProfileValue(user.triumphant_id, 'Not assigned yet');
             const residence = [user.country_of_residence, user.state_county_province].filter(Boolean).join(', ');
             return `
                 <div class="profile-card-head">
@@ -2732,8 +2760,11 @@
                     </div>
                     <button class="button small outline profile-edit-button" type="button">Edit profile</button>
                 </div>
+                <div class="profile-triumphant-id" aria-label="Triumphant ID">
+                    <span>Triumphant ID</span>
+                    <strong>${escapeHtml(triumphantId)}</strong>
+                </div>
                 <div class="detail-list">
-                    ${profileDetailRow('Triumphant ID', user.triumphant_id, 'Not assigned yet')}
                     ${profileDetailRow('Email', user.email)}
                     ${profileDetailRow('Phone', user.phone)}
                     ${profileDetailRow('Title', user.title || user.profile_title)}
