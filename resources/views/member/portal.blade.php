@@ -3119,7 +3119,9 @@
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/member-sw.js').catch(() => {});
+                navigator.serviceWorker.register('/member-sw.js', { updateViaCache: 'none' })
+                    .then((registration) => registration.update().catch(() => {}))
+                    .catch(() => {});
             });
         }
     </script>

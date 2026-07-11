@@ -1,6 +1,5 @@
-const CACHE_NAME = 'goshen-member-shell-v6';
+const CACHE_NAME = 'goshen-member-shell-v7';
 const APP_SHELL = [
-  '/app',
   '/member-manifest.json',
   '/favicon.png'
 ];
@@ -28,9 +27,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (request.mode === 'navigate') {
+  const acceptsHtml = request.headers.get('accept')?.includes('text/html');
+
+  if (request.mode === 'navigate' || acceptsHtml) {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/app'))
+      fetch(request, { cache: 'no-store' }).catch(() => new Response(
+        '<!doctype html><title>Offline</title><meta name="viewport" content="width=device-width, initial-scale=1"><body style="font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;margin:2rem;color:#0c2230"><h1>You are offline</h1><p>Please reconnect to continue using the Goshen Retreat portal.</p></body>',
+        {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          status: 503,
+          statusText: 'Offline',
+        }
+      ))
     );
     return;
   }

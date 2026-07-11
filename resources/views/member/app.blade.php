@@ -4741,7 +4741,9 @@
     renderAuth();
 
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/member-sw.js').catch(() => {});
+        navigator.serviceWorker.register('/member-sw.js', { updateViaCache: 'none' })
+            .then((registration) => registration.update().catch(() => {}))
+            .catch(() => {});
     }
 </script>
 </body>
