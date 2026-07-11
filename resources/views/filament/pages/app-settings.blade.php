@@ -162,6 +162,7 @@
                             'goshenQuizEnabled' => ['Quiz', 'Show Goshen Quiz in the app.'],
                             'goshenWalletWithdrawalsEnabled' => ['Wallet withdrawal', 'Allow wallet withdrawal request screens.'],
                             'goshenWalletAutoTopupEnabled' => ['Wallet auto top-up', 'Allow recurring wallet auto top-up plans.'],
+                            'goshenWalletAdminTopupEnabled' => ['Admin wallet top-up', 'Allow authorized admins to add funds directly to member wallets.'],
                             'branchesEnabled' => ['Branches', 'Show the branches module.'],
                             'mobilePhoneOtpLoginEnabled' => ['Mobile phone OTP login', 'Allow Firebase phone number sign-in.'],
                         ] as $model => [$label, $note])

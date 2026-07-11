@@ -4,8 +4,10 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\GoshenWalletResource\Pages;
+use App\Models\AppSetting;
 use App\Models\GoshenWallet;
 use App\Models\User;
+use App\Services\GoshenWalletService;
 use App\Services\WalletSecurityResetService;
 use App\Support\AdminPermissions;
 use BackedEnum;
@@ -103,8 +105,161 @@ class GoshenWalletResource extends Resource
             ->recordUrl(fn (Model $record): string => static::getUrl('view', ['record' => $record]))
             ->recordActions([
                 Actions\ViewAction::make()->label('View wallet'),
+                static::walletAdminTopUpAction(),
                 static::walletSecurityResetAction(),
             ]);
+    }
+
+    public static function walletAdminTopUpAction(): Actions\Action
+    {
+        return Actions\Action::make('adminWalletTopUp')
+            ->label('Top up wallet')
+            ->icon('heroicon-o-banknotes')
+            ->color('success')
+            ->visible(fn (GoshenWallet $record): bool => static::canAdminTopUpWallet($record))
+            ->form(fn (GoshenWallet $record): array => static::walletAdminTopUpForm($record))
+            ->modalHeading('Top up member wallet')
+            ->modalDescription('This records an admin-approved wallet credit with audit details. Use only after the church has received or approved the matching funds.')
+            ->modalSubmitActionLabel('Top up wallet')
+            ->action(function (GoshenWallet $record, array $data, GoshenWalletService $wallets): void {
+                static::topUpWallet($record, $data, $wallets);
+            });
+    }
+
+    public static function walletAdminTopUpForm(?GoshenWallet $record = null): array
+    {
+        $currency = strtoupper((string) ($record?->currency ?: 'GBP'));
+
+        return [
+            Forms\Components\TextInput::make('amount')
+                ->label('Amount')
+                ->numeric()
+                ->minValue(0.01)
+                ->step('0.01')
+                ->prefix($currency)
+                ->required(),
+            Forms\Components\TextInput::make('currency')
+                ->label('Currency')
+                ->default($currency)
+                ->maxLength(3)
+                ->required()
+                ->helperText('Must match the wallet currency.'),
+            Forms\Components\Select::make('purpose_type')
+                ->label('Purpose')
+                ->options([
+                    'cash_received' => 'Cash received',
+                    'bank_transfer_received' => 'Bank transfer received',
+                    'voucher_replacement' => 'Voucher replacement',
+                    'balance_correction' => 'Balance correction',
+                    'admin_wallet_top_up' => 'Admin wallet top-up',
+                    'other' => 'Other',
+                ])
+                ->default('cash_received')
+                ->native(false)
+                ->required(),
+            Forms\Components\TextInput::make('external_reference')
+                ->label('External reference')
+                ->maxLength(120)
+                ->helperText('Optional receipt, cash log, bank transfer, or support reference.'),
+            Forms\Components\Textarea::make('note')
+                ->label('Audit note')
+                ->helperText('Record why this wallet is being topped up and how the funds were confirmed.')
+                ->required()
+                ->minLength(12)
+                ->maxLength(1000)
+                ->rows(4),
+            Forms\Components\TextInput::make('confirmation')
+                ->label('Type TOP UP WALLET')
+                ->helperText('This creates a paid wallet credit immediately.')
+                ->required(),
+        ];
+    }
+
+    public static function topUpWallet(
+        GoshenWallet $record,
+        array $data,
+        GoshenWalletService $wallets,
+    ): void {
+        $confirmation = trim((string) ($data['confirmation'] ?? ''));
+        if ($confirmation !== 'TOP UP WALLET') {
+            Notification::make()
+                ->title('Confirmation phrase did not match')
+                ->body('Type TOP UP WALLET to confirm this wallet credit.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        if (! static::canAdminTopUpWallet($record)) {
+            Notification::make()
+                ->title('Wallet top-up not allowed')
+                ->body('The feature is disabled, the wallet is not linked to a member, or you do not have permission.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $admin = Auth::user();
+        if (! $admin instanceof User) {
+            Notification::make()
+                ->title('Admin account could not be verified')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        try {
+            $entry = $wallets->createAdminTopUp($record, $admin, $data);
+        } catch (RuntimeException $exception) {
+            Notification::make()
+                ->title('Wallet top-up was not created')
+                ->body($exception->getMessage())
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $record->refresh();
+
+        Notification::make()
+            ->title('Wallet topped up')
+            ->body(sprintf(
+                '%s %s was credited. New balance: %s %s.',
+                $entry->currency,
+                number_format((float) $entry->amount, 2),
+                $record->currency,
+                number_format((float) $record->balance, 2),
+            ))
+            ->success()
+            ->send();
+    }
+
+    public static function canAdminTopUpWallet(?GoshenWallet $record = null): bool
+    {
+        $admin = Auth::user();
+
+        if (! $admin || (! $admin->hasRole('super_admin') && ! $admin->can(AdminPermissions::resourcePermission(static::class)))) {
+            return false;
+        }
+
+        $walletEnabled = filter_var(AppSetting::value('goshen_wallet_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $adminTopUpEnabled = filter_var(AppSetting::value('goshen_wallet_admin_topup_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+
+        if (! $walletEnabled || ! $adminTopUpEnabled) {
+            return false;
+        }
+
+        if (! $record) {
+            return true;
+        }
+
+        $record->loadMissing('user');
+
+        return $record->user !== null;
     }
 
     public static function walletSecurityResetAction(): Actions\Action
@@ -219,7 +374,6 @@ class GoshenWalletResource extends Resource
             ->success()
             ->send();
 
-        return;
     }
 
     public static function canResetWalletSecurity(?GoshenWallet $record = null): bool

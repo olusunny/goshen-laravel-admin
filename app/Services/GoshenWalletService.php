@@ -8,6 +8,7 @@ use App\Models\GoshenWalletLedgerEntry;
 use App\Models\GoshenWalletSavingsPlan;
 use App\Models\GoshenWalletWithdrawalRequest;
 use App\Models\MobileUser;
+use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -607,6 +608,67 @@ class GoshenWalletService
         ];
     }
 
+    public function createAdminTopUp(GoshenWallet $wallet, User $admin, array $data): GoshenWalletLedgerEntry
+    {
+        $amount = round((float) ($data['amount'] ?? 0), 2);
+        if ($amount <= 0) {
+            throw new RuntimeException('Wallet top-up amount must be greater than zero.');
+        }
+
+        $currency = strtoupper((string) ($data['currency'] ?? $wallet->currency ?: $this->defaultCurrency()));
+        $note = trim((string) ($data['note'] ?? ''));
+        if ($note === '') {
+            throw new RuntimeException('A wallet top-up note is required.');
+        }
+
+        $purpose = trim((string) ($data['purpose_type'] ?? 'admin_wallet_top_up'));
+        $externalReference = trim((string) ($data['external_reference'] ?? ''));
+        $reference = 'gw_admin_' . Str::ulid();
+
+        return DB::transaction(function () use ($wallet, $admin, $amount, $currency, $note, $purpose, $externalReference, $reference): GoshenWalletLedgerEntry {
+            $lockedWallet = GoshenWallet::query()
+                ->whereKey($wallet->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $walletCurrency = strtoupper((string) ($lockedWallet->currency ?: $currency));
+            if ($walletCurrency !== $currency) {
+                throw new RuntimeException("This wallet uses {$walletCurrency}; top-ups must use the wallet currency.");
+            }
+
+            $previousBalance = round((float) $lockedWallet->balance, 2);
+            $newBalance = round($previousBalance + $amount, 2);
+
+            $lockedWallet->forceFill([
+                'currency' => $walletCurrency,
+                'balance' => $newBalance,
+            ])->save();
+
+            $entry = $lockedWallet->ledgerEntries()->create([
+                'type' => 'admin_top_up',
+                'status' => 'paid',
+                'currency' => $walletCurrency,
+                'amount' => $amount,
+                'gateway' => 'admin',
+                'provider_reference' => $reference,
+                'metadata' => array_filter([
+                    'source' => 'admin_panel',
+                    'purpose_type' => $purpose,
+                    'note' => $note,
+                    'external_reference' => $externalReference !== '' ? $externalReference : null,
+                    'admin_user_id' => $admin->id,
+                    'admin_name' => $admin->name,
+                    'admin_email' => $admin->email,
+                    'wallet_balance_before' => $previousBalance,
+                    'wallet_balance_after' => $newBalance,
+                ], static fn (mixed $value): bool => $value !== null && $value !== ''),
+                'settled_at' => now(),
+            ]);
+
+            return $entry->fresh(['wallet']) ?? $entry;
+        });
+    }
+
     public function settleStripeCheckout(array $payload): ?GoshenWalletLedgerEntry
     {
         $object = data_get($payload, 'data.object', []);
@@ -1089,7 +1151,7 @@ class GoshenWalletService
         return [
             'id' => $entry->id,
             'type' => $entry->type,
-            'direction' => in_array($entry->type, ['top_up', 'scheduled_top_up', 'voucher_top_up', 'refund', 'withdrawal_refund', 'transfer_in', 'referral_conversion'], true) ? 'credit' : 'debit',
+            'direction' => in_array($entry->type, ['top_up', 'scheduled_top_up', 'voucher_top_up', 'admin_top_up', 'refund', 'withdrawal_refund', 'transfer_in', 'referral_conversion'], true) ? 'credit' : 'debit',
             'status' => $entry->status,
             'description' => $this->ledgerDescription($entry),
             'currency' => $entry->currency,
@@ -1171,6 +1233,7 @@ class GoshenWalletService
             'top_up' => 'Wallet top-up',
             'scheduled_top_up' => 'Automatic wallet top-up',
             'voucher_top_up' => 'Voucher wallet top-up',
+            'admin_top_up' => 'Admin wallet top-up',
             'retreat_payment' => 'Goshen Retreat payment',
             'giving_payment' => 'Giving from wallet',
             'fundraising_payment' => 'Fundraising contribution',

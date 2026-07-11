@@ -99,6 +99,8 @@ class AppSettings extends Page
 
     public bool $goshenWalletAutoTopupEnabled = true;
 
+    public bool $goshenWalletAdminTopupEnabled = true;
+
     public bool $branchesEnabled = true;
 
     public bool $mobilePhoneOtpLoginEnabled = true;
@@ -173,6 +175,7 @@ class AppSettings extends Page
         $this->goshenQuizEnabled = filter_var(AppSetting::value('goshen_quiz_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         $this->goshenWalletWithdrawalsEnabled = filter_var(AppSetting::value('goshen_wallet_withdrawals_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         $this->goshenWalletAutoTopupEnabled = filter_var(AppSetting::value('goshen_wallet_auto_topup_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->goshenWalletAdminTopupEnabled = filter_var(AppSetting::value('goshen_wallet_admin_topup_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         $this->branchesEnabled = filter_var(AppSetting::value('branches_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         $this->mobilePhoneOtpLoginEnabled = filter_var(AppSetting::value('mobile_phone_otp_login_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
 
@@ -270,6 +273,7 @@ class AppSettings extends Page
             'goshen_quiz_enabled' => ['required', 'boolean'],
             'goshen_wallet_withdrawals_enabled' => ['required', 'boolean'],
             'goshen_wallet_auto_topup_enabled' => ['required', 'boolean'],
+            'goshen_wallet_admin_topup_enabled' => ['required', 'boolean'],
             'branches_enabled' => ['required', 'boolean'],
             'mobile_phone_otp_login_enabled' => ['required', 'boolean'],
             'accommodation_booking_support_name' => ['nullable', 'string', 'max:120'],
@@ -331,6 +335,7 @@ class AppSettings extends Page
             'goshen_quiz_enabled' => $this->goshenQuizEnabled,
             'goshen_wallet_withdrawals_enabled' => $this->goshenWalletWithdrawalsEnabled,
             'goshen_wallet_auto_topup_enabled' => $this->goshenWalletAutoTopupEnabled,
+            'goshen_wallet_admin_topup_enabled' => $this->goshenWalletAdminTopupEnabled,
             'branches_enabled' => $this->branchesEnabled,
             'mobile_phone_otp_login_enabled' => $this->mobilePhoneOtpLoginEnabled,
             'accommodation_booking_support_name' => $this->accommodationSupportName,
@@ -381,6 +386,7 @@ class AppSettings extends Page
             ['features', 'goshen_quiz_enabled', $values['goshen_quiz_enabled'] ? '1' : '0', 'Show Goshen Quiz in the mobile app.'],
             ['features', 'goshen_wallet_withdrawals_enabled', $values['goshen_wallet_withdrawals_enabled'] ? '1' : '0', 'Allow wallet withdrawal requests.'],
             ['features', 'goshen_wallet_auto_topup_enabled', $values['goshen_wallet_auto_topup_enabled'] ? '1' : '0', 'Allow recurring wallet auto top-up plans.'],
+            ['features', 'goshen_wallet_admin_topup_enabled', $values['goshen_wallet_admin_topup_enabled'] ? '1' : '0', 'Allow authorized admins to add funds directly to member wallets from the admin panel.'],
             ['features', 'branches_enabled', $values['branches_enabled'] ? '1' : '0', 'Show Branches module in the mobile app.'],
             ['features', 'mobile_phone_otp_login_enabled', $values['mobile_phone_otp_login_enabled'] ? '1' : '0', 'Allow Firebase phone OTP sign-in in the mobile app.'],
             ['support', 'accommodation_booking_support_name', $values['accommodation_booking_support_name'] ?? '', 'Accommodation support contact name.'],
@@ -526,6 +532,7 @@ class AppSettings extends Page
             'goshen_quiz_enabled',
             'goshen_wallet_withdrawals_enabled',
             'goshen_wallet_auto_topup_enabled',
+            'goshen_wallet_admin_topup_enabled',
             'branches_enabled',
             'mobile_phone_otp_login_enabled',
             'accommodation_booking_support_name',

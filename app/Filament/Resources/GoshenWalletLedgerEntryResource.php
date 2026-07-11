@@ -6,6 +6,7 @@ use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\GoshenWalletLedgerEntryResource\Pages;
 use App\Models\GoshenWalletLedgerEntry;
 use BackedEnum;
+use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
@@ -135,7 +136,7 @@ class GoshenWalletLedgerEntryResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->recordUrl(fn (Model $record): string => static::getUrl('view', ['record' => $record]))
             ->recordActions([
-                \Filament\Actions\ViewAction::make()->label('View activity'),
+                ViewAction::make()->label('View activity'),
             ]);
     }
 
@@ -153,6 +154,7 @@ class GoshenWalletLedgerEntryResource extends Resource
             'transfer_in' => 'Transfer received',
             'transfer_out' => 'Transfer sent',
             'top_up' => 'Wallet top-up',
+            'admin_top_up' => 'Admin wallet top-up',
             'wallet_payment' => 'Wallet payment',
             'giving_payment' => 'Giving from wallet',
             'fundraising_payment' => 'Fundraising contribution',
@@ -284,7 +286,7 @@ class GoshenWalletLedgerEntryResource extends Resource
     private static function typeTone(?string $type): string
     {
         return match ($type) {
-            'transfer_in', 'top_up', 'credit', 'refund', 'referral_conversion' => 'success',
+            'transfer_in', 'top_up', 'admin_top_up', 'credit', 'refund', 'referral_conversion' => 'success',
             'transfer_out', 'payment', 'debit', 'retreat_payment', 'giving_payment', 'fundraising_payment' => 'warning',
             default => 'gray',
         };

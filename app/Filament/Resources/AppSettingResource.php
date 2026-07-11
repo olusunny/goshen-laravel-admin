@@ -3,8 +3,8 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\AppSettingResource\Pages;
-use App\Models\AppSetting;
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
+use App\Models\AppSetting;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -19,6 +19,7 @@ use UnitEnum;
 class AppSettingResource extends Resource
 {
     use AuthorizesResourceAccess;
+
     protected static ?string $model = AppSetting::class;
 
     protected static bool $shouldRegisterNavigation = false;
@@ -245,6 +246,7 @@ class AppSettingResource extends Resource
             'goshen_quiz_enabled',
             'goshen_wallet_withdrawals_enabled',
             'goshen_wallet_auto_topup_enabled',
+            'goshen_wallet_admin_topup_enabled',
             'branches_enabled',
             'mobile_phone_otp_login_enabled',
         ];
@@ -281,6 +283,7 @@ class AppSettingResource extends Resource
             'goshen_quiz_enabled' => 'Enable Quiz',
             'goshen_wallet_withdrawals_enabled' => 'Enable Wallet withdrawal',
             'goshen_wallet_auto_topup_enabled' => 'Enable Wallet auto top-up',
+            'goshen_wallet_admin_topup_enabled' => 'Enable Admin wallet top-up',
             'branches_enabled' => 'Enable Branches',
             'mobile_phone_otp_login_enabled' => 'Enable Mobile phone OTP login',
             'goshen_referral_points_per_paid_registration' => 'Goshen referral points per paid registration',
@@ -323,6 +326,7 @@ class AppSettingResource extends Resource
             'goshen_quiz_enabled' => 'Show Goshen Quiz in the mobile app.',
             'goshen_wallet_withdrawals_enabled' => 'Allow wallet withdrawal requests.',
             'goshen_wallet_auto_topup_enabled' => 'Allow recurring wallet auto top-up plans.',
+            'goshen_wallet_admin_topup_enabled' => 'Allow authorized admins to add funds directly to member wallets from the admin panel.',
             'branches_enabled' => 'Show the Branches module.',
             'mobile_phone_otp_login_enabled' => 'Allow Firebase phone number sign-in in the mobile app.',
             'goshen_referral_points_per_paid_registration' => 'Awarded after a referred Goshen Retreat registration is paid.',
