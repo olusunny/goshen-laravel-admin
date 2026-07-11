@@ -195,6 +195,54 @@
             box-shadow: 0 0 0 4px rgba(248, 181, 34, .18);
         }
 
+        .quantity-stepper {
+            display: grid;
+            grid-template-columns: 54px minmax(84px, 1fr) 54px;
+            gap: 10px;
+            align-items: center;
+        }
+        .quantity-stepper-button {
+            width: 54px;
+            min-height: 54px;
+            border: 1px solid var(--line);
+            border-radius: 17px;
+            background: var(--card);
+            color: var(--ink);
+            display: inline-grid;
+            place-items: center;
+            cursor: pointer;
+            font-size: 28px;
+            font-weight: 1000;
+            line-height: 1;
+        }
+        .quantity-stepper-button.add {
+            border-color: transparent;
+            background: var(--gold);
+            color: #0c2230;
+        }
+        .quantity-stepper-button:disabled {
+            cursor: not-allowed;
+            opacity: .42;
+        }
+        .attendee-quantity-value {
+            min-height: 54px;
+            border: 1px solid var(--line);
+            border-radius: 17px;
+            background: var(--field);
+            color: var(--ink);
+            display: grid;
+            place-items: center;
+            padding: 0 16px;
+            font-size: 22px;
+            font-weight: 1000;
+        }
+        .attendee-quantity-field {
+            grid-column: 1 / -1;
+        }
+        .attendee-quantity-field .hint {
+            margin-top: 2px;
+        }
+
         .form-grid {
             display: grid;
             gap: 14px;
@@ -1931,6 +1979,40 @@
                 : `This ticket allows ${min} to ${max} attendee${max === 1 ? '' : 's'} per booking.`;
         }
 
+        function ticketShowsQuantitySelector(ticket) {
+            const explicitMin = normalizedTicketLimit(ticket?.min_per_booking, 1);
+            const explicitMax = Number(ticket?.max_per_booking);
+            const hasExplicitMultiMax = Number.isFinite(explicitMax) && explicitMax > 1;
+            const ticketName = `${ticket?.name || ''}`.toLowerCase();
+            return explicitMin > 1 || hasExplicitMultiMax || ticketName.includes('family');
+        }
+
+        function renderQuantityStepper(ticket, quantity, labelId = 'attendeeQuantityLabel') {
+            const min = ticketMinimum(ticket);
+            const max = ticketMaximum(ticket);
+            const current = clampTicketQuantity(quantity, ticket);
+            return `
+                <input class="attendee-quantity" name="quantity" type="hidden" value="${escapeHtml(current)}">
+                <div class="quantity-stepper" role="group" aria-labelledby="${escapeHtml(labelId)}">
+                    <button class="quantity-stepper-button attendee-quantity-decrease" type="button" aria-label="Reduce attendees" ${current <= min ? 'disabled' : ''}>−</button>
+                    <span class="attendee-quantity-value" aria-live="polite">${escapeHtml(current)}</span>
+                    <button class="quantity-stepper-button add attendee-quantity-increase" type="button" aria-label="Add attendee" ${current >= max ? 'disabled' : ''}>+</button>
+                </div>
+            `;
+        }
+
+        function updateQuantityStepper(form, ticket, quantity) {
+            const min = ticketMinimum(ticket);
+            const max = ticketMaximum(ticket);
+            const value = clampTicketQuantity(quantity, ticket);
+            const display = form.querySelector('.attendee-quantity-value');
+            if (display) display.textContent = `${value}`;
+            const decrease = form.querySelector('.attendee-quantity-decrease');
+            if (decrease) decrease.disabled = value <= min;
+            const increase = form.querySelector('.attendee-quantity-increase');
+            if (increase) increase.disabled = value >= max;
+        }
+
         function renderRegistrationForm(event) {
             const tickets = Array.isArray(event.ticket_types) ? event.ticket_types : [];
             if (!tickets.length) {
@@ -1939,6 +2021,8 @@
             const ticketOptions = tickets.map((ticket) => `<option value="${escapeHtml(ticket.public_id)}">${escapeHtml(ticket.name || 'Ticket')} - ${escapeHtml(formatMoney(ticket.price, ticket.currency))} · ${escapeHtml(ticketQuantityHint(ticket))}</option>`).join('');
             const firstTicket = tickets[0] || {};
             const initialQuantity = ticketDefaultQuantity(firstTicket);
+            const quantityLabelId = `attendeeQuantityLabel-${event.public_id || 'current'}`;
+            const showQuantitySelector = ticketShowsQuantitySelector(firstTicket);
             return `
                 <form class="form registration-form" data-event-id="${escapeHtml(event.public_id)}">
                     <div class="form-grid">
@@ -1946,9 +2030,9 @@
                             <label>Ticket type</label>
                             <select class="input" name="ticket_type_id" required>${ticketOptions}</select>
                         </div>
-                        <div class="field">
-                            <label>Attendees</label>
-                            <input class="input attendee-quantity" name="quantity" type="number" min="${escapeHtml(ticketMinimum(firstTicket))}" max="${escapeHtml(ticketMaximum(firstTicket))}" value="${escapeHtml(initialQuantity)}" required>
+                        <div class="field attendee-quantity-field" ${showQuantitySelector ? '' : 'hidden'}>
+                            <label id="${escapeHtml(quantityLabelId)}">Attendees</label>
+                            ${renderQuantityStepper(firstTicket, initialQuantity, quantityLabelId)}
                             <span class="hint attendee-quantity-hint">${escapeHtml(ticketQuantityHint(firstTicket))}</span>
                         </div>
                         <div class="field">
@@ -2123,9 +2207,11 @@
 
             const ticket = eventTicketById(eventModel, select.value);
             const nextQuantity = clampTicketQuantity(preferredQuantity ?? quantityInput.value, ticket);
-            quantityInput.min = `${ticketMinimum(ticket)}`;
-            quantityInput.max = `${ticketMaximum(ticket)}`;
             quantityInput.value = `${nextQuantity}`;
+            updateQuantityStepper(form, ticket, nextQuantity);
+
+            const quantityField = form.querySelector('.attendee-quantity-field');
+            if (quantityField) quantityField.hidden = !ticketShowsQuantitySelector(ticket);
 
             const hint = form.querySelector('.attendee-quantity-hint');
             if (hint) hint.textContent = ticketQuantityHint(ticket);
@@ -3006,6 +3092,18 @@
         });
 
         document.getElementById('portalMain').addEventListener('click', async (event) => {
+            const quantityButton = event.target.closest('.attendee-quantity-decrease, .attendee-quantity-increase');
+            if (quantityButton) {
+                const form = quantityButton.closest('.registration-form');
+                const quantityInput = form?.querySelector('.attendee-quantity');
+                if (!form || !quantityInput) return;
+
+                const eventModel = eventsCache.find((item) => `${item.public_id}` === `${form.dataset.eventId}`);
+                const delta = quantityButton.classList.contains('attendee-quantity-increase') ? 1 : -1;
+                const current = Number(quantityInput.value || 1);
+                syncRegistrationQuantity(form, eventModel, current + delta);
+                return;
+            }
             const walletTab = event.target.closest('[data-wallet-tab]');
             if (walletTab) {
                 setWalletTab(walletTab.dataset.walletTab);
