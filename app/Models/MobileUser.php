@@ -140,6 +140,11 @@ class MobileUser extends Authenticatable
         return $this->hasOne(GoshenWallet::class, 'mobile_user_id');
     }
 
+    public function transactionEntries(): HasMany
+    {
+        return $this->hasMany(GoshenTransactionEntry::class, 'mobile_user_id');
+    }
+
     public function goshenReferralCode(): HasOne
     {
         return $this->hasOne(GoshenReferralCode::class, 'mobile_user_id');

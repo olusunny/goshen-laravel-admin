@@ -26,8 +26,7 @@ class GoshenAdminTicketIssuanceService
         private readonly WebWalletVerificationService $walletVerification,
         private readonly GoshenAdminWalletPaymentService $walletPayments,
         private readonly WalletSecurityResetService $walletSecurityResets,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string, int|string>
@@ -214,6 +213,10 @@ class GoshenAdminTicketIssuanceService
                         $payer,
                         'filament_admin_ticket_issue',
                         $admin,
+                        [
+                            'request_ip' => request()->ip(),
+                            'request_user_agent' => request()->userAgent(),
+                        ],
                     );
                     $transaction = $usage->paymentTransaction()->firstOrFail();
                     $paymentReferences = [
@@ -229,6 +232,10 @@ class GoshenAdminTicketIssuanceService
                         $payer,
                         $member,
                         $admin,
+                        [
+                            'request_ip' => request()->ip(),
+                            'request_user_agent' => request()->userAgent(),
+                        ],
                     );
                     $paymentReferences = [
                         'payer_mobile_user_id' => $payer->id,

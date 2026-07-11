@@ -1101,7 +1101,7 @@ class GoshenRetreatController extends Controller
         }
 
         try {
-            return DB::transaction(function () use ($validated, $actor, $user, $ticketIssuer, $wallets, $walletSecurityResets, $referrals, $vouchers, $availability): JsonResponse {
+            return DB::transaction(function () use ($validated, $actor, $user, $ticketIssuer, $wallets, $walletSecurityResets, $referrals, $vouchers, $availability, $request): JsonResponse {
                 $event = $this->goshenEventsQuery()
                     ->where('public_id', $validated['event_id'])
                     ->where('status', 'published')
@@ -1389,6 +1389,8 @@ class GoshenRetreatController extends Controller
                             'booking_id' => $booking->id,
                             'booking_public_id' => $booking->public_id,
                             'event_name' => $booking->event?->name,
+                            'request_ip' => $request->ip(),
+                            'request_user_agent' => $request->userAgent(),
                         ],
                         'settled_at' => now(),
                     ]);
@@ -1417,6 +1419,8 @@ class GoshenRetreatController extends Controller
                             'source' => 'goshen_wallet',
                             'wallet_id' => $wallet->id,
                             'ledger_reference' => $reference,
+                            'request_ip' => $request->ip(),
+                            'request_user_agent' => $request->userAgent(),
                         ],
                     ]);
 
@@ -1437,6 +1441,11 @@ class GoshenRetreatController extends Controller
                         $user,
                         $actor,
                         $isManagerAssisted ? 'control_hub_registration' : 'mobile_registration',
+                        null,
+                        [
+                            'request_ip' => $request->ip(),
+                            'request_user_agent' => $request->userAgent(),
+                        ],
                     );
                 } elseif ($isFreeRegistration) {
                     $ticketIssuer->issueForBooking($booking->refresh());
@@ -1760,7 +1769,7 @@ class GoshenRetreatController extends Controller
         }
 
         try {
-            $paidBooking = DB::transaction(function () use ($bookingModel, $user, $wallets, $ticketIssuer, $referrals) {
+            $paidBooking = DB::transaction(function () use ($bookingModel, $user, $wallets, $ticketIssuer, $referrals, $request) {
                 $booking = Booking::query()
                     ->whereKey($bookingModel->id)
                     ->with(['event', 'lines.ticketType', 'attendees', 'installments', 'tickets'])
@@ -1818,6 +1827,8 @@ class GoshenRetreatController extends Controller
                         'booking_id' => $booking->id,
                         'booking_public_id' => $booking->public_id,
                         'event_name' => $booking->event?->name,
+                        'request_ip' => $request->ip(),
+                        'request_user_agent' => $request->userAgent(),
                     ],
                     'settled_at' => now(),
                 ]);
@@ -1846,6 +1857,8 @@ class GoshenRetreatController extends Controller
                         'source' => 'goshen_wallet',
                         'wallet_id' => $wallet->id,
                         'ledger_reference' => $reference,
+                        'request_ip' => $request->ip(),
+                        'request_user_agent' => $request->userAgent(),
                     ],
                 ]);
 
@@ -2040,6 +2053,11 @@ class GoshenRetreatController extends Controller
                 $canManageVouchers && (int) $actor->id !== (int) $beneficiary->id
                     ? 'control_hub'
                     : 'mobile_existing_booking',
+                null,
+                [
+                    'request_ip' => $request->ip(),
+                    'request_user_agent' => $request->userAgent(),
+                ],
             );
         } catch (Throwable $exception) {
             return response()->json([

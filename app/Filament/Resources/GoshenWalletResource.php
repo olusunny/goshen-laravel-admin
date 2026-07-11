@@ -212,6 +212,8 @@ class GoshenWalletResource extends Resource
         }
 
         try {
+            $data['request_ip'] = request()->ip();
+            $data['request_user_agent'] = request()->userAgent();
             $entry = $wallets->createAdminTopUp($record, $admin, $data);
         } catch (RuntimeException $exception) {
             Notification::make()

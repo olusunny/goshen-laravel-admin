@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
+use App\Filament\Resources\MobileUserResource\RelationManagers\TransactionEntriesRelationManager;
 use App\Filament\Resources\MobileUserResource\Pages;
 use App\Models\ChurchGroup;
 use App\Models\MobileUser;
@@ -395,7 +396,7 @@ class MobileUserResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            TransactionEntriesRelationManager::class,
         ];
     }
 

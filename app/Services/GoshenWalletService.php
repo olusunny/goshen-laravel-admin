@@ -550,6 +550,8 @@ class GoshenWalletService
                 'source' => 'mobile_app',
                 'save_payment_method' => $saveMethod,
                 'savings_plan_id' => $data['savings_plan_id'] ?? null,
+                'request_ip' => $data['request_ip'] ?? null,
+                'request_user_agent' => $data['request_user_agent'] ?? null,
             ],
         ]);
 
@@ -661,6 +663,8 @@ class GoshenWalletService
                     'admin_email' => $admin->email,
                     'wallet_balance_before' => $previousBalance,
                     'wallet_balance_after' => $newBalance,
+                    'request_ip' => $data['request_ip'] ?? null,
+                    'request_user_agent' => $data['request_user_agent'] ?? null,
                 ], static fn (mixed $value): bool => $value !== null && $value !== ''),
                 'settled_at' => now(),
             ]);

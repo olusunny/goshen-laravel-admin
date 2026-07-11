@@ -3,9 +3,14 @@
 namespace App\Providers;
 
 use App\Auth\MergedEmailUserProvider;
+use App\Models\Donation;
+use App\Models\DynamicFormSubmission;
+use App\Models\GoshenVoucherUsage;
+use App\Models\GoshenWalletLedgerEntry;
 use App\Models\MobileUser;
 use App\Models\User;
 use App\Services\GoshenReferralService;
+use App\Services\GoshenTransactionEntrySyncService;
 use App\Services\GoshenWalletService;
 use App\Services\LinkedMobileAccountService;
 use App\Services\MergedAccountCredentialService;
@@ -14,6 +19,8 @@ use App\Services\TriumphantIdService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
+use Personal\EventInstallments\Models\PaymentTransaction;
+use Sunny\Fundraising\Models\CampaignContribution;
 use Throwable;
 
 class AppServiceProvider extends ServiceProvider
@@ -98,6 +105,47 @@ class AppServiceProvider extends ServiceProvider
                 $credentials->syncMobileFromAdmin($user, $mobile);
             }
         });
+
+        PaymentTransaction::saved(fn (PaymentTransaction $transaction): null => $this->syncTransactionEntry(
+            fn () => app(GoshenTransactionEntrySyncService::class)->syncPaymentTransaction($transaction),
+        ));
+
+        GoshenWalletLedgerEntry::saved(fn (GoshenWalletLedgerEntry $entry): null => $this->syncTransactionEntry(
+            fn () => app(GoshenTransactionEntrySyncService::class)->syncWalletLedgerEntry($entry),
+        ));
+
+        GoshenVoucherUsage::saved(fn (GoshenVoucherUsage $usage): null => $this->syncTransactionEntry(
+            fn () => app(GoshenTransactionEntrySyncService::class)->syncVoucherUsage($usage),
+        ));
+
+        Donation::saved(fn (Donation $donation): null => $this->syncTransactionEntry(
+            fn () => app(GoshenTransactionEntrySyncService::class)->syncDonation($donation),
+        ));
+
+        DynamicFormSubmission::saved(fn (DynamicFormSubmission $submission): null => $this->syncTransactionEntry(
+            fn () => app(GoshenTransactionEntrySyncService::class)->syncDynamicFormSubmission($submission),
+        ));
+
+        if (class_exists(CampaignContribution::class)) {
+            CampaignContribution::saved(fn (CampaignContribution $contribution): null => $this->syncTransactionEntry(
+                fn () => app(GoshenTransactionEntrySyncService::class)->syncFundraisingContribution($contribution),
+            ));
+        }
+    }
+
+    private function syncTransactionEntry(callable $callback): null
+    {
+        if (! Schema::hasTable('goshen_transaction_entries')) {
+            return null;
+        }
+
+        try {
+            $callback();
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        return null;
     }
 
     private function syncMergedAdminCredentialsFromMobile(MobileUser $user, bool $created = false): void

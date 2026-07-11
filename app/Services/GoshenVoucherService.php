@@ -146,8 +146,9 @@ class GoshenVoucherService
         ?MobileUser $redeemedBy = null,
         string $source = 'mobile_registration',
         ?User $adminActor = null,
+        array $context = [],
     ): GoshenVoucherUsage {
-        return DB::transaction(function () use ($booking, $installment, $code, $beneficiary, $redeemedBy, $source, $adminActor): GoshenVoucherUsage {
+        return DB::transaction(function () use ($booking, $installment, $code, $beneficiary, $redeemedBy, $source, $adminActor, $context): GoshenVoucherUsage {
             $booking = Booking::query()
                 ->with(['event', 'installments'])
                 ->whereKey($booking->id)
@@ -205,6 +206,8 @@ class GoshenVoucherService
                     'beneficiary_mobile_user_id' => $beneficiary->id,
                     'redeemed_by_mobile_user_id' => $redeemedBy?->id,
                     'redeemed_by_id' => $adminActor?->id,
+                    'request_ip' => $context['request_ip'] ?? null,
+                    'request_user_agent' => $context['request_user_agent'] ?? null,
                 ],
             ]);
 
@@ -225,6 +228,8 @@ class GoshenVoucherService
                 'metadata' => [
                     'booking_public_id' => $booking->public_id,
                     'event_name' => $booking->event?->name,
+                    'request_ip' => $context['request_ip'] ?? null,
+                    'request_user_agent' => $context['request_user_agent'] ?? null,
                 ],
             ]);
 
@@ -265,8 +270,9 @@ class GoshenVoucherService
         string $code,
         MobileUser $beneficiary,
         ?MobileUser $redeemedBy = null,
+        array $context = [],
     ): GoshenVoucherUsage {
-        return DB::transaction(function () use ($wallet, $code, $beneficiary, $redeemedBy): GoshenVoucherUsage {
+        return DB::transaction(function () use ($wallet, $code, $beneficiary, $redeemedBy, $context): GoshenVoucherUsage {
             $lockedWallet = GoshenWallet::query()
                 ->whereKey($wallet->id)
                 ->where('mobile_user_id', $beneficiary->id)
@@ -306,6 +312,8 @@ class GoshenVoucherService
                     'source' => 'wallet_voucher_top_up',
                     'voucher_id' => $voucher->id,
                     'voucher_code_suffix' => $voucher->code_suffix,
+                    'request_ip' => $context['request_ip'] ?? null,
+                    'request_user_agent' => $context['request_user_agent'] ?? null,
                 ],
                 'settled_at' => now(),
             ]);
@@ -323,6 +331,8 @@ class GoshenVoucherService
                     'wallet_id' => $lockedWallet->id,
                     'wallet_ledger_entry_id' => $entry->id,
                     'wallet_balance_after' => (float) $lockedWallet->balance,
+                    'request_ip' => $context['request_ip'] ?? null,
+                    'request_user_agent' => $context['request_user_agent'] ?? null,
                 ],
             ]);
 

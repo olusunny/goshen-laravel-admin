@@ -320,6 +320,8 @@ class GoshenWalletController extends Controller
             'save_payment_method' => ['nullable', 'boolean'],
             'savings_plan_id' => ['nullable', 'integer'],
         ])->validate();
+        $validated['request_ip'] = $request->ip();
+        $validated['request_user_agent'] = $request->userAgent();
 
         $wallet = $this->wallets->walletFor($user);
 
@@ -368,7 +370,10 @@ class GoshenWalletController extends Controller
         $wallet = $this->wallets->walletFor($user);
 
         try {
-            $usage = $vouchers->redeemForWalletTopUp($wallet, (string) $validated['code'], $user, $user);
+            $usage = $vouchers->redeemForWalletTopUp($wallet, (string) $validated['code'], $user, $user, [
+                'request_ip' => $request->ip(),
+                'request_user_agent' => $request->userAgent(),
+            ]);
         } catch (Throwable $exception) {
             return response()->json([
                 'status' => 'error',

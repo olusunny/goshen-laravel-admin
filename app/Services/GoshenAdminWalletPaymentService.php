@@ -20,8 +20,7 @@ class GoshenAdminWalletPaymentService
         private readonly PaymentSettlementService $settlements,
         private readonly GoshenSingleFullPaymentService $fullPayments,
         private readonly WalletSecurityResetService $walletSecurityResets,
-    ) {
-    }
+    ) {}
 
     public function settle(
         Booking $booking,
@@ -30,6 +29,7 @@ class GoshenAdminWalletPaymentService
         MobileUser $payer,
         MobileUser $beneficiary,
         User $admin,
+        array $context = [],
     ): PaymentTransaction {
         return DB::transaction(function () use (
             $booking,
@@ -38,6 +38,7 @@ class GoshenAdminWalletPaymentService
             $payer,
             $beneficiary,
             $admin,
+            $context,
         ): PaymentTransaction {
             $admin = User::query()->whereKey($admin->id)->lockForUpdate()->firstOrFail();
             $booking = Booking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
@@ -114,6 +115,8 @@ class GoshenAdminWalletPaymentService
                     'payer_mobile_user_id' => $payer->id,
                     'beneficiary_mobile_user_id' => $beneficiary->id,
                     'payer_admin_user_id' => $admin->id,
+                    'request_ip' => $context['request_ip'] ?? null,
+                    'request_user_agent' => $context['request_user_agent'] ?? null,
                 ],
                 'settled_at' => now(),
             ]);
@@ -132,6 +135,8 @@ class GoshenAdminWalletPaymentService
                     'payer_mobile_user_id' => $payer->id,
                     'beneficiary_mobile_user_id' => $beneficiary->id,
                     'payer_admin_user_id' => $admin->id,
+                    'request_ip' => $context['request_ip'] ?? null,
+                    'request_user_agent' => $context['request_user_agent'] ?? null,
                 ],
             ]);
 
