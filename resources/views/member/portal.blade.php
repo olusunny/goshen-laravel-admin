@@ -1904,14 +1904,85 @@
             return event?.feature_image_url || event?.image_url || event?.cover_image_url || event?.media_url || '';
         }
 
+        function eventStartValue(event) {
+            return event?.start_date || event?.startDate || event?.starts_at || event?.start_at || event?.sales_start_at || null;
+        }
+
+        function eventEndValue(event) {
+            return event?.end_date || event?.endDate || event?.ends_at || event?.end_at || null;
+        }
+
         function eventDate(event) {
-            const start = event?.starts_at || event?.start_at || event?.sales_start_at;
-            const end = event?.ends_at || event?.end_at;
+            const start = eventStartValue(event);
+            const end = eventEndValue(event);
+            if (!start) return 'Dates will be announced';
             return end ? `${formatDate(start)} - ${formatDate(end)}` : formatDate(start);
         }
 
         function eventVenue(event) {
             return [event?.venue_name, event?.venue_address].filter(Boolean).join(' - ') || 'Venue details will be shared by the church.';
+        }
+
+        function eventCountdownTarget(event) {
+            const value = eventStartValue(event);
+            if (!value) return null;
+            const raw = `${value}`;
+            const date = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T00:00:00`) : new Date(raw);
+            return Number.isNaN(date.getTime()) ? null : date;
+        }
+
+        function eventCountdownMarkup(event) {
+            const target = eventCountdownTarget(event);
+            if (!target) {
+                return `
+                    <section class="card event-countdown">
+                        <h3>Retreat countdown</h3>
+                        <p class="muted">Dates will be announced soon.</p>
+                    </section>
+                `;
+            }
+
+            let remaining = target.getTime() - Date.now();
+            const active = remaining >= 0;
+            remaining = Math.max(0, remaining);
+            const minutes = Math.floor(remaining / 60000);
+            const days = Math.floor(minutes / 1440);
+            const hours = Math.floor((minutes % 1440) / 60);
+            const mins = minutes % 60;
+
+            return `
+                <section class="card event-countdown">
+                    <h3>${active ? 'Retreat starts in' : 'Retreat date reached'}</h3>
+                    <div class="stats-grid">
+                        <div class="stat"><strong>${escapeHtml(days)}</strong><span>Days</span></div>
+                        <div class="stat"><strong>${escapeHtml(String(hours).padStart(2, '0'))}</strong><span>Hours</span></div>
+                        <div class="stat"><strong>${escapeHtml(String(mins).padStart(2, '0'))}</strong><span>Mins</span></div>
+                    </div>
+                </section>
+            `;
+        }
+
+        function renderTicketTypeCards(tickets) {
+            if (!tickets.length) return '<div class="empty">Ticket types are not available yet for this retreat edition.</div>';
+
+            return `
+                <section class="card">
+                    <h3>Ticket types</h3>
+                    <div class="record-list">
+                        ${tickets.map((ticket) => `
+                            <article class="record">
+                                <div class="record-top">
+                                    <div class="record-title">
+                                        <strong>${escapeHtml(ticket.name || 'Ticket')}</strong>
+                                        <span class="item-meta">Min ${escapeHtml(ticketMinimum(ticket))} · Max ${escapeHtml(ticketMaximum(ticket))}</span>
+                                    </div>
+                                    <strong>${escapeHtml(formatMoney(ticket.price, ticket.currency))}</strong>
+                                </div>
+                            </article>
+                        `).join('')}
+                    </div>
+                </section>
+            `;
         }
 
         async function loadEvents() {
@@ -2008,10 +2079,12 @@
                         </div>
                     </div>
                     <div class="detail-list">
+                        <div class="detail-row"><strong>Date</strong><span>${escapeHtml(eventDate(event))}</span></div>
                         <div class="detail-row"><strong>Venue</strong><span>${escapeHtml(eventVenue(event))}</span></div>
-                        ${tickets.length ? `<div class="detail-row"><strong>Ticket options</strong>${tickets.map((ticket) => `<span>${escapeHtml(ticket.name || 'Ticket')} - ${escapeHtml(formatMoney(ticket.price, ticket.currency))}</span>`).join('')}</div>` : ''}
                         ${schedules.length ? `<div class="detail-row"><strong>Schedule</strong>${schedules.slice(0, 4).map((schedule) => `<span>${escapeHtml(schedule.title || 'Session')} - ${escapeHtml(formatDateTime(schedule.starts_at))}</span>`).join('')}</div>` : ''}
                     </div>
+                    ${eventCountdownMarkup(event)}
+                    ${renderTicketTypeCards(tickets)}
                     ${registrationOpen ? renderRegistrationForm(event) : `<div class="empty">${escapeHtml(event.registration?.message || 'Registration is currently closed for this retreat edition.')}</div>`}
                 </article>
             `;
@@ -2745,6 +2818,56 @@
             return `<div class="detail-row"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(displayProfileValue(value, fallback))}</span></div>`;
         }
 
+        function referralValue(referral, keys, fallback = '0') {
+            for (const key of keys) {
+                const value = referral?.[key];
+                if (value !== undefined && value !== null && `${value}`.trim() !== '') return value;
+            }
+            return fallback;
+        }
+
+        function renderProfileReferralCard() {
+            const referral = memberData.referral || currentUser?.referral || null;
+            if (!referral) {
+                return `
+                    <article class="card">
+                        <h3>Referral rewards</h3>
+                        <p class="muted">Your Goshen referral code will appear here once your retreat profile is loaded.</p>
+                    </article>
+                `;
+            }
+
+            const code = referralValue(referral, ['referral_code', 'code'], 'Not available');
+            const total = referralValue(referral, ['total_points', 'total_earned'], 0);
+            const pending = referralValue(referral, ['pending_points', 'pending_validation'], 0);
+            const available = referralValue(referral, ['available_points', 'validated_points'], 0);
+            const converted = referralValue(referral, ['converted_points'], 0);
+            const walletAmount = referralValue(referral, ['wallet_amount', 'wallet_amount_available'], 0);
+            const currency = referralValue(referral, ['currency'], walletData?.currency || 'GBP');
+
+            return `
+                <article class="card">
+                    <div class="profile-card-head">
+                        <div>
+                            <h3>Referral rewards</h3>
+                            <p class="muted">Share your Goshen code and track referral points linked to your member account.</p>
+                        </div>
+                    </div>
+                    <div class="profile-triumphant-id" aria-label="Referral code">
+                        <span>Your referral code</span>
+                        <strong>${escapeHtml(code)}</strong>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat"><span>Total</span><strong>${escapeHtml(total)}</strong></div>
+                        <div class="stat"><span>Pending</span><strong>${escapeHtml(pending)}</strong></div>
+                        <div class="stat"><span>Available</span><strong>${escapeHtml(available)}</strong></div>
+                        <div class="stat"><span>Converted</span><strong>${escapeHtml(converted)}</strong></div>
+                    </div>
+                    <p class="muted">Wallet value available: ${escapeHtml(formatMoney(walletAmount, currency))}</p>
+                </article>
+            `;
+        }
+
         function renderProfileView(user, firstName, lastName) {
             const fullName = displayProfileValue(
                 user.name || [firstName, user.middle_name, lastName].filter(Boolean).join(' '),
@@ -2779,6 +2902,7 @@
                     ${profileDetailRow('Address', user.address)}
                     ${profileDetailRow('About me', user.about_me)}
                 </div>
+                ${renderProfileReferralCard()}
             `;
         }
 
