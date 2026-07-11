@@ -199,6 +199,7 @@ class GoshenWalletVoucherWithdrawalTest extends TestCase
             'amount' => $amount,
             'currency' => 'GBP',
             'max_uses' => 1,
+            'purpose' => GoshenVoucher::PURPOSE_WALLET_FUNDING,
             'metadata' => ['purpose' => 'wallet_top_up'],
         ]);
 

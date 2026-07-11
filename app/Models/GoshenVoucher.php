@@ -11,13 +11,21 @@ use Personal\EventInstallments\Models\Event;
 class GoshenVoucher extends Model
 {
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_PAUSED = 'paused';
+
     public const STATUS_EXHAUSTED = 'exhausted';
+
     public const STATUS_VOID = 'void';
+
+    public const PURPOSE_PAYMENTS = 'payments';
+
+    public const PURPOSE_WALLET_FUNDING = 'wallet_funding';
 
     protected $guarded = [];
 
     protected $casts = [
+        'purpose' => 'string',
         'amount' => 'decimal:2',
         'max_uses' => 'integer',
         'used_count' => 'integer',
@@ -25,6 +33,14 @@ class GoshenVoucher extends Model
         'expires_at' => 'datetime',
         'metadata' => 'array',
     ];
+
+    public static function purposeOptions(): array
+    {
+        return [
+            self::PURPOSE_PAYMENTS => 'For Payments',
+            self::PURPOSE_WALLET_FUNDING => 'Wallet Funding',
+        ];
+    }
 
     public function event(): BelongsTo
     {
@@ -44,6 +60,11 @@ class GoshenVoucher extends Model
     public function usages(): HasMany
     {
         return $this->hasMany(GoshenVoucherUsage::class, 'voucher_id');
+    }
+
+    public function isUnused(): bool
+    {
+        return (int) $this->used_count === 0 && ! $this->usages()->exists();
     }
 
     public function scopeUsable(Builder $query): Builder

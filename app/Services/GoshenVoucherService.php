@@ -25,8 +25,7 @@ class GoshenVoucherService
     public function __construct(
         private readonly PaymentSettlementService $settlement,
         private readonly GoshenSingleFullPaymentService $fullPayments,
-    ) {
-    }
+    ) {}
 
     public function normalizeCode(string $code): string
     {
@@ -41,8 +40,8 @@ class GoshenVoucherService
     public function generateCode(): string
     {
         do {
-            $raw = $this->randomSegment(4) . $this->randomSegment(4) . $this->randomSegment(4) . $this->randomSegment(4);
-            $code = 'GSH-' . substr($raw, 0, 4) . '-' . substr($raw, 4, 4) . '-' . substr($raw, 8, 4) . '-' . substr($raw, 12, 4);
+            $raw = $this->randomSegment(4).$this->randomSegment(4).$this->randomSegment(4).$this->randomSegment(4);
+            $code = 'GSH-'.substr($raw, 0, 4).'-'.substr($raw, 4, 4).'-'.substr($raw, 8, 4).'-'.substr($raw, 12, 4);
         } while (GoshenVoucher::query()->where('code_hash', $this->hashCode($code))->exists());
 
         return $code;
@@ -53,6 +52,11 @@ class GoshenVoucherService
      */
     public function createVoucher(array $data, ?MobileUser $mobileActor = null, ?User $adminActor = null): array
     {
+        $purpose = (string) ($data['purpose'] ?? GoshenVoucher::PURPOSE_PAYMENTS);
+        if (! array_key_exists($purpose, GoshenVoucher::purposeOptions())) {
+            throw new RuntimeException('Voucher purpose is not valid.');
+        }
+
         $code = isset($data['code']) && is_string($data['code']) && trim($data['code']) !== ''
             ? $data['code']
             : $this->generateCode();
@@ -64,6 +68,7 @@ class GoshenVoucherService
 
         $voucher = GoshenVoucher::query()->create([
             'event_id' => $data['event_id'] ?? null,
+            'purpose' => $purpose,
             'created_by_id' => $adminActor?->id,
             'created_by_mobile_user_id' => $mobileActor?->id,
             'label' => $data['label'] ?? null,
@@ -94,7 +99,7 @@ class GoshenVoucherService
     public function createBulk(array $data, ?MobileUser $mobileActor = null, ?User $adminActor = null): array
     {
         $quantity = min(500, max(1, (int) ($data['quantity'] ?? 1)));
-        $batch = $data['batch_reference'] ?? ('GSV-' . Str::upper((string) Str::ulid()));
+        $batch = $data['batch_reference'] ?? ('GSV-'.Str::upper((string) Str::ulid()));
         $created = [];
 
         DB::transaction(function () use ($quantity, $batch, $data, $mobileActor, $adminActor, &$created): void {
@@ -181,13 +186,14 @@ class GoshenVoucherService
                 throw new RuntimeException('This voucher code is not valid.');
             }
 
+            $this->assertVoucherPurpose($voucher, GoshenVoucher::PURPOSE_PAYMENTS);
             $this->assertVoucherCanPay($voucher, $booking->event, $amountDue, (string) $booking->currency);
 
             $transaction = PaymentTransaction::query()->create([
                 'booking_id' => $booking->id,
                 'installment_id' => $installment->id,
                 'gateway' => 'voucher',
-                'provider_reference' => 'gsv_' . Str::ulid(),
+                'provider_reference' => 'gsv_'.Str::ulid(),
                 'currency' => $booking->currency,
                 'amount' => $amountDue,
                 'status' => 'pending',
@@ -275,6 +281,7 @@ class GoshenVoucherService
                 throw new RuntimeException('This voucher code is not valid.');
             }
 
+            $this->assertVoucherPurpose($voucher, GoshenVoucher::PURPOSE_WALLET_FUNDING);
             $this->assertVoucherCanPay($voucher, null, null, (string) $lockedWallet->currency);
 
             $amount = round((float) $voucher->amount, 2);
@@ -282,7 +289,7 @@ class GoshenVoucherService
                 throw new RuntimeException('This voucher cannot be used for wallet funding.');
             }
 
-            $reference = 'gw_voucher_' . Str::ulid();
+            $reference = 'gw_voucher_'.Str::ulid();
             $lockedWallet->forceFill([
                 'balance' => round(((float) $lockedWallet->balance) + $amount, 2),
             ])->save();
@@ -334,6 +341,7 @@ class GoshenVoucherService
         return array_filter([
             'id' => $voucher->id,
             'event_id' => $voucher->event_id,
+            'purpose' => $voucher->purpose,
             'label' => $voucher->label,
             'batch_reference' => $voucher->batch_reference,
             'code_suffix' => $voucher->code_suffix,
@@ -418,6 +426,19 @@ class GoshenVoucherService
         }
     }
 
+    private function assertVoucherPurpose(GoshenVoucher $voucher, string $requiredPurpose): void
+    {
+        if ($voucher->purpose === $requiredPurpose) {
+            return;
+        }
+
+        $message = $voucher->purpose === GoshenVoucher::PURPOSE_WALLET_FUNDING
+            ? 'This voucher is only valid for wallet funding.'
+            : 'This voucher is only valid for payments.';
+
+        throw new RuntimeException($message);
+    }
+
     private function verificationPayload(bool $valid, string $message, ?GoshenVoucher $voucher = null): array
     {
         return [
@@ -442,7 +463,7 @@ class GoshenVoucherService
     private function formatCode(string $normalized): string
     {
         if (str_starts_with($normalized, 'GSH') && strlen($normalized) > 3) {
-            return 'GSH-' . implode('-', str_split(substr($normalized, 3), 4));
+            return 'GSH-'.implode('-', str_split(substr($normalized, 3), 4));
         }
 
         return implode('-', str_split($normalized, 4));
