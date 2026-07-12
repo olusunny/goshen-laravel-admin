@@ -60,7 +60,11 @@
         }
 
         * { box-sizing: border-box; }
-        html, body { min-height: 100%; }
+        html, body {
+            min-height: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
         body {
             margin: 0;
             background: var(--wash);
@@ -545,12 +549,19 @@
 
         .portal-main {
             width: min(100%, 1180px);
+            max-width: 100%;
+            min-width: 0;
             margin: 0 auto;
             padding: 20px 18px calc(var(--bottom-nav) + env(safe-area-inset-bottom) + 24px);
         }
 
         .page-view { display: none; animation: fade .18s ease-out; }
-        .page-view.active { display: grid; gap: 18px; }
+        .page-view.active {
+            display: grid;
+            gap: 18px;
+            min-width: 0;
+            max-width: 100%;
+        }
         @keyframes fade { from { opacity: .65; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
         .hero-card {
@@ -583,6 +594,8 @@
             border-radius: var(--radius);
             padding: 20px;
             box-shadow: var(--soft-shadow);
+            max-width: 100%;
+            min-width: 0;
         }
         .card h3 { font-size: 22px; margin-bottom: 8px; }
 
@@ -717,18 +730,22 @@
             text-decoration: none;
         }
         .past-video-slider {
-            display: grid;
-            grid-auto-flow: column;
-            grid-auto-columns: clamp(220px, 72vw, 320px);
+            display: flex;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
             gap: 12px;
             margin: 0 -6px;
             padding: 4px 6px 10px;
             overflow-x: auto;
+            overflow-y: hidden;
             overscroll-behavior-inline: contain;
             scroll-snap-type: inline mandatory;
             scrollbar-width: thin;
+            contain: inline-size;
         }
         .past-video-card {
+            flex: 0 0 clamp(216px, 72vw, 320px);
             display: grid;
             gap: 10px;
             align-content: start;
@@ -739,6 +756,8 @@
             color: inherit;
             text-decoration: none;
             scroll-snap-align: start;
+            min-width: 0;
+            max-width: calc(100vw - 48px);
         }
         .past-video-card iframe,
         .past-video-card img {
