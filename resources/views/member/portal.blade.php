@@ -604,6 +604,23 @@
             font-size: clamp(28px, 8vw, 44px);
             line-height: 1.04;
         }
+        .dashboard-triumphant-id {
+            display: inline-flex;
+            align-items: center;
+            width: max-content;
+            max-width: 100%;
+            min-height: 36px;
+            margin: 4px 0 14px;
+            border-radius: 999px;
+            padding: 0 14px;
+            background: rgba(248, 181, 34, .16);
+            color: #fff;
+            box-shadow: inset 0 0 0 1px rgba(248, 181, 34, .34);
+            font-size: 13px;
+            font-weight: 1000;
+            letter-spacing: .04em;
+            overflow-wrap: anywhere;
+        }
         .hero-card p { color: rgba(255,255,255,.78); margin-bottom: 0; line-height: 1.55; }
 
         .section-head {
@@ -1529,6 +1546,7 @@
                 <div class="hero-card">
                     <p class="eyebrow">Member dashboard</p>
                     <h2 id="homeGreeting">Welcome to Goshen Retreat</h2>
+                    <div id="homeTriumphantId" class="dashboard-triumphant-id">Triumphant ID pending</div>
                     <p>Manage your registration, tickets, payments, receipts, and retreat updates in one secure place.</p>
                 </div>
                 <div id="homeStats" class="stats-grid"></div>
@@ -1997,6 +2015,9 @@
             ['sidebarUserName', 'drawerUserName'].forEach((id) => { document.getElementById(id).textContent = name; });
             ['sidebarUserEmail', 'drawerUserEmail'].forEach((id) => { document.getElementById(id).textContent = email; });
             document.getElementById('homeGreeting').textContent = `Welcome, ${name.split(' ')[0] || 'Member'}`;
+            document.getElementById('homeTriumphantId').textContent = currentUser?.triumphant_id
+                ? `Triumphant ID: ${currentUser.triumphant_id}`
+                : 'Triumphant ID pending';
         }
 
         function showPage(page, push = true) {
