@@ -211,7 +211,7 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
 
   php artisan migrate --force --no-interaction
   php artisan optimize:clear --no-interaction
-  rm -f bootstrap/cache/config.php
+  php artisan config:cache --no-interaction
   php artisan route:cache --no-interaction
   php artisan view:cache --no-interaction
   php artisan about --only=environment --no-interaction
