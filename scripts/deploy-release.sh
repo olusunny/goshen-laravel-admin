@@ -32,16 +32,19 @@ case "$environment" in
     domain="staging-goshen.shotfaz.com"
     app_root="${APP_ROOT:-/home/cels/projects/.git-deploy/$domain}"
     web_root="${WEB_ROOT:-/home/cels/projects/$domain}"
+    web_root_mode="${WEB_ROOT_MODE:-symlink}"
     ;;
   production|prod)
     domain="goshen.shotfaz.com"
     app_root="${APP_ROOT:-/home/cels/projects/.git-deploy/$domain}"
     web_root="${WEB_ROOT:-/home/cels/projects/$domain}"
+    web_root_mode="${WEB_ROOT_MODE:-symlink}"
     ;;
   portal|portal-production|goshenretreat)
     domain="portal.goshenretreat.uk"
     app_root="${APP_ROOT:-/home/goshenretreat/apps/portal}"
     web_root="${WEB_ROOT:-/home/goshenretreat/portal.goshenretreat.uk}"
+    web_root_mode="${WEB_ROOT_MODE:-public}"
     ;;
   -h|--help|"")
     usage
@@ -80,7 +83,21 @@ case "$web_root" in
     ;;
 esac
 
-mkdir -p "$shared" "$releases" "$web_root"
+case "$web_root_mode" in
+  public|symlink) ;;
+  *)
+    echo "Unknown web root mode: $web_root_mode" >&2
+    exit 1
+    ;;
+esac
+
+mkdir -p "$shared" "$releases"
+
+if [[ "$web_root_mode" == "symlink" ]]; then
+  mkdir -p "$(dirname "$web_root")"
+else
+  mkdir -p "$web_root"
+fi
 
 copy_directory_contents() {
   local source_dir="$1"
@@ -144,9 +161,14 @@ fi
 short_commit="${commit:0:7}"
 release="$releases/$stamp-$short_commit"
 previous_release=""
+previous_web_release=""
 
 if [[ -L "$current" ]]; then
   previous_release="$(readlink -f "$current")"
+fi
+
+if [[ "$web_root_mode" == "symlink" && -L "$web_root" ]]; then
+  previous_web_release="$(readlink -f "$web_root")"
 fi
 
 if [[ ! -e "$shared/.env" ]]; then
@@ -195,10 +217,11 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
   php artisan about --only=environment --no-interaction
 )
 
-sync_public_assets "$release/public" "$web_root"
+if [[ "$web_root_mode" == "public" ]]; then
+  sync_public_assets "$release/public" "$web_root"
 
-if [[ ! -f "$web_root/index.php" ]]; then
-  cat > "$web_root/index.php" <<PHP
+  if [[ ! -f "$web_root/index.php" ]]; then
+    cat > "$web_root/index.php" <<PHP
 <?php
 
 use Illuminate\Foundation\Application;
@@ -219,11 +242,18 @@ require \$appBase.'/vendor/autoload.php';
 
 \$app->handleRequest(Request::capture());
 PHP
+  fi
 fi
 
 next_link="$app_root/.current-next-$stamp"
 ln -s "$release" "$next_link"
 mv -Tf "$next_link" "$current"
+
+if [[ "$web_root_mode" == "symlink" ]]; then
+  next_web_link="$app_root/.webroot-next-$stamp"
+  ln -s "$release" "$next_web_link"
+  mv -Tf "$next_web_link" "$web_root"
+fi
 
 if command -v curl >/dev/null 2>&1; then
   if ! curl --fail --silent --show-error --max-time 20 "$health_url" >/dev/null; then
@@ -234,6 +264,13 @@ if command -v curl >/dev/null 2>&1; then
       ln -s "$previous_release" "$rollback_link"
       mv -Tf "$rollback_link" "$current"
       echo "Rolled back current symlink to $previous_release" >&2
+    fi
+
+    if [[ "$web_root_mode" == "symlink" && -n "$previous_web_release" && -d "$previous_web_release" ]]; then
+      rollback_web_link="$app_root/.webroot-rollback-$stamp"
+      ln -s "$previous_web_release" "$rollback_web_link"
+      mv -Tf "$rollback_web_link" "$web_root"
+      echo "Rolled back web root symlink to $previous_web_release" >&2
     fi
 
     if command -v pkill >/dev/null 2>&1; then
