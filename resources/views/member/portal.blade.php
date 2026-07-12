@@ -2076,25 +2076,22 @@
             try {
                 const saved = JSON.parse(raw);
                 if (!saved?.api_token) throw new Error('Missing token');
-                currentUser = saved;
-                showPortal();
                 const payload = await apiPost('/api/member/me', { api_token: saved.api_token });
-                if (payload.user) {
-                    currentUser = { ...payload.user, api_token: saved.api_token, saved_at: new Date().toISOString() };
-                    localStorage.setItem(storageKey, JSON.stringify(currentUser));
-                    updateUserIdentity();
-                    renderProfile();
-                }
+                if (!payload.user?.id) throw new Error('Missing member account');
+
+                currentUser = { ...payload.user, api_token: saved.api_token, saved_at: new Date().toISOString() };
+                localStorage.setItem(storageKey, JSON.stringify(currentUser));
+                showPortal();
             } catch (error) {
                 if ([401, 403].includes(Number(error?.status))) {
                     clearUser('Your saved session expired. Please sign in again.');
                     return;
                 }
-                if (currentUser?.api_token) {
-                    notify('You are still signed in. Some live data could not refresh right now.', 'error');
-                    return;
-                }
-                clearUser('Please sign in again.');
+                currentUser = null;
+                localStorage.removeItem(storageKey);
+                portalShell.hidden = true;
+                showAuth('login', false);
+                notify('We could not verify your saved session. Please sign in again.', 'error');
             }
         }
 

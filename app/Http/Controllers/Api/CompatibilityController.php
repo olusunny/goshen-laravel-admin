@@ -36,6 +36,7 @@ use App\Services\DynamicSmtpMailer;
 use App\Services\MergedAccountCredentialService;
 use App\Services\MessagePersonalizationService;
 use App\Services\RecurringChurchEventService;
+use App\Services\TriumphantIdService;
 use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -967,6 +968,11 @@ class CompatibilityController extends Controller
 
         if ($isNew || ! $wasVerified) {
             app(AutomaticNotificationService::class)->enqueue('welcome_verified_user', $user);
+        }
+
+        $user = $user->refresh();
+        if (blank($user->triumphant_id)) {
+            $user = app(TriumphantIdService::class)->assignFor($user)->refresh();
         }
 
         return response()->json([

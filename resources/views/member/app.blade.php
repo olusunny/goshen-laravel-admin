@@ -1886,16 +1886,17 @@
         try {
             const saved = JSON.parse(raw);
             if (!saved?.api_token) return;
-            currentUser = saved;
-            renderAuth();
 
             apiPost('/api/member/me', { api_token: saved.api_token })
-                .then((payload) => saveUser({ ...payload.user, api_token: saved.api_token }))
+                .then((payload) => {
+                    if (!payload.user?.id) throw new Error('Missing member account');
+                    saveUser({ ...payload.user, api_token: saved.api_token });
+                })
                 .catch(() => {
                     currentUser = null;
                     localStorage.removeItem(storageKey);
                     renderAuth();
-                    notice('Your session expired. Please sign in again.', 'error');
+                    notice('We could not verify your saved session. Please sign in again.', 'error');
                 });
         } catch {
             localStorage.removeItem(storageKey);

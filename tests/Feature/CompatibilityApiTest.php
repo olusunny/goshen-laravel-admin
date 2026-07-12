@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AppSetting;
 use App\Models\BibleVersion;
 use App\Models\Branch;
 use App\Models\Category;
@@ -16,6 +17,7 @@ use App\Models\MobileUser;
 use App\Models\TransportationArrangement;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -74,6 +76,47 @@ class CompatibilityApiTest extends TestCase
         $this->postJson('/discover', ['data' => []])
             ->assertOk()
             ->assertJsonPath('donation_accounts', []);
+    }
+
+    public function test_google_auth_persists_member_and_returns_database_triumphant_id(): void
+    {
+        AppSetting::query()->updateOrCreate(['key' => 'google_login_enabled'], ['value' => '1']);
+        AppSetting::query()->updateOrCreate(['key' => 'google_web_client_id'], ['value' => 'web-client-id.apps.googleusercontent.com']);
+
+        Http::fake([
+            'https://oauth2.googleapis.com/tokeninfo*' => Http::response([
+                'aud' => 'web-client-id.apps.googleusercontent.com',
+                'sub' => 'google-user-123',
+                'email' => 'new.google.member@example.test',
+                'email_verified' => true,
+                'name' => 'New Google Member',
+                'picture' => 'https://example.test/avatar.png',
+            ]),
+        ]);
+
+        $response = $this->postJson('/api/googleAuth', [
+            'id_token' => 'fake-google-token',
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('user.email', 'new.google.member@example.test');
+
+        $user = MobileUser::query()
+            ->where('email', 'new.google.member@example.test')
+            ->firstOrFail();
+
+        $this->assertSame($user->id, $response->json('user.id'));
+        $this->assertSame('google-user-123', $user->google_id);
+        $this->assertSame('google', $user->login_type);
+        $this->assertNotNull($user->triumphant_id);
+        $this->assertSame($user->triumphant_id, $response->json('user.triumphant_id'));
+        $this->assertDatabaseHas('mobile_users', [
+            'id' => $response->json('user.id'),
+            'email' => 'new.google.member@example.test',
+            'triumphant_id' => $response->json('user.triumphant_id'),
+        ]);
     }
 
     public function test_manage_groups_requires_assigned_group_leadership(): void
