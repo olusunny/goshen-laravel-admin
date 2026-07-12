@@ -2488,8 +2488,10 @@ class GoshenRetreatController extends Controller
         }
 
         try {
-            $document = $ticketModel->documents()->where('type', $type)->first()
-                ?: $this->generateTicketDocument($documents, $ticketModel, $type);
+            $document = $type === 'pdf'
+                ? $this->generateTicketDocument($documents, $ticketModel, $type)
+                : ($ticketModel->documents()->where('type', $type)->first()
+                    ?: $this->generateTicketDocument($documents, $ticketModel, $type));
         } catch (Throwable $exception) {
             report($exception);
 

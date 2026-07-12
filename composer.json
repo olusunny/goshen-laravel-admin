@@ -10,15 +10,16 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "barryvdh/laravel-dompdf": "3.1.2",
         "church-tools/laravel-cloud-backup-addon": "*",
         "filament/filament": "~5.6.3",
         "kreait/laravel-firebase": "7.2",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
-        "sunny/fundraising": "*",
         "spatie/laravel-permission": "6.21",
-        "stripe/stripe-php": "^20.2"
+        "stripe/stripe-php": "^20.2",
+        "sunny/fundraising": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
