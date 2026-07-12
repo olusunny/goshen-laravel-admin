@@ -5,6 +5,11 @@
 
     RewriteEngine On
 
+    # Legacy Goshen host: keep all browser/API traffic on the single
+    # current portal database instead of the old Shotfaz deployment.
+    RewriteCond %{HTTP_HOST} ^(www\.)?goshen\.shotfaz\.com$ [NC]
+    RewriteRule ^(.*)$ https://portal.goshenretreat.uk/$1 [R=302,L]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
