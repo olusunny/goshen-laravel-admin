@@ -82,6 +82,56 @@ esac
 
 mkdir -p "$shared" "$releases" "$web_root"
 
+copy_directory_contents() {
+  local source_dir="$1"
+  local target_dir="$2"
+
+  mkdir -p "$target_dir"
+
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a "$source_dir/" "$target_dir/"
+  else
+    cp -a "$source_dir/." "$target_dir/"
+  fi
+}
+
+sync_public_assets() {
+  local source_dir="$1"
+  local target_dir="$2"
+
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude='/index.php' \
+      --exclude='/.htaccess' \
+      --exclude='/storage' \
+      --exclude='/error_log' \
+      --exclude='/.well-known' \
+      "$source_dir/" "$target_dir/"
+
+    return
+  fi
+
+  find "$target_dir" -mindepth 1 -maxdepth 1 \
+    ! -name 'index.php' \
+    ! -name '.htaccess' \
+    ! -name 'storage' \
+    ! -name 'error_log' \
+    ! -name '.well-known' \
+    -exec rm -rf {} +
+
+  shopt -s dotglob nullglob
+  for item in "$source_dir"/*; do
+    case "$(basename "$item")" in
+      index.php|.htaccess|storage|error_log|.well-known)
+        continue
+        ;;
+    esac
+
+    cp -a "$item" "$target_dir/"
+  done
+  shopt -u dotglob nullglob
+}
+
 if [[ -z "$commit" ]]; then
   commit="$(git ls-remote "$repo_url" "refs/heads/$branch" | awk '{ print $1 }')"
 fi
@@ -131,7 +181,7 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
     "$composer_bin" install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
   elif [[ -n "$previous_release" && -d "$previous_release/vendor" ]]; then
     echo "Composer is unavailable; reusing vendor/ from $previous_release"
-    rsync -a "$previous_release/vendor/" "$release/vendor/"
+    copy_directory_contents "$previous_release/vendor" "$release/vendor"
   else
     echo "Composer is unavailable and no previous vendor/ directory exists." >&2
     exit 1
@@ -145,13 +195,7 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
   php artisan about --only=environment --no-interaction
 )
 
-rsync -a --delete \
-  --exclude='/index.php' \
-  --exclude='/.htaccess' \
-  --exclude='/storage' \
-  --exclude='/error_log' \
-  --exclude='/.well-known' \
-  "$release/public/" "$web_root/"
+sync_public_assets "$release/public" "$web_root"
 
 if [[ ! -f "$web_root/index.php" ]]; then
   cat > "$web_root/index.php" <<PHP
