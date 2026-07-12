@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Middleware\DiscourageSearchIndexing;
-use App\Http\Middleware\RedirectLegacyGoshenHost;
 use App\Http\Middleware\TrackVisitorMetric;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -17,7 +16,6 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->prepend(RedirectLegacyGoshenHost::class);
         $middleware->append(DiscourageSearchIndexing::class);
         $middleware->append(TrackVisitorMetric::class);
         $middleware->redirectGuestsTo(
