@@ -198,6 +198,33 @@
             border-color: var(--gold);
             box-shadow: 0 0 0 4px rgba(248, 181, 34, .18);
         }
+        .password-control {
+            position: relative;
+            display: grid;
+        }
+        .password-control .input {
+            padding-right: 86px;
+        }
+        .password-reveal {
+            position: absolute;
+            top: 50%;
+            right: 8px;
+            transform: translateY(-50%);
+            min-height: 38px;
+            border: 0;
+            border-radius: 13px;
+            padding: 0 12px;
+            background: var(--card);
+            color: var(--brand-2);
+            box-shadow: inset 0 0 0 1px var(--line);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 1000;
+        }
+        .password-reveal:focus-visible {
+            outline: 3px solid rgba(248, 181, 34, .36);
+            outline-offset: 2px;
+        }
 
         .quantity-stepper {
             display: grid;
@@ -1285,7 +1312,10 @@
                 </div>
                 <div class="field">
                     <label for="loginPassword">Password</label>
-                    <input id="loginPassword" class="input" name="password" type="password" autocomplete="current-password" required>
+                    <div class="password-control">
+                        <input id="loginPassword" class="input" name="password" type="password" autocomplete="current-password" required>
+                        <button class="password-reveal" type="button" data-password-toggle="loginPassword" aria-controls="loginPassword" aria-pressed="false">Show</button>
+                    </div>
                 </div>
                 <div class="inline-actions">
                     <a class="link-button" href="/app/forgot-password" data-auth-tab="forgot">Forgot password?</a>
@@ -1346,11 +1376,17 @@
                     </div>
                     <div class="field">
                         <label for="registerPassword">Password</label>
-                        <input id="registerPassword" class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
+                        <div class="password-control">
+                            <input id="registerPassword" class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
+                            <button class="password-reveal" type="button" data-password-toggle="registerPassword" aria-controls="registerPassword" aria-pressed="false">Show</button>
+                        </div>
                     </div>
                     <div class="field">
                         <label for="registerPasswordConfirm">Confirm password</label>
-                        <input id="registerPasswordConfirm" class="input" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" required>
+                        <div class="password-control">
+                            <input id="registerPasswordConfirm" class="input" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" required>
+                            <button class="password-reveal" type="button" data-password-toggle="registerPasswordConfirm" aria-controls="registerPasswordConfirm" aria-pressed="false">Show</button>
+                        </div>
                     </div>
                 </div>
                 <button class="button dark" type="submit">Create account</button>
@@ -1389,7 +1425,10 @@
                 </div>
                 <div class="field">
                     <label for="resetPassword">New password</label>
-                    <input id="resetPassword" class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
+                    <div class="password-control">
+                        <input id="resetPassword" class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
+                        <button class="password-reveal" type="button" data-password-toggle="resetPassword" aria-controls="resetPassword" aria-pressed="false">Show</button>
+                    </div>
                 </div>
                 <button class="button dark" type="submit">Reset password</button>
                 <button class="button outline" type="button" data-auth-tab="login">Back to sign in</button>
@@ -3331,6 +3370,19 @@
                 event.preventDefault();
                 showAuth(button.dataset.authTab);
                 showAuthNotice('');
+            });
+        });
+
+        document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+            const input = document.getElementById(button.dataset.passwordToggle);
+            if (!input) return;
+
+            button.addEventListener('click', () => {
+                const shouldReveal = input.type === 'password';
+                input.type = shouldReveal ? 'text' : 'password';
+                button.textContent = shouldReveal ? 'Hide' : 'Show';
+                button.setAttribute('aria-pressed', shouldReveal ? 'true' : 'false');
+                input.focus({ preventScroll: true });
             });
         });
 

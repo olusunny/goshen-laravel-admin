@@ -458,6 +458,33 @@
             border-color: rgba(248, 184, 35, .85);
             box-shadow: 0 0 0 .22rem rgba(248, 184, 35, .18);
         }
+        .password-control {
+            position: relative;
+            display: grid;
+        }
+        .password-control .input {
+            padding-right: 5.35rem;
+        }
+        .password-reveal {
+            position: absolute;
+            top: 50%;
+            right: .45rem;
+            transform: translateY(-50%);
+            min-height: 2.25rem;
+            border: 0;
+            border-radius: .8rem;
+            padding: 0 .72rem;
+            background: white;
+            color: var(--green);
+            box-shadow: inset 0 0 0 1px var(--line);
+            cursor: pointer;
+            font-size: .82rem;
+            font-weight: 900;
+        }
+        .password-reveal:focus-visible {
+            outline: .2rem solid rgba(248, 184, 35, .32);
+            outline-offset: .12rem;
+        }
 
         .button {
             display: inline-flex;
@@ -1187,7 +1214,10 @@
                             </div>
                             <div class="field">
                                 <label for="loginPassword">Password</label>
-                                <input class="input" id="loginPassword" name="password" type="password" required>
+                                <div class="password-control">
+                                    <input class="input" id="loginPassword" name="password" type="password" required>
+                                    <button class="password-reveal" type="button" data-password-toggle="loginPassword" aria-controls="loginPassword" aria-pressed="false">Show</button>
+                                </div>
                             </div>
                             <button class="button alt" type="submit">Sign in securely</button>
                         </form>
@@ -1238,7 +1268,10 @@
                             </div>
                             <div class="field">
                                 <label for="registerPassword">Password</label>
-                                <input class="input" id="registerPassword" name="password" type="password" minlength="8" required>
+                                <div class="password-control">
+                                    <input class="input" id="registerPassword" name="password" type="password" minlength="8" required>
+                                    <button class="password-reveal" type="button" data-password-toggle="registerPassword" aria-controls="registerPassword" aria-pressed="false">Show</button>
+                                </div>
                             </div>
                             <button class="button alt" type="submit">Create account</button>
                         </form>
@@ -1877,6 +1910,19 @@
             registerForm.hidden = tab.dataset.tab !== 'register';
             verifyForm.hidden = tab.dataset.tab !== 'verify';
             clearNotice();
+        });
+    });
+
+    document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+        const input = document.getElementById(button.dataset.passwordToggle);
+        if (!input) return;
+
+        button.addEventListener('click', () => {
+            const shouldReveal = input.type === 'password';
+            input.type = shouldReveal ? 'text' : 'password';
+            button.textContent = shouldReveal ? 'Hide' : 'Show';
+            button.setAttribute('aria-pressed', shouldReveal ? 'true' : 'false');
+            input.focus({ preventScroll: true });
         });
     });
 
