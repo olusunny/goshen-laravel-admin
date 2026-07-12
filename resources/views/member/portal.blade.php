@@ -2740,12 +2740,9 @@
             const registrations = memberData.registrations || [];
             const tickets = memberData.tickets || [];
             const payable = payableRows();
-            const outstanding = payable.reduce((sum, row) => sum + Math.max(0, Number(row.installment.amount || 0) - Number(row.installment.paid_amount || 0)), 0);
-            const currency = payable[0]?.installment?.currency || registrations[0]?.currency || 'GBP';
             document.getElementById('homeStats').innerHTML = `
                 <div class="stat"><span>Registrations</span><strong>${registrations.length}</strong></div>
                 <div class="stat"><span>Tickets</span><strong>${tickets.length}</strong></div>
-                <div class="stat"><span>Outstanding</span><strong>${escapeHtml(formatMoney(outstanding, currency))}</strong></div>
                 <div class="stat"><span>Wallet</span><strong>${escapeHtml(walletData ? formatMoney(walletData.balance, walletData.currency) : 'Load')}</strong></div>
             `;
             document.getElementById('homeNextAction').innerHTML = payable.length
