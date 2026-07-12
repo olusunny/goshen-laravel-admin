@@ -212,6 +212,11 @@ class AppSettings extends Page
                     'url' => CloudBackups::getUrl(),
                 ],
                 [
+                    'label' => 'Cron Jobs',
+                    'description' => 'Scheduler health report and cPanel cron setup commands.',
+                    'url' => CronJobs::getUrl(),
+                ],
+                [
                     'label' => 'AI Providers',
                     'description' => 'AI provider model, API key, and test configuration.',
                     'url' => AiProviderSettingResource::getUrl('index'),

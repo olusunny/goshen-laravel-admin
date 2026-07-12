@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Filament\Pages\CloudBackups;
 use App\Filament\Pages\AppSettings;
+use App\Filament\Pages\CronJobs;
 use App\Filament\Pages\GoshenReferralSettings;
 use App\Filament\Pages\GoshenRetreatConsole;
 use App\Filament\Pages\GoogleFirebaseSettings;
@@ -142,6 +143,7 @@ class AdminMenuRegistry
         return [
             AppSettings::class,
             CloudBackups::class,
+            CronJobs::class,
             GoshenReferralSettings::class,
             GoshenRetreatConsole::class,
             GoogleFirebaseSettings::class,

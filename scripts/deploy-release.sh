@@ -6,16 +6,20 @@ usage() {
 Usage:
   scripts/deploy-release.sh staging [commit]
   scripts/deploy-release.sh production [commit]
+  scripts/deploy-release.sh portal [commit]
 
 Environment variables:
   REPO_URL      Git repository URL. Defaults to https://github.com/olusunny/goshen-laravel-admin.git
   BRANCH        Branch to clone when resolving a commit. Defaults to main
-  PROJECTS_DIR  Server projects directory. Defaults to /home/cels/projects
+  APP_ROOT      Laravel app release root. Defaults per environment.
+  WEB_ROOT      cPanel/public web root. Defaults per environment.
+  PHP_BIN       PHP CLI binary. Defaults to php.
+  HEALTH_URL    Public health URL checked after switching releases.
 
 This script creates a new Git-backed release, links shared .env and storage,
-runs Laravel production build steps, then atomically points the domain folder at
-the prepared release. Existing non-Git site folders are moved into the release
-legacy folder during the first migration.
+runs Laravel production build steps, then atomically points the app current
+symlink at the prepared release. For cPanel deployments the web root remains in
+place and its front controller points at APP_ROOT/current.
 USAGE
 }
 
@@ -25,9 +29,18 @@ commit="${2:-}"
 case "$environment" in
   staging)
     domain="staging-goshen.shotfaz.com"
+    app_root="${APP_ROOT:-/home/cels/projects/.git-deploy/$domain}"
+    web_root="${WEB_ROOT:-/home/cels/projects/$domain}"
     ;;
   production|prod)
     domain="goshen.shotfaz.com"
+    app_root="${APP_ROOT:-/home/cels/projects/.git-deploy/$domain}"
+    web_root="${WEB_ROOT:-/home/cels/projects/$domain}"
+    ;;
+  portal|portal-production|goshenretreat)
+    domain="portal.goshenretreat.uk"
+    app_root="${APP_ROOT:-/home/goshenretreat/apps/portal}"
+    web_root="${WEB_ROOT:-/home/goshenretreat/portal.goshenretreat.uk}"
     ;;
   -h|--help|"")
     usage
@@ -42,23 +55,30 @@ esac
 
 repo_url="${REPO_URL:-https://github.com/olusunny/goshen-laravel-admin.git}"
 branch="${BRANCH:-main}"
-projects_dir="${PROJECTS_DIR:-/home/cels/projects}"
-site="$projects_dir/$domain"
-deploy_root="$projects_dir/.git-deploy/$domain"
-shared="$deploy_root/shared"
-releases="$deploy_root/releases"
-legacy_root="$deploy_root/legacy"
+php_bin="${PHP_BIN:-php}"
+health_url="${HEALTH_URL:-https://$domain/up}"
+current="$app_root/current"
+shared="$app_root/shared"
+releases="$app_root/releases"
 stamp="$(date +%Y%m%d%H%M%S)"
 
-case "$site" in
-  "$projects_dir"/*) ;;
+case "$app_root" in
+  /home/*/apps/*|/home/*/.git-deploy/*) ;;
   *)
-    echo "Refusing unsafe site path: $site" >&2
+    echo "Refusing unsafe app root path: $app_root" >&2
     exit 1
     ;;
 esac
 
-mkdir -p "$shared" "$releases" "$legacy_root"
+case "$web_root" in
+  /home/*/*|/home/*/public_html) ;;
+  *)
+    echo "Refusing unsafe web root path: $web_root" >&2
+    exit 1
+    ;;
+esac
+
+mkdir -p "$shared" "$releases" "$web_root"
 
 if [[ -z "$commit" ]]; then
   commit="$(git ls-remote "$repo_url" "refs/heads/$branch" | awk '{ print $1 }')"
@@ -71,22 +91,21 @@ fi
 
 short_commit="${commit:0:7}"
 release="$releases/$stamp-$short_commit"
+previous_release=""
 
-if [[ ! -e "$shared/.env" ]]; then
-  if [[ ! -e "$site/.env" ]]; then
-    echo "Missing .env at $site/.env; create $shared/.env before deploying." >&2
-    exit 1
-  fi
-  cp -p "$site/.env" "$shared/.env"
+if [[ -L "$current" ]]; then
+  previous_release="$(readlink -f "$current")"
 fi
 
-if [[ ! -e "$shared/storage" ]]; then
-  if [[ ! -e "$site/storage" ]]; then
-    echo "Missing storage at $site/storage; create $shared/storage before deploying." >&2
+if [[ ! -e "$shared/.env" ]]; then
+  if [[ -e "$current/.env" ]]; then
+    cp -p "$current/.env" "$shared/.env"
+  elif [[ -e "$web_root/.env" ]]; then
+    cp -p "$web_root/.env" "$shared/.env"
+  else
+    echo "Missing .env; create $shared/.env before deploying." >&2
     exit 1
   fi
-  mv "$site/storage" "$shared/storage"
-  ln -s "$shared/storage" "$site/storage"
 fi
 
 git clone --quiet --branch "$branch" --single-branch "$repo_url" "$release"
@@ -109,23 +128,68 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
   composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
   php artisan migrate --force --no-interaction
   php artisan optimize:clear --no-interaction
-  php artisan config:cache --no-interaction
+  rm -f bootstrap/cache/config.php
   php artisan route:cache --no-interaction
   php artisan view:cache --no-interaction
+  php artisan about --only=environment --no-interaction
 )
 
-next_link="$projects_dir/.${domain}.next-$stamp"
-ln -s "$release" "$next_link"
+rsync -a --delete \
+  --exclude='/index.php' \
+  --exclude='/.htaccess' \
+  --exclude='/storage' \
+  --exclude='/error_log' \
+  --exclude='/.well-known' \
+  "$release/public/" "$web_root/"
 
-if [[ -L "$site" ]]; then
-  mv -Tf "$next_link" "$site"
-else
-  legacy="$legacy_root/$stamp-pre-git-release"
-  mv "$site" "$legacy"
-  mv -T "$next_link" "$site"
-  printf '%s\n' "$legacy" > "$deploy_root/last_legacy_path"
+if [[ ! -f "$web_root/index.php" ]]; then
+  cat > "$web_root/index.php" <<PHP
+<?php
+
+use Illuminate\Foundation\Application;
+use Illuminate\Http\Request;
+
+define('LARAVEL_START', microtime(true));
+
+\$appBase = __DIR__.'/../apps/portal/current';
+
+if (file_exists(\$maintenance = \$appBase.'/storage/framework/maintenance.php')) {
+    require \$maintenance;
+}
+
+require \$appBase.'/vendor/autoload.php';
+
+/** @var Application \$app */
+\$app = require_once \$appBase.'/bootstrap/app.php';
+
+\$app->handleRequest(Request::capture());
+PHP
 fi
 
-printf '%s\n' "$release" > "$deploy_root/current_release_path"
+next_link="$app_root/.current-next-$stamp"
+ln -s "$release" "$next_link"
+mv -Tf "$next_link" "$current"
+
+if command -v curl >/dev/null 2>&1; then
+  if ! curl --fail --silent --show-error --max-time 20 "$health_url" >/dev/null; then
+    echo "Health check failed for $health_url" >&2
+
+    if [[ -n "$previous_release" && -d "$previous_release" ]]; then
+      rollback_link="$app_root/.current-rollback-$stamp"
+      ln -s "$previous_release" "$rollback_link"
+      mv -Tf "$rollback_link" "$current"
+      echo "Rolled back current symlink to $previous_release" >&2
+    fi
+
+    if command -v pkill >/dev/null 2>&1; then
+      pkill -u "$(id -un)" -f '^lsphp' || true
+    fi
+
+    exit 1
+  fi
+fi
+
+printf '%s\n' "$release" > "$app_root/current_release_path"
+printf '%s\n' "$commit" > "$app_root/.app_commit"
 echo "Deployed $domain at $commit"
 echo "Current release: $release"

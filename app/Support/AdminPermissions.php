@@ -9,6 +9,8 @@ class AdminPermissions
 {
     public const CLOUD_BACKUPS = 'manage_cloud_backups';
 
+    public const CRON_MONITOR = 'manage_cron_monitor';
+
     public const FUNDRAISING_VIEW = 'fundraising.view';
 
     public const FUNDRAISING_MANAGE = 'fundraising.manage';
@@ -87,6 +89,7 @@ class AdminPermissions
         return collect(self::resources())
             ->mapWithKeys(fn ($meta) => [$meta['permission'] => "{$meta['group']} - {$meta['label']}"])
             ->put(self::CLOUD_BACKUPS, 'Settings - Cloud Backups')
+            ->put(self::CRON_MONITOR, 'Settings - Cron Jobs')
             ->put(self::FUNDRAISING_VIEW, 'Fundraising - View campaigns')
             ->put(self::FUNDRAISING_MANAGE, 'Fundraising - Manage campaigns')
             ->put(self::FUNDRAISING_CONTRIBUTE, 'Fundraising - Contribute')
