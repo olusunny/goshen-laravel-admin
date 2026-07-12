@@ -1935,6 +1935,13 @@
             try {
                 const payload = await apiPost('/api/googleAuth', { id_token: idToken });
                 saveUser(payload.user);
+                if (payload.profile_needs_update) {
+                    showPage('profile');
+                    profileEditMode = true;
+                    renderProfile();
+                    notify('Please complete your profile details before continuing.', 'error');
+                    return;
+                }
                 notify(`Welcome, ${payload.user?.name || 'member'}.`);
             } catch (error) {
                 showAuthNotice(error.message, 'error');

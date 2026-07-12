@@ -933,11 +933,19 @@ class CompatibilityController extends Controller
             ], 422);
         }
 
-        $user = MobileUser::firstOrNew(['email' => $email]);
-        $isNew = ! $user->exists;
-        $wasVerified = (bool) ($user->exists && $user->is_verified && $user->email_verified_at);
+        $user = MobileUser::query()->whereRaw('LOWER(email) = ?', [$email])->first();
 
-        if ($user->exists && ($user->is_blocked || $user->is_deleted)) {
+        if (! $user) {
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'No member account exists for this Google email yet. Please register with email first, then use Google after your account is available in the portal.',
+                'message' => 'No member account exists for this Google email yet. Please register with email first, then use Google after your account is available in the portal.',
+            ], 404);
+        }
+
+        $wasVerified = (bool) ($user->is_verified && $user->email_verified_at);
+
+        if ($user->is_blocked || $user->is_deleted) {
             return response()->json([
                 'status' => 'error',
                 'msg' => 'This account is not allowed to sign in. Please contact support.',
@@ -958,15 +966,14 @@ class CompatibilityController extends Controller
             'address_latitude' => $data['address_latitude'] ?? $user->address_latitude,
             'address_longitude' => $data['address_longitude'] ?? $user->address_longitude,
             'avatar' => $user->avatar ?: ($data['photo_url'] ?? $google['picture'] ?? null),
-            'password' => $isNew ? null : $user->password,
-            'login_type' => $isNew ? 'google' : ($user->login_type ?: 'google'),
+            'login_type' => $user->login_type ?: 'google',
             'is_verified' => true,
             'email_verified_at' => $user->email_verified_at ?? now(),
             'email_verification_code_hash' => null,
             'email_verification_expires_at' => null,
         ])->save();
 
-        if ($isNew || ! $wasVerified) {
+        if (! $wasVerified) {
             app(AutomaticNotificationService::class)->enqueue('welcome_verified_user', $user);
         }
 
@@ -980,7 +987,7 @@ class CompatibilityController extends Controller
             'msg' => 'Signed in successfully.',
             'message' => 'Signed in successfully.',
             'user' => $this->mobileUserPayload($user, $user->issueApiToken()),
-            'is_new_user' => $isNew,
+            'is_new_user' => false,
             'profile_needs_update' => blank($user->phone) || blank($user->gender) || blank($user->member_type) || blank($user->country_of_residence) || blank($user->state_county_province) || blank($user->address),
         ]);
     }

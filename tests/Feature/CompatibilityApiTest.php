@@ -78,7 +78,7 @@ class CompatibilityApiTest extends TestCase
             ->assertJsonPath('donation_accounts', []);
     }
 
-    public function test_google_auth_persists_member_and_returns_database_triumphant_id(): void
+    public function test_google_auth_rejects_unknown_google_email_without_creating_member(): void
     {
         AppSetting::query()->updateOrCreate(['key' => 'google_login_enabled'], ['value' => '1']);
         AppSetting::query()->updateOrCreate(['key' => 'google_web_client_id'], ['value' => 'web-client-id.apps.googleusercontent.com']);
@@ -99,22 +99,59 @@ class CompatibilityApiTest extends TestCase
         ]);
 
         $response
+            ->assertNotFound()
+            ->assertJsonPath('status', 'error');
+
+        $this->assertDatabaseMissing('mobile_users', [
+            'email' => 'new.google.member@example.test',
+        ]);
+    }
+
+    public function test_google_auth_links_existing_member_and_returns_database_triumphant_id(): void
+    {
+        AppSetting::query()->updateOrCreate(['key' => 'google_login_enabled'], ['value' => '1']);
+        AppSetting::query()->updateOrCreate(['key' => 'google_web_client_id'], ['value' => 'web-client-id.apps.googleusercontent.com']);
+
+        $user = MobileUser::query()->create([
+            'name' => 'Existing Member',
+            'email' => 'existing.google.member@example.test',
+            'login_type' => 'email',
+            'is_verified' => true,
+        ]);
+
+        Http::fake([
+            'https://oauth2.googleapis.com/tokeninfo*' => Http::response([
+                'aud' => 'web-client-id.apps.googleusercontent.com',
+                'sub' => 'google-user-123',
+                'email' => 'existing.google.member@example.test',
+                'email_verified' => true,
+                'name' => 'Existing Google Member',
+                'picture' => 'https://example.test/avatar.png',
+            ]),
+        ]);
+
+        $response = $this->postJson('/api/googleAuth', [
+            'id_token' => 'fake-google-token',
+        ]);
+
+        $response
             ->assertOk()
             ->assertJsonPath('status', 'ok')
-            ->assertJsonPath('user.email', 'new.google.member@example.test');
+            ->assertJsonPath('user.id', $user->id)
+            ->assertJsonPath('user.email', 'existing.google.member@example.test')
+            ->assertJsonPath('is_new_user', false)
+            ->assertJsonPath('profile_needs_update', true);
 
-        $user = MobileUser::query()
-            ->where('email', 'new.google.member@example.test')
-            ->firstOrFail();
+        $user->refresh();
 
         $this->assertSame($user->id, $response->json('user.id'));
         $this->assertSame('google-user-123', $user->google_id);
-        $this->assertSame('google', $user->login_type);
+        $this->assertSame('email', $user->login_type);
         $this->assertNotNull($user->triumphant_id);
         $this->assertSame($user->triumphant_id, $response->json('user.triumphant_id'));
         $this->assertDatabaseHas('mobile_users', [
             'id' => $response->json('user.id'),
-            'email' => 'new.google.member@example.test',
+            'email' => 'existing.google.member@example.test',
             'triumphant_id' => $response->json('user.triumphant_id'),
         ]);
     }
