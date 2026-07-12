@@ -14,6 +14,7 @@ Environment variables:
   APP_ROOT      Laravel app release root. Defaults per environment.
   WEB_ROOT      cPanel/public web root. Defaults per environment.
   PHP_BIN       PHP CLI binary. Defaults to php.
+  COMPOSER_BIN  Composer binary. If unavailable, vendor/ is copied from the previous release.
   HEALTH_URL    Public health URL checked after switching releases.
 
 This script creates a new Git-backed release, links shared .env and storage,
@@ -56,6 +57,7 @@ esac
 repo_url="${REPO_URL:-https://github.com/olusunny/goshen-laravel-admin.git}"
 branch="${BRANCH:-main}"
 php_bin="${PHP_BIN:-php}"
+composer_bin="${COMPOSER_BIN:-composer}"
 health_url="${HEALTH_URL:-https://$domain/up}"
 current="$app_root/current"
 shared="$app_root/shared"
@@ -125,7 +127,16 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
 
 (
   cd "$release"
-  composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
+  if command -v "$composer_bin" >/dev/null 2>&1; then
+    "$composer_bin" install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
+  elif [[ -n "$previous_release" && -d "$previous_release/vendor" ]]; then
+    echo "Composer is unavailable; reusing vendor/ from $previous_release"
+    rsync -a "$previous_release/vendor/" "$release/vendor/"
+  else
+    echo "Composer is unavailable and no previous vendor/ directory exists." >&2
+    exit 1
+  fi
+
   php artisan migrate --force --no-interaction
   php artisan optimize:clear --no-interaction
   rm -f bootstrap/cache/config.php
