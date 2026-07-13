@@ -64,17 +64,27 @@ class GoshenRetreatConsole extends Page
     {
         return [
             'cards' => collect($this->cards())
-                ->filter(fn (array $card): bool => $this->canSeeCard($card['permission']))
+                ->filter(fn (array $card): bool => $this->canSeeCard($card))
                 ->values()
                 ->all(),
         ];
     }
 
-    private function canSeeCard(string $permission): bool
+    private function canSeeCard(array $card): bool
     {
         $user = Auth::user();
 
         if (! $user) {
+            return false;
+        }
+
+        $permission = (string) $card['permission'];
+
+        if (isset($card['resource']) && ! AdminMenuRegistry::visibleForResource((string) $card['resource'])) {
+            return false;
+        }
+
+        if (isset($card['page']) && ! AdminMenuRegistry::visibleForPage((string) $card['page'])) {
             return false;
         }
 
@@ -95,6 +105,7 @@ class GoshenRetreatConsole extends Page
                 'icon' => 'calendar',
                 'url' => GoshenRetreatEventResource::getUrl('index'),
                 'permission' => AdminPermissions::resourcePermission(GoshenRetreatEventResource::class),
+                'resource' => GoshenRetreatEventResource::class,
             ],
             [
                 'title' => 'Schedules',
@@ -102,6 +113,7 @@ class GoshenRetreatConsole extends Page
                 'icon' => 'clock',
                 'url' => GoshenScheduleResource::getUrl('index'),
                 'permission' => AdminPermissions::resourcePermission(GoshenScheduleResource::class),
+                'resource' => GoshenScheduleResource::class,
             ],
             [
                 'title' => 'Ticket types',
@@ -109,6 +121,7 @@ class GoshenRetreatConsole extends Page
                 'icon' => 'ticket',
                 'url' => GoshenTicketTypeResource::getUrl('index'),
                 'permission' => AdminPermissions::resourcePermission(GoshenTicketTypeResource::class),
+                'resource' => GoshenTicketTypeResource::class,
             ],
             [
                 'title' => 'Registration form fields',
@@ -116,6 +129,7 @@ class GoshenRetreatConsole extends Page
                 'icon' => 'form',
                 'url' => GoshenRegistrationFieldResource::getUrl('index'),
                 'permission' => AdminPermissions::resourcePermission(GoshenRegistrationFieldResource::class),
+                'resource' => GoshenRegistrationFieldResource::class,
             ],
             [
                 'title' => 'Bookings',
@@ -123,6 +137,7 @@ class GoshenRetreatConsole extends Page
                 'icon' => 'clipboard',
                 'url' => GoshenBookingResource::getUrl('index'),
                 'permission' => AdminPermissions::resourcePermission(GoshenBookingResource::class),
+                'resource' => GoshenBookingResource::class,
             ],
             [
                 'title' => 'Tickets',
@@ -132,6 +147,7 @@ class GoshenRetreatConsole extends Page
                     ? GoshenTicketResource::getUrl('index')
                     : GoshenTicketResource::getUrl('create'),
                 'permission' => AdminPermissions::resourcePermission(GoshenTicketResource::class),
+                'resource' => GoshenTicketResource::class,
             ],
             [
                 'title' => 'Accommodation allocations',
@@ -139,6 +155,7 @@ class GoshenRetreatConsole extends Page
                 'icon' => 'bed',
                 'url' => GoshenAccommodationAllocationResource::getUrl('index'),
                 'permission' => AdminPermissions::resourcePermission(GoshenAccommodationAllocationResource::class),
+                'resource' => GoshenAccommodationAllocationResource::class,
             ],
             [
                 'title' => 'Referral points',
@@ -146,6 +163,7 @@ class GoshenRetreatConsole extends Page
                 'icon' => 'gift',
                 'url' => GoshenReferralPointEntryResource::getUrl('index'),
                 'permission' => AdminPermissions::resourcePermission(GoshenReferralPointEntryResource::class),
+                'resource' => GoshenReferralPointEntryResource::class,
             ],
             [
                 'title' => 'Referral settings',
@@ -153,6 +171,7 @@ class GoshenRetreatConsole extends Page
                 'icon' => 'settings',
                 'url' => GoshenReferralSettings::getUrl(),
                 'permission' => AdminPermissions::resourcePermission(GoshenReferralPointEntryResource::class),
+                'page' => GoshenReferralSettings::class,
             ],
         ];
     }

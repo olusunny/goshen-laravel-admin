@@ -190,54 +190,110 @@ class AppSettings extends Page
     public function getViewData(): array
     {
         return [
-            'quickLinks' => [
-                [
-                    'label' => 'Payment Gateways',
-                    'description' => 'Stripe test/live keys, webhooks, and checkout URLs.',
-                    'url' => PaymentGateways::getUrl(),
-                ],
-                [
-                    'label' => 'Google & Firebase',
-                    'description' => 'Google login IDs, fingerprints, and Firebase Admin status.',
-                    'url' => GoogleFirebaseSettings::getUrl(),
-                ],
-                [
-                    'label' => 'Referral Settings',
-                    'description' => 'Referral points, wallet conversion rate, and conversion minimums.',
-                    'url' => GoshenReferralSettings::getUrl(),
-                ],
-                [
-                    'label' => 'Cloud Backups',
-                    'description' => 'Google Drive and OneDrive backup providers.',
-                    'url' => CloudBackups::getUrl(),
-                ],
-                [
-                    'label' => 'Cron Jobs',
-                    'description' => 'Scheduler health report and cPanel cron setup commands.',
-                    'url' => CronJobs::getUrl(),
-                ],
-                [
-                    'label' => 'AI Providers',
-                    'description' => 'AI provider model, API key, and test configuration.',
-                    'url' => AiProviderSettingResource::getUrl('index'),
-                ],
-                [
-                    'label' => 'Add-ons',
-                    'description' => 'Installed add-ons, lifecycle status, and package health.',
-                    'url' => AddonResource::getUrl('index'),
-                ],
-                [
-                    'label' => 'Role Permissions',
-                    'description' => 'Admin roles and feature permissions.',
-                    'url' => RoleResource::getUrl('index'),
-                ],
-                [
-                    'label' => 'Admin Menu Settings',
-                    'description' => 'Role-based visibility for admin navigation items.',
-                    'url' => AdminMenuSettings::getUrl(),
-                ],
-            ],
+            'quickLinks' => $this->visibleQuickLinks(),
             'additionalSettingGroups' => $this->additionalSettingGroups(),
+        ];
+    }
+
+    /**
+     * @return array<int, array{label: string, description: string, url: string}>
+     */
+    private function visibleQuickLinks(): array
+    {
+        return collect([
+            $this->pageQuickLink(
+                PaymentGateways::class,
+                'Payment Gateways',
+                'Stripe test/live keys, webhooks, and checkout URLs.',
+            ),
+            $this->pageQuickLink(
+                GoogleFirebaseSettings::class,
+                'Google & Firebase',
+                'Google login IDs, fingerprints, and Firebase Admin status.',
+            ),
+            $this->pageQuickLink(
+                GoshenReferralSettings::class,
+                'Referral Settings',
+                'Referral points, wallet conversion rate, and conversion minimums.',
+            ),
+            $this->pageQuickLink(
+                CloudBackups::class,
+                'Cloud Backups',
+                'Google Drive and OneDrive backup providers.',
+            ),
+            $this->pageQuickLink(
+                CronJobs::class,
+                'Cron Jobs',
+                'Scheduler health report and cPanel cron setup commands.',
+            ),
+            $this->resourceQuickLink(
+                AiProviderSettingResource::class,
+                'AI Providers',
+                'AI provider model, API key, and test configuration.',
+            ),
+            $this->resourceQuickLink(
+                AddonResource::class,
+                'Add-ons',
+                'Installed add-ons, lifecycle status, and package health.',
+            ),
+            $this->resourceQuickLink(
+                RoleResource::class,
+                'Role Permissions',
+                'Admin roles and feature permissions.',
+            ),
+            $this->pageQuickLink(
+                AdminMenuSettings::class,
+                'Admin Menu Settings',
+                'Role-based visibility for admin navigation items.',
+            ),
+        ])
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param class-string<Page> $pageClass
+     *
+     * @return array{label: string, description: string, url: string}|null
+     */
+    private function pageQuickLink(string $pageClass, string $label, string $description): ?array
+    {
+        if (! $pageClass::canAccess()) {
+            return null;
+        }
+
+        if (! AdminMenuRegistry::visibleForPage($pageClass)) {
+            return null;
+        }
+
+        return [
+            'label' => $label,
+            'description' => $description,
+            'url' => $pageClass::getUrl(),
+        ];
+    }
+
+    /**
+     * @param class-string $resourceClass
+     *
+     * @return array{label: string, description: string, url: string}|null
+     */
+    private function resourceQuickLink(string $resourceClass, string $label, string $description): ?array
+    {
+        if (method_exists($resourceClass, 'canViewAny') && ! $resourceClass::canViewAny()) {
+            return null;
+        }
+
+        if (AdminMenuRegistry::resourceIsConfigurable($resourceClass)
+            && ! AdminMenuRegistry::visibleForResource($resourceClass)) {
+            return null;
+        }
+
+        return [
+            'label' => $label,
+            'description' => $description,
+            'url' => $resourceClass::getUrl('index'),
         ];
     }
 

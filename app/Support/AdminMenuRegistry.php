@@ -81,6 +81,11 @@ class AdminMenuRegistry
         return self::visibleForCurrentUser(self::resourceKey($resourceClass));
     }
 
+    public static function resourceIsConfigurable(string $resourceClass): bool
+    {
+        return self::resourceShouldAppearInMatrix($resourceClass);
+    }
+
     public static function visibleForPage(string $pageClass): bool
     {
         return self::visibleForCurrentUser(self::pageKey($pageClass));
