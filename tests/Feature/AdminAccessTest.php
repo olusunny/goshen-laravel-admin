@@ -59,13 +59,19 @@ class AdminAccessTest extends TestCase
         $this->actingAs($admin)
             ->get('/admin/media-items/create')
             ->assertOk()
-            ->assertSee('Update banner');
+            ->assertSee('Update banner')
+            ->assertDontSee('Free to stream')
+            ->assertDontSee('Can preview')
+            ->assertDontSee('Free preview duration');
 
         $this->actingAs($admin)
             ->get('/admin/video-audio-media/create')
             ->assertOk()
             ->assertSee('Video &amp; Audio', false)
-            ->assertSee('Artwork and Playback');
+            ->assertSee('Artwork and Playback')
+            ->assertDontSee('Free to stream')
+            ->assertDontSee('Can preview')
+            ->assertDontSee('Free preview duration');
 
         $this->actingAs($admin)
             ->get('/admin/streams/create')

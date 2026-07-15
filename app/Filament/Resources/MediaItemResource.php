@@ -154,21 +154,9 @@ class MediaItemResource extends Resource
                             ->numeric()
                             ->default(0)
                             ->required(),
-                        Forms\Components\TextInput::make('preview_duration')
-                            ->helperText('Free preview duration in seconds.')
-                            ->numeric()
-                            ->default(0)
-                            ->required(),
                         Forms\Components\DateTimePicker::make('published_at'),
                         Forms\Components\Toggle::make('can_download')
                             ->default(true)
-                            ->required(),
-                        Forms\Components\Toggle::make('is_free')
-                            ->label('Free to stream')
-                            ->default(true)
-                            ->required(),
-                        Forms\Components\Toggle::make('can_preview')
-                            ->default(false)
                             ->required(),
                         Forms\Components\Toggle::make('is_featured')
                             ->label('Show in slider / discover')
@@ -236,13 +224,6 @@ class MediaItemResource extends Resource
                 Tables\Columns\IconColumn::make('can_download')
                     ->boolean()
                     ->toggleable(),
-                Tables\Columns\IconColumn::make('can_preview')
-                    ->boolean()
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('preview_duration')
-                    ->numeric()
-                    ->sortable()
-                    ->toggleable(),
                 Tables\Columns\TextColumn::make('views_count')
                     ->numeric()
                     ->sortable()
@@ -250,9 +231,6 @@ class MediaItemResource extends Resource
                 Tables\Columns\TextColumn::make('likes_count')
                     ->numeric()
                     ->sortable()
-                    ->toggleable(),
-                Tables\Columns\IconColumn::make('is_free')
-                    ->boolean()
                     ->toggleable(),
                 Tables\Columns\IconColumn::make('is_featured')
                     ->boolean()
