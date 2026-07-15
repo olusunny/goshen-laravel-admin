@@ -27,6 +27,8 @@ class GoshenAdminWalletTopUpTest extends TestCase
             'purpose_type' => 'cash_received',
             'external_reference' => 'CASH-001',
             'note' => 'Cash received by the front desk for member wallet.',
+            'request_ip' => '203.0.113.42',
+            'request_user_agent' => 'Feature test browser',
         ]);
 
         $this->assertSame('55.50', $wallet->fresh()->balance);
@@ -39,8 +41,10 @@ class GoshenAdminWalletTopUpTest extends TestCase
         $this->assertSame('cash_received', $entry->metadata['purpose_type']);
         $this->assertSame('CASH-001', $entry->metadata['external_reference']);
         $this->assertSame($admin->email, $entry->metadata['admin_email']);
-        $this->assertSame(10.0, $entry->metadata['wallet_balance_before']);
-        $this->assertSame(55.5, $entry->metadata['wallet_balance_after']);
+        $this->assertEquals(10.0, $entry->metadata['wallet_balance_before']);
+        $this->assertEquals(55.5, $entry->metadata['wallet_balance_after']);
+        $this->assertSame('203.0.113.42', $entry->metadata['request_ip']);
+        $this->assertSame('Feature test browser', $entry->metadata['request_user_agent']);
     }
 
     public function test_admin_top_up_action_obeys_activation_setting(): void
@@ -100,11 +104,13 @@ class GoshenAdminWalletTopUpTest extends TestCase
 
     private function wallet(MobileUser $member, float $balance): GoshenWallet
     {
-        return GoshenWallet::query()->create([
-            'mobile_user_id' => $member->id,
-            'currency' => 'GBP',
-            'balance' => $balance,
-        ]);
+        return GoshenWallet::query()->updateOrCreate(
+            ['mobile_user_id' => $member->id],
+            [
+                'currency' => 'GBP',
+                'balance' => $balance,
+            ],
+        );
     }
 
     private function setting(string $key, string $value): void

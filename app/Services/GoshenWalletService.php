@@ -627,7 +627,7 @@ class GoshenWalletService
         $externalReference = trim((string) ($data['external_reference'] ?? ''));
         $reference = 'gw_admin_' . Str::ulid();
 
-        return DB::transaction(function () use ($wallet, $admin, $amount, $currency, $note, $purpose, $externalReference, $reference): GoshenWalletLedgerEntry {
+        return DB::transaction(function () use ($wallet, $admin, $data, $amount, $currency, $note, $purpose, $externalReference, $reference): GoshenWalletLedgerEntry {
             $lockedWallet = GoshenWallet::query()
                 ->whereKey($wallet->id)
                 ->lockForUpdate()

@@ -112,6 +112,51 @@ copy_directory_contents() {
   fi
 }
 
+write_php_execution_deny_htaccess() {
+  local target_dir="$1"
+
+  mkdir -p "$target_dir"
+  cat > "$target_dir/.htaccess" <<'HTACCESS'
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule \.(?:php[0-9]?|phtml|phar)$ - [F,L,NC]
+</IfModule>
+
+<FilesMatch "\.(?:php[0-9]?|phtml|phar)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Deny from all
+    </IfModule>
+</FilesMatch>
+HTACCESS
+  chmod 644 "$target_dir/.htaccess"
+}
+
+assert_public_php_surface() {
+  local target_dir="$1"
+  local unexpected=""
+
+  if [[ ! -d "$target_dir" ]]; then
+    echo "Public surface check failed; directory does not exist: $target_dir" >&2
+    exit 1
+  fi
+
+  unexpected="$(
+    find -L "$target_dir" -type f \
+      \( -iname '*.php' -o -iname '*.php[0-9]' -o -iname '*.phtml' -o -iname '*.phar' \) \
+      ! -path "$target_dir/index.php" \
+      -print
+  )"
+
+  if [[ -n "$unexpected" ]]; then
+    echo "Refusing deploy because unexpected PHP-like files are exposed under $target_dir:" >&2
+    echo "$unexpected" >&2
+    exit 1
+  fi
+}
+
 sync_public_assets() {
   local source_dir="$1"
   local target_dir="$2"
@@ -122,7 +167,6 @@ sync_public_assets() {
       --exclude='/.htaccess' \
       --exclude='/storage' \
       --exclude='/error_log' \
-      --exclude='/.well-known' \
       "$source_dir/" "$target_dir/"
 
     return
@@ -133,13 +177,12 @@ sync_public_assets() {
     ! -name '.htaccess' \
     ! -name 'storage' \
     ! -name 'error_log' \
-    ! -name '.well-known' \
     -exec rm -rf {} +
 
   shopt -s dotglob nullglob
   for item in "$source_dir"/*; do
     case "$(basename "$item")" in
-      index.php|.htaccess|storage|error_log|.well-known)
+      index.php|.htaccess|storage|error_log)
         continue
         ;;
     esac
@@ -194,6 +237,7 @@ mkdir -p \
   "$shared/storage/framework/sessions" \
   "$shared/storage/framework/views" \
   "$shared/storage/logs"
+write_php_execution_deny_htaccess "$shared/storage/app/public"
 ln -s "$shared/storage/app/public" "$release/public/storage"
 printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
 
@@ -219,6 +263,8 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
 
 if [[ "$web_root_mode" == "public" ]]; then
   sync_public_assets "$release/public" "$web_root"
+  rm -rf "$web_root/storage"
+  ln -s "$shared/storage/app/public" "$web_root/storage"
 
   # Always rewrite the cPanel front controller. The public web root is outside
   # the release directory, so preserving an existing index.php can leave a stale
@@ -245,6 +291,8 @@ require \$appBase.'/vendor/autoload.php';
 \$app->handleRequest(Request::capture());
 PHP
   chmod 644 "$web_root/index.php"
+  write_php_execution_deny_htaccess "$web_root/storage"
+  assert_public_php_surface "$web_root"
 fi
 
 next_link="$app_root/.current-next-$stamp"
@@ -255,6 +303,7 @@ if [[ "$web_root_mode" == "symlink" ]]; then
   next_web_link="$app_root/.webroot-next-$stamp"
   ln -s "$release" "$next_web_link"
   mv -Tf "$next_web_link" "$web_root"
+  assert_public_php_surface "$web_root/public"
 fi
 
 if command -v curl >/dev/null 2>&1; then

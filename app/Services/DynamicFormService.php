@@ -134,6 +134,7 @@ class DynamicFormService
             })
             ->map(fn (mixed $extension): string => strtolower(ltrim(trim((string) $extension), '.')))
             ->filter(fn (string $extension): bool => $extension !== '' && preg_match('/^[a-z0-9]+$/', $extension) === 1)
+            ->reject(fn (string $extension): bool => in_array($extension, $this->executableUploadExtensions(), true))
             ->unique()
             ->values()
             ->all();
@@ -817,6 +818,10 @@ class DynamicFormService
             data_get($field->settings, 'allowed_extensions', ['pdf', 'jpg', 'jpeg', 'png', 'webp']),
         ));
         $extension = strtolower((string) $file->getClientOriginalExtension());
+        if (in_array($extension, $this->executableUploadExtensions(), true)) {
+            throw ValidationException::withMessages([$field->key => "{$field->label} cannot be an executable file."]);
+        }
+
         if ($allowed->isNotEmpty() && ! $allowed->contains($extension)) {
             throw ValidationException::withMessages([$field->key => "{$field->label} must be one of: {$allowed->implode(', ')}."]);
         }
@@ -970,6 +975,20 @@ class DynamicFormService
         return str_starts_with($url, 'http://') || str_starts_with($url, 'https://')
             ? $url
             : url($url);
+    }
+
+    private function executableUploadExtensions(): array
+    {
+        return [
+            'php',
+            'php3',
+            'php4',
+            'php5',
+            'php7',
+            'php8',
+            'phtml',
+            'phar',
+        ];
     }
 
     private function assertStripeConfigured(): void

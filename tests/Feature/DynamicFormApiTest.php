@@ -7,6 +7,7 @@ use App\Models\DynamicFormField;
 use App\Models\DynamicFormSubmission;
 use App\Models\GoshenWallet;
 use App\Models\MobileUser;
+use App\Services\DynamicFormService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -131,11 +132,13 @@ class DynamicFormApiTest extends TestCase
     {
         $member = $this->member();
         $token = $member->issueApiToken();
-        $wallet = GoshenWallet::query()->create([
-            'mobile_user_id' => $member->id,
-            'currency' => 'GBP',
-            'balance' => 50,
-        ]);
+        $wallet = GoshenWallet::query()->updateOrCreate(
+            ['mobile_user_id' => $member->id],
+            [
+                'currency' => 'GBP',
+                'balance' => 50,
+            ],
+        );
 
         $form = $this->form('paid-meal', [
             'visibility' => DynamicForm::VISIBILITY_AUTHENTICATED,
@@ -246,6 +249,39 @@ class DynamicFormApiTest extends TestCase
         $this->assertArrayHasKey('file_path', $answer);
         $this->assertArrayNotHasKey('file_url', $answer);
         Storage::disk('local')->assertExists($answer['file_path']);
+    }
+
+    public function test_file_upload_extensions_never_allow_executable_php_payloads(): void
+    {
+        $this->assertSame(
+            ['pdf', 'jpg'],
+            app(DynamicFormService::class)->normalizeAllowedExtensions(['pdf', 'php', '.phtml', 'jpg', 'phar']),
+        );
+
+        Storage::fake('local');
+
+        $form = $this->form('blocked-executable-upload');
+        $this->field($form, 'proof', 'Proof of payment', DynamicFormField::TYPE_FILE, [
+            'is_required' => true,
+            'settings' => [
+                'allowed_extensions' => ['php', 'pdf'],
+            ],
+        ]);
+
+        $this->postJson('/api/dynamic-forms/blocked-executable-upload/submit', [
+            'data' => [
+                'name' => 'Upload Tester',
+                'email' => 'upload-tester@example.test',
+            ],
+            'files' => [
+                'proof' => UploadedFile::fake()->create('shell.php', 1, 'application/x-httpd-php'),
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('status', 'error');
+
+        $this->assertSame(0, DynamicFormSubmission::query()->count());
+        $this->assertEmpty(Storage::disk('local')->allFiles('dynamic-forms'));
     }
 
     public function test_dynamic_form_manager_can_manage_forms_and_view_submissions(): void

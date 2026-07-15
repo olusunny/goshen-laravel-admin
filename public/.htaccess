@@ -13,6 +13,11 @@
     RewriteCond %{HTTP:x-xsrf-token} .
     RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
+    # Block dropped PHP-like files. Only Laravel's front controller should ever
+    # be executable from the public web root.
+    RewriteCond %{REQUEST_URI} !/index\.php$ [NC]
+    RewriteRule \.(?:php[0-9]?|phtml|phar)$ - [F,L,NC]
+
     # Redirect Trailing Slashes If Not A Folder...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
