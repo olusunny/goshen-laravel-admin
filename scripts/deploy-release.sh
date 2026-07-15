@@ -220,8 +220,10 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
 if [[ "$web_root_mode" == "public" ]]; then
   sync_public_assets "$release/public" "$web_root"
 
-  if [[ ! -f "$web_root/index.php" ]]; then
-    cat > "$web_root/index.php" <<PHP
+  # Always rewrite the cPanel front controller. The public web root is outside
+  # the release directory, so preserving an existing index.php can leave a stale
+  # or compromised file in front of the freshly deployed Laravel release.
+  cat > "$web_root/index.php" <<PHP
 <?php
 
 use Illuminate\Foundation\Application;
@@ -242,7 +244,7 @@ require \$appBase.'/vendor/autoload.php';
 
 \$app->handleRequest(Request::capture());
 PHP
-  fi
+  chmod 644 "$web_root/index.php"
 fi
 
 next_link="$app_root/.current-next-$stamp"
