@@ -13,8 +13,8 @@ Environment variables:
   BRANCH        Branch to clone when resolving a commit. Defaults to main
   APP_ROOT      Laravel app release root. Defaults per environment.
   WEB_ROOT      cPanel/public web root. Defaults per environment.
-  PHP_BIN       PHP CLI binary. Defaults to php.
-  COMPOSER_BIN  Composer binary. If unavailable, vendor/ is copied from the previous release.
+  PHP_BIN       PHP CLI binary. Defaults to PHP 8.4 for the portal and php elsewhere.
+  COMPOSER_BIN  Composer binary or PHAR. Defaults to the portal's shared Composer PHAR.
   HEALTH_URL    Public health URL checked after switching releases.
 
 This script creates a new Git-backed release, links shared .env and storage,
@@ -33,18 +33,24 @@ case "$environment" in
     app_root="${APP_ROOT:-/home/cels/projects/.git-deploy/$domain}"
     web_root="${WEB_ROOT:-/home/cels/projects/$domain}"
     web_root_mode="${WEB_ROOT_MODE:-symlink}"
+    default_php_bin="php"
+    default_composer_bin="composer"
     ;;
   production|prod)
     domain="goshen.shotfaz.com"
     app_root="${APP_ROOT:-/home/cels/projects/.git-deploy/$domain}"
     web_root="${WEB_ROOT:-/home/cels/projects/$domain}"
     web_root_mode="${WEB_ROOT_MODE:-symlink}"
+    default_php_bin="php"
+    default_composer_bin="composer"
     ;;
   portal|portal-production|goshenretreat)
     domain="portal.goshenretreat.uk"
     app_root="${APP_ROOT:-/home/goshenretreat/apps/portal}"
     web_root="${WEB_ROOT:-/home/goshenretreat/portal.goshenretreat.uk}"
     web_root_mode="${WEB_ROOT_MODE:-public}"
+    default_php_bin="/opt/cpanel/ea-php84/root/usr/bin/php"
+    default_composer_bin="$app_root/shared/tools/composer.phar"
     ;;
   -h|--help|"")
     usage
@@ -59,8 +65,8 @@ esac
 
 repo_url="${REPO_URL:-https://github.com/olusunny/goshen-laravel-admin.git}"
 branch="${BRANCH:-main}"
-php_bin="${PHP_BIN:-php}"
-composer_bin="${COMPOSER_BIN:-composer}"
+php_bin="${PHP_BIN:-$default_php_bin}"
+composer_bin="${COMPOSER_BIN:-$default_composer_bin}"
 health_url="${HEALTH_URL:-https://$domain/up}"
 current="$app_root/current"
 shared="$app_root/shared"
@@ -244,7 +250,9 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
 
 (
   cd "$release"
-  if command -v "$composer_bin" >/dev/null 2>&1; then
+  if [[ "$composer_bin" == *.phar && -f "$composer_bin" ]]; then
+    "$php_bin" "$composer_bin" install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress "${composer_install_extra_args[@]}"
+  elif command -v "$composer_bin" >/dev/null 2>&1; then
     "$composer_bin" install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress "${composer_install_extra_args[@]}"
   elif [[ -n "$previous_release" && -d "$previous_release/vendor" ]]; then
     echo "Composer is unavailable; reusing vendor/ from $previous_release"
@@ -254,12 +262,12 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
     exit 1
   fi
 
-  php artisan migrate --force --no-interaction
-  php artisan optimize:clear --no-interaction
-  php artisan config:cache --no-interaction
-  php artisan route:cache --no-interaction
-  php artisan view:cache --no-interaction
-  php artisan about --only=environment --no-interaction
+  "$php_bin" artisan migrate --force --no-interaction
+  "$php_bin" artisan optimize:clear --no-interaction
+  "$php_bin" artisan config:cache --no-interaction
+  "$php_bin" artisan route:cache --no-interaction
+  "$php_bin" artisan view:cache --no-interaction
+  "$php_bin" artisan about --only=environment --no-interaction
 )
 
 if [[ "$web_root_mode" == "public" ]]; then

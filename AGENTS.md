@@ -136,6 +136,5 @@ For Laravel changes:
 Expected scheduler:
 
 ```bash
-* * * * * cd /home/goshenretreat/apps/portal/current && /usr/local/bin/php artisan schedule:run >> /home/goshenretreat/apps/portal/shared/storage/logs/scheduler.log 2>&1
+* * * * * cd /home/goshenretreat/apps/portal/current && /opt/cpanel/ea-php84/root/usr/bin/php artisan schedule:run >> /home/goshenretreat/apps/portal/shared/storage/logs/scheduler.log 2>&1
 ```
-

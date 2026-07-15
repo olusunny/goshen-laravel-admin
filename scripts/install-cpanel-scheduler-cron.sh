@@ -2,7 +2,7 @@
 set -euo pipefail
 
 app_dir="${APP_DIR:-/home/goshenretreat/apps/portal/current}"
-php_bin="${PHP_BIN:-/usr/local/bin/php}"
+php_bin="${PHP_BIN:-/opt/cpanel/ea-php84/root/usr/bin/php}"
 log_file="${LOG_FILE:-/home/goshenretreat/apps/portal/shared/storage/logs/scheduler.log}"
 
 case "$app_dir" in
