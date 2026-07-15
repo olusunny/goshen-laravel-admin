@@ -66,6 +66,7 @@ current="$app_root/current"
 shared="$app_root/shared"
 releases="$app_root/releases"
 stamp="$(date +%Y%m%d%H%M%S)"
+read -r -a composer_install_extra_args <<< "${COMPOSER_INSTALL_EXTRA_ARGS:-}"
 
 case "$app_root" in
   /home/*/apps/*|/home/*/.git-deploy/*) ;;
@@ -244,7 +245,7 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
 (
   cd "$release"
   if command -v "$composer_bin" >/dev/null 2>&1; then
-    "$composer_bin" install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
+    "$composer_bin" install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress "${composer_install_extra_args[@]}"
   elif [[ -n "$previous_release" && -d "$previous_release/vendor" ]]; then
     echo "Composer is unavailable; reusing vendor/ from $previous_release"
     copy_directory_contents "$previous_release/vendor" "$release/vendor"
