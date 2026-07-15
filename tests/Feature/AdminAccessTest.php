@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\RoleResource\Pages\EditRole;
+use App\Filament\Resources\VideoAudioMediaResource;
+use App\Models\MediaItem;
 use App\Models\User;
 use App\Support\AdminPermissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -57,12 +59,68 @@ class AdminAccessTest extends TestCase
         $this->actingAs($admin)
             ->get('/admin/media-items/create')
             ->assertOk()
+            ->assertSee('Update banner');
+
+        $this->actingAs($admin)
+            ->get('/admin/video-audio-media/create')
+            ->assertOk()
+            ->assertSee('Video &amp; Audio', false)
             ->assertSee('Artwork and Playback');
 
         $this->actingAs($admin)
             ->get('/admin/streams/create')
             ->assertOk()
             ->assertSee('Stream url');
+    }
+
+    public function test_video_audio_management_cannot_access_update_banners(): void
+    {
+        $this->seed();
+
+        $banner = MediaItem::create([
+            'type' => 'banner',
+            'title' => 'Admin-only update banner',
+            'source_type' => 'none',
+            'duration' => 0,
+            'preview_duration' => 0,
+            'can_download' => false,
+            'can_preview' => false,
+            'is_free' => true,
+            'is_featured' => false,
+            'is_published' => true,
+            'views_count' => 0,
+            'likes_count' => 0,
+        ]);
+
+        $admin = User::where('email', 'admin@church.local')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get("/admin/video-audio-media/{$banner->getKey()}/edit")
+            ->assertNotFound();
+    }
+
+    public function test_video_audio_management_requires_its_resource_permission(): void
+    {
+        $permission = Permission::findOrCreate(
+            AdminPermissions::resourcePermission(VideoAudioMediaResource::class),
+            'web',
+        );
+        $mediaManager = Role::create(['name' => 'video_audio_manager', 'guard_name' => 'web']);
+
+        $unauthorizedUser = User::factory()->create();
+        $unauthorizedUser->assignRole($mediaManager);
+
+        $this->actingAs($unauthorizedUser)
+            ->get('/admin/video-audio-media')
+            ->assertForbidden();
+
+        $mediaManager->givePermissionTo($permission);
+        $authorizedUser = User::factory()->create();
+        $authorizedUser->assignRole($mediaManager);
+
+        $this->actingAs($authorizedUser)
+            ->get('/admin/video-audio-media')
+            ->assertOk();
     }
 
     public function test_role_permission_edit_ignores_same_role_name_in_other_guard(): void
@@ -260,6 +318,7 @@ class AdminAccessTest extends TestCase
             'hymns',
             'inbox-messages',
             'media-items',
+            'video-audio-media',
             'mobile-users',
             'prayer-points',
             'streams',

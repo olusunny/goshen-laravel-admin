@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Filament\Resources\MediaItemResource;
+use App\Filament\Resources\VideoAudioMediaResource;
 use App\Models\AppSetting;
 use App\Models\BibleVersion;
 use App\Models\Category;
@@ -14,6 +16,7 @@ use App\Models\DonationCategory;
 use App\Models\MediaItem;
 use App\Models\Stream;
 use App\Models\User;
+use App\Support\AdminPermissions;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -29,7 +32,12 @@ class DatabaseSeeder extends Seeder
     {
         $roles = [
             'super_admin' => ['*'],
-            'content_manager' => ['manage_content', 'manage_media', 'manage_settings'],
+            'content_manager' => [
+                'manage_content',
+                'manage_settings',
+                AdminPermissions::resourcePermission(MediaItemResource::class),
+                AdminPermissions::resourcePermission(VideoAudioMediaResource::class),
+            ],
             'moderator' => [
                 'moderate_comments',
                 'manage_mobile_users',

@@ -2,10 +2,10 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\MediaItemResource\Pages;
 use App\Models\Category;
 use App\Models\MediaItem;
-use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -13,17 +13,49 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class MediaItemResource extends Resource
 {
     use AuthorizesResourceAccess;
+
     protected static ?string $model = MediaItem::class;
 
-    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-play-circle';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-megaphone';
+
+    protected static ?string $navigationLabel = 'Update Banners';
+
+    protected static ?string $modelLabel = 'update banner';
+
+    protected static ?string $pluralModelLabel = 'Update banners';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Media Library';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 3;
+
+    /**
+     * @return array<int, string>
+     */
+    protected static function manageableTypes(): array
+    {
+        return ['banner'];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function mediaTypeOptions(): array
+    {
+        return [
+            'banner' => 'Update banner',
+        ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->whereIn('type', static::manageableTypes());
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -41,12 +73,7 @@ class MediaItemResource extends Resource
                             ->options(fn () => Category::query()->whereNotNull('parent_id')->pluck('name', 'id'))
                             ->searchable(),
                         Forms\Components\Select::make('type')
-                            ->options([
-                                'audio' => 'Audio',
-                                'video' => 'Video',
-                                'music' => 'Music',
-                                'banner' => 'Update banner',
-                            ])
+                            ->options(static::mediaTypeOptions())
                             ->live()
                             ->required(),
                         Forms\Components\TextInput::make('title')
@@ -253,12 +280,7 @@ class MediaItemResource extends Resource
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('type')
-                    ->options([
-                        'audio' => 'Audio',
-                        'video' => 'Video',
-                        'music' => 'Music',
-                        'banner' => 'Update banner',
-                    ]),
+                    ->options(static::mediaTypeOptions()),
                 Tables\Filters\TernaryFilter::make('is_featured'),
                 Tables\Filters\TernaryFilter::make('is_published'),
             ])
