@@ -62,7 +62,9 @@ class AdminAccessTest extends TestCase
             ->assertSee('Update banner')
             ->assertDontSee('Free to stream')
             ->assertDontSee('Can preview')
-            ->assertDontSee('Free preview duration');
+            ->assertDontSee('Free preview duration')
+            ->assertDontSee('Views count')
+            ->assertDontSee('Likes count');
 
         $this->actingAs($admin)
             ->get('/admin/video-audio-media/create')
@@ -71,7 +73,9 @@ class AdminAccessTest extends TestCase
             ->assertSee('Artwork and Playback')
             ->assertDontSee('Free to stream')
             ->assertDontSee('Can preview')
-            ->assertDontSee('Free preview duration');
+            ->assertDontSee('Free preview duration')
+            ->assertDontSee('Views count')
+            ->assertDontSee('Likes count');
 
         $this->actingAs($admin)
             ->get('/admin/streams/create')

@@ -152,8 +152,7 @@ class MediaItemResource extends Resource
                         Forms\Components\TextInput::make('duration')
                             ->helperText('Duration in seconds.')
                             ->numeric()
-                            ->default(0)
-                            ->required(),
+                            ->default(0),
                         Forms\Components\DateTimePicker::make('published_at'),
                         Forms\Components\Toggle::make('can_download')
                             ->default(true)
@@ -177,14 +176,6 @@ class MediaItemResource extends Resource
                             ->helperText('Optional. Pinned media appears first in the mobile app, ordered from #1 to #6.'),
                         Forms\Components\Toggle::make('is_published')
                             ->default(true)
-                            ->required(),
-                        Forms\Components\TextInput::make('views_count')
-                            ->numeric()
-                            ->default(0)
-                            ->required(),
-                        Forms\Components\TextInput::make('likes_count')
-                            ->numeric()
-                            ->default(0)
                             ->required(),
                         Forms\Components\Hidden::make('legacy_id'),
                     ]),
