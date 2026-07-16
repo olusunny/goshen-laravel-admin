@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'enabled' => env('COUNSELING_ENABLED', false),
+    'enabled' => env('COUNSELING_ENABLED', true),
 
     'api_prefix' => env('COUNSELING_API_PREFIX', 'api/v1/counseling'),
     'admin_prefix' => env('COUNSELING_ADMIN_PREFIX', 'admin/counseling'),

@@ -11,7 +11,6 @@
     "require": {
         "php": "^8.2",
         "barryvdh/laravel-dompdf": "3.1.2",
-        "church-tools/digital-counseling-addon": "*",
         "church-tools/laravel-cloud-backup-addon": "*",
         "filament/filament": "~5.6.3",
         "kreait/laravel-firebase": "7.2",
@@ -36,7 +35,6 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/",
-            "ChurchTools\\DigitalCounseling\\": "packages/digital-counseling-addon/src/",
             "ChurchTools\\CloudBackup\\": "packages/laravel-cloud-backup-addon/src/",
             "Personal\\EventInstallments\\": "packages/event-installments/src/",
             "Sunny\\Fundraising\\": "packages/sunny-fundraising/src/"
@@ -89,14 +87,6 @@
     "minimum-stability": "dev",
     "prefer-stable": true,
     "repositories": [
-        {
-            "name": "church-tools-digital-counseling",
-            "type": "path",
-            "url": "packages/digital-counseling-addon",
-            "options": {
-                "symlink": true
-            }
-        },
         {
             "name": "church-tools-cloud-backup",
             "type": "path",
