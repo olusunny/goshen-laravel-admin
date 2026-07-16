@@ -245,6 +245,9 @@ mkdir -p \
   "$shared/storage/framework/sessions" \
   "$shared/storage/framework/views" \
   "$shared/storage/logs"
+if [[ -n "$previous_release" && -d "$previous_release/addons" && ! -L "$previous_release/addons" ]]; then
+  copy_directory_contents "$previous_release/addons" "$shared/addons/installed"
+fi
 rm -rf "$release/addons"
 ln -s "$shared/addons/installed" "$release/addons"
 write_php_execution_deny_htaccess "$shared/storage/app/public"
