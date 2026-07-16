@@ -41,6 +41,9 @@
         .pg-button-danger { background:#dc2626; color:#fff; box-shadow:none; }
         .pg-note { padding:14px 16px; border-radius:16px; background:#eff6ff; border:1px solid #bfdbfe; color:#155eef; font-size:13px; font-weight:750; line-height:1.55; }
         .dark .pg-note { background:rgba(37,99,235,.13); border-color:rgba(147,197,253,.22); color:#93c5fd; }
+        .pg-error { margin-top:18px; padding:14px 16px; border-radius:16px; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; font-size:13px; font-weight:750; line-height:1.55; }
+        .dark .pg-error { background:rgba(220,38,38,.12); border-color:rgba(248,113,113,.25); color:#fca5a5; }
+        .pg-error ul { margin:8px 0 0 18px; padding:0; }
         @media (max-width:900px) { .pg-grid, .pg-grid-3 { grid-template-columns:1fr; } .pg-section-head { flex-direction:column; } .pg-pad { padding:18px; } }
     </style>
 
@@ -89,6 +92,7 @@
                     <div class="pg-field" style="margin-top:12px;">
                         <label class="pg-label">Test secret key</label>
                         <input type="password" class="pg-input" wire:model.defer="testSecretKey" placeholder="Leave blank to keep saved secret">
+                        <span class="pg-help">For security, saved secret fields clear after saving. Use the status badges to confirm they are stored.</span>
                     </div>
                     <div class="pg-field" style="margin-top:12px;">
                         <label class="pg-label">Test Giving webhook signing secret</label>
@@ -122,6 +126,7 @@
                     <div class="pg-field" style="margin-top:12px;">
                         <label class="pg-label">Live secret key</label>
                         <input type="password" class="pg-input" wire:model.defer="liveSecretKey" placeholder="Leave blank to keep saved secret">
+                        <span class="pg-help">For security, saved secret fields clear after saving. Use the status badges to confirm they are stored.</span>
                     </div>
                     <div class="pg-field" style="margin-top:12px;">
                         <label class="pg-label">Live Giving webhook signing secret</label>
@@ -181,8 +186,22 @@
                 </div>
             </section>
 
+            @if ($errors->any())
+                <div class="pg-error" role="alert">
+                    <strong>Stripe settings were not saved.</strong>
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <div class="pg-actions">
-                <button type="submit" class="pg-button">Save Stripe settings</button>
+                <button type="submit" class="pg-button" wire:loading.attr="disabled" wire:target="save">
+                    <span wire:loading.remove wire:target="save">Save Stripe settings</span>
+                    <span wire:loading wire:target="save">Saving Stripe settings...</span>
+                </button>
             </div>
         </form>
 

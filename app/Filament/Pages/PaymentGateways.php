@@ -9,6 +9,7 @@ use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 use UnitEnum;
 
@@ -88,38 +89,64 @@ class PaymentGateways extends Page
 
     public function save(StripePaymentSettings $settings): void
     {
-        $validated = validator($this->payload(), [
-            'mode' => ['required', 'in:test,live'],
-            'api_version' => ['required', 'string', 'max:80'],
-            'giving_success_url' => ['required', 'url', 'max:2048'],
-            'giving_cancel_url' => ['required', 'url', 'max:2048'],
-            'event_success_url' => ['required', 'url', 'max:2048'],
-            'event_cancel_url' => ['required', 'url', 'max:2048'],
-            'wallet_success_url' => ['required', 'url', 'max:2048'],
-            'wallet_cancel_url' => ['required', 'url', 'max:2048'],
-            'test_publishable_key' => ['nullable', 'string', 'max:255'],
-            'test_secret_key' => ['nullable', 'string', 'max:255'],
-            'test_webhook_secret' => ['nullable', 'string', 'max:255'],
-            'test_giving_webhook_secret' => ['nullable', 'string', 'max:255'],
-            'test_event_webhook_secret' => ['nullable', 'string', 'max:255'],
-            'test_wallet_webhook_secret' => ['nullable', 'string', 'max:255'],
-            'live_publishable_key' => ['nullable', 'string', 'max:255'],
-            'live_secret_key' => ['nullable', 'string', 'max:255'],
-            'live_webhook_secret' => ['nullable', 'string', 'max:255'],
-            'live_giving_webhook_secret' => ['nullable', 'string', 'max:255'],
-            'live_event_webhook_secret' => ['nullable', 'string', 'max:255'],
-            'live_wallet_webhook_secret' => ['nullable', 'string', 'max:255'],
-        ])->validate();
+        $this->resetErrorBag();
 
-        $settings->save($validated);
-        $settings->applyToConfig();
-        $this->fillFromSettings($settings);
+        try {
+            $validated = validator($this->payloadWithFallbacks($settings), [
+                'mode' => ['required', 'in:test,live'],
+                'api_version' => ['required', 'string', 'max:80'],
+                'giving_success_url' => ['required', 'url', 'max:2048'],
+                'giving_cancel_url' => ['required', 'url', 'max:2048'],
+                'event_success_url' => ['required', 'url', 'max:2048'],
+                'event_cancel_url' => ['required', 'url', 'max:2048'],
+                'wallet_success_url' => ['required', 'url', 'max:2048'],
+                'wallet_cancel_url' => ['required', 'url', 'max:2048'],
+                'test_publishable_key' => ['nullable', 'string', 'max:255'],
+                'test_secret_key' => ['nullable', 'string', 'max:255'],
+                'test_webhook_secret' => ['nullable', 'string', 'max:255'],
+                'test_giving_webhook_secret' => ['nullable', 'string', 'max:255'],
+                'test_event_webhook_secret' => ['nullable', 'string', 'max:255'],
+                'test_wallet_webhook_secret' => ['nullable', 'string', 'max:255'],
+                'live_publishable_key' => ['nullable', 'string', 'max:255'],
+                'live_secret_key' => ['nullable', 'string', 'max:255'],
+                'live_webhook_secret' => ['nullable', 'string', 'max:255'],
+                'live_giving_webhook_secret' => ['nullable', 'string', 'max:255'],
+                'live_event_webhook_secret' => ['nullable', 'string', 'max:255'],
+                'live_wallet_webhook_secret' => ['nullable', 'string', 'max:255'],
+            ], [
+                '*.url' => 'Please enter a full URL including https://.',
+            ])->validate();
+        } catch (ValidationException $exception) {
+            $this->setErrorBag($exception->validator->errors());
 
-        Notification::make()
-            ->title('Stripe settings saved')
-            ->body('The selected Stripe mode and checkout URLs are now active for Giving, Goshen Retreat, and Goshen Wallet payments.')
-            ->success()
-            ->send();
+            Notification::make()
+                ->title('Stripe settings not saved')
+                ->body($exception->validator->errors()->first() ?: 'Please review the highlighted fields and try again.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        try {
+            $settings->save($validated);
+            $settings->applyToConfig();
+            $this->fillFromSettings($settings);
+
+            Notification::make()
+                ->title('Stripe settings saved')
+                ->body('The selected Stripe mode, keys, webhook secrets, and checkout URLs are now active for Giving, Goshen Retreat, and Goshen Wallet payments.')
+                ->success()
+                ->send();
+        } catch (Throwable $exception) {
+            report($exception);
+
+            Notification::make()
+                ->title('Stripe settings not saved')
+                ->body($exception->getMessage() ?: 'The server could not save the Stripe settings. Please check the logs and try again.')
+                ->danger()
+                ->send();
+        }
     }
 
     public function testConnection(StripePaymentSettings $settings): void
@@ -236,5 +263,28 @@ class PaymentGateways extends Page
             'live_event_webhook_secret' => $this->liveEventWebhookSecret,
             'live_wallet_webhook_secret' => $this->liveWalletWebhookSecret,
         ];
+    }
+
+    private function payloadWithFallbacks(StripePaymentSettings $settings): array
+    {
+        $payload = $this->payload();
+
+        $fallbacks = [
+            'api_version' => $settings->apiVersion(),
+            'giving_success_url' => $settings->givingSuccessUrl(),
+            'giving_cancel_url' => $settings->givingCancelUrl(),
+            'event_success_url' => $settings->eventSuccessUrl(),
+            'event_cancel_url' => $settings->eventCancelUrl(),
+            'wallet_success_url' => $settings->walletSuccessUrl(),
+            'wallet_cancel_url' => $settings->walletCancelUrl(),
+        ];
+
+        foreach ($fallbacks as $key => $fallback) {
+            if (blank($payload[$key] ?? null)) {
+                $payload[$key] = $fallback;
+            }
+        }
+
+        return $payload;
     }
 }
