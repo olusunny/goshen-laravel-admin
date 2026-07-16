@@ -239,11 +239,14 @@ rm -rf "$release/storage" "$release/public/storage"
 ln -s "$shared/storage" "$release/storage"
 ln -s "$shared/.env" "$release/.env"
 mkdir -p \
+  "$shared/addons/installed" \
   "$shared/storage/app/public" \
   "$shared/storage/framework/cache" \
   "$shared/storage/framework/sessions" \
   "$shared/storage/framework/views" \
   "$shared/storage/logs"
+rm -rf "$release/addons"
+ln -s "$shared/addons/installed" "$release/addons"
 write_php_execution_deny_htaccess "$shared/storage/app/public"
 ln -s "$shared/storage/app/public" "$release/public/storage"
 printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
