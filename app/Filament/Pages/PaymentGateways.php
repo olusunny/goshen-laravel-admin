@@ -9,6 +9,7 @@ use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 use UnitEnum;
@@ -95,12 +96,12 @@ class PaymentGateways extends Page
             $validated = validator($this->payloadWithFallbacks($settings), [
                 'mode' => ['required', 'in:test,live'],
                 'api_version' => ['required', 'string', 'max:80'],
-                'giving_success_url' => ['required', 'url', 'max:2048'],
-                'giving_cancel_url' => ['required', 'url', 'max:2048'],
-                'event_success_url' => ['required', 'url', 'max:2048'],
-                'event_cancel_url' => ['required', 'url', 'max:2048'],
-                'wallet_success_url' => ['required', 'url', 'max:2048'],
-                'wallet_cancel_url' => ['required', 'url', 'max:2048'],
+                'giving_success_url' => $this->checkoutUrlRules(),
+                'giving_cancel_url' => $this->checkoutUrlRules(),
+                'event_success_url' => $this->checkoutUrlRules(),
+                'event_cancel_url' => $this->checkoutUrlRules(),
+                'wallet_success_url' => $this->checkoutUrlRules(),
+                'wallet_cancel_url' => $this->checkoutUrlRules(),
                 'test_publishable_key' => ['nullable', 'string', 'max:255'],
                 'test_secret_key' => ['nullable', 'string', 'max:255'],
                 'test_webhook_secret' => ['nullable', 'string', 'max:255'],
@@ -286,5 +287,25 @@ class PaymentGateways extends Page
         }
 
         return $payload;
+    }
+
+    private function checkoutUrlRules(): array
+    {
+        return [
+            'required',
+            'string',
+            'max:2048',
+            function (string $attribute, mixed $value, \Closure $fail): void {
+                $url = str_replace(
+                    '{CHECKOUT_SESSION_ID}',
+                    'cs_test_checkout_session_id',
+                    trim((string) $value),
+                );
+
+                if (Validator::make(['url' => $url], ['url' => ['url']])->fails()) {
+                    $fail('Please enter a full URL including https://.');
+                }
+            },
+        ];
     }
 }
