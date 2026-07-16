@@ -15,6 +15,11 @@ class AddonRuntimeLoader
      */
     private array $registeredProviders = [];
 
+    /**
+     * @var array<string, bool>
+     */
+    private array $registeredAutoloaders = [];
+
     public function registerActiveAddons(): void
     {
         if (! config('addons.enabled', true)) {
@@ -107,7 +112,10 @@ class AddonRuntimeLoader
         foreach (($manifest['autoload_psr4'] ?? []) as $prefix => $relativePath) {
             $path = $this->safeAddonChildPath($installPath, (string) $relativePath);
             if ($path !== null && is_dir($path)) {
-                $loader->addPsr4((string) $prefix, $path);
+                $normalizedPrefix = rtrim((string) $prefix, '\\').'\\';
+
+                $loader->addPsr4($normalizedPrefix, $path);
+                $this->registerPsr4FallbackAutoloader($normalizedPrefix, $path);
             }
         }
 
@@ -116,6 +124,34 @@ class AddonRuntimeLoader
             app()->register($provider);
             $this->registeredProviders[$provider] = true;
         }
+    }
+
+    private function registerPsr4FallbackAutoloader(string $prefix, string $path): void
+    {
+        $key = $prefix.'|'.$path;
+
+        if (isset($this->registeredAutoloaders[$key])) {
+            return;
+        }
+
+        spl_autoload_register(
+            static function (string $class) use ($prefix, $path): void {
+                if (! str_starts_with($class, $prefix)) {
+                    return;
+                }
+
+                $relativeClass = substr($class, strlen($prefix));
+                $file = rtrim($path, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.str_replace('\\', DIRECTORY_SEPARATOR, $relativeClass).'.php';
+
+                if (is_file($file)) {
+                    require $file;
+                }
+            },
+            true,
+            true,
+        );
+
+        $this->registeredAutoloaders[$key] = true;
     }
 
     private function composerLoader(): ?ClassLoader
