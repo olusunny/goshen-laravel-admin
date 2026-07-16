@@ -12,6 +12,10 @@ class AddonServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(config_path('addons.php'), 'addons');
 
         $this->app->singleton(AddonRuntimeLoader::class);
+    }
+
+    public function boot(): void
+    {
         $this->app->make(AddonRuntimeLoader::class)->registerActiveAddons();
     }
 }
