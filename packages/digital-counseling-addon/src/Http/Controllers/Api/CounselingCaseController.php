@@ -3,11 +3,14 @@
 namespace ChurchTools\DigitalCounseling\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppSetting;
+use App\Support\MediaUrl;
 use ChurchTools\DigitalCounseling\Contracts\PermissionResolverContract;
 use ChurchTools\DigitalCounseling\Contracts\ProtectedMediaStorageContract;
 use ChurchTools\DigitalCounseling\Models\CounselingCase;
 use ChurchTools\DigitalCounseling\Models\CounselingCaseEvent;
 use ChurchTools\DigitalCounseling\Models\CounselingMessage;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,10 +27,12 @@ class CounselingCaseController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        abort_unless($this->featureEnabled(), 404, 'Private counseling is currently unavailable.');
+
         $actor = $this->actor($request);
 
         $cases = CounselingCase::query()
-            ->with(['assignedProviderProfile', 'latestMessage'])
+            ->with(['requester', 'assignedProviderProfile', 'latestMessage'])
             ->when(! $this->permissions->canTriage($actor), function ($query) use ($actor): void {
                 $actorType = $actor::class;
                 $actorId = (int) $actor->getKey();
@@ -63,6 +68,8 @@ class CounselingCaseController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        abort_unless($this->featureEnabled(), 404, 'Private counseling is currently unavailable.');
+
         $actor = $this->actor($request);
         abort_unless($this->permissions->canRequest($actor), 403, 'Only verified members can request private counseling.');
 
@@ -74,15 +81,14 @@ class CounselingCaseController extends Controller
             'country_code' => ['nullable', 'string', 'size:2'],
             'locale' => ['nullable', 'string', 'max:20'],
             'timezone' => ['nullable', 'string', 'max:80'],
-            'message_type' => ['nullable', Rule::in([CounselingMessage::TYPE_TEXT, CounselingMessage::TYPE_AUDIO])],
-            'body' => [$type === CounselingMessage::TYPE_AUDIO ? 'nullable' : 'required', 'string', 'max:5000'],
+            'message_type' => ['nullable', Rule::in([CounselingMessage::TYPE_TEXT, CounselingMessage::TYPE_AUDIO, CounselingMessage::TYPE_IMAGE, CounselingMessage::TYPE_FILE])],
+            'body' => [in_array($type, [CounselingMessage::TYPE_AUDIO, CounselingMessage::TYPE_IMAGE, CounselingMessage::TYPE_FILE], true) ? 'nullable' : 'required', 'string', 'max:5000'],
             'audio' => [$type === CounselingMessage::TYPE_AUDIO ? 'required' : 'nullable', 'file', 'mimetypes:'.implode(',', config('counseling.media.allowed_audio_mimetypes', [])), 'max:'.(int) config('counseling.media.max_audio_size_kb', 20480)],
+            'attachment' => [in_array($type, [CounselingMessage::TYPE_IMAGE, CounselingMessage::TYPE_FILE], true) ? 'required' : 'nullable', 'file', 'mimetypes:'.implode(',', $this->allowedAttachmentMimetypes($type)), 'max:'.(int) config('counseling.media.max_attachment_size_kb', 20480)],
             'audio_duration_seconds' => [$type === CounselingMessage::TYPE_AUDIO ? 'required' : 'nullable', 'integer', 'min:1', 'max:'.(int) config('counseling.media.max_audio_duration_seconds', 300)],
         ]);
 
-        $media = $request->hasFile('audio')
-            ? $this->mediaStorage->storeVoiceNote($request->file('audio'))
-            : null;
+        $media = $this->storeIncomingMedia($request, $type);
 
         $case = DB::transaction(function () use ($actor, $data, $media, $type): CounselingCase {
             $case = CounselingCase::query()->create([
@@ -97,6 +103,9 @@ class CounselingCaseController extends Controller
                 'locale' => $data['locale'] ?? config('counseling.case.default_locale'),
                 'timezone' => $data['timezone'] ?? config('counseling.case.default_timezone'),
                 'last_message_at' => now(),
+                'metadata' => [
+                    'requester' => $this->actorPayload($actor),
+                ],
             ]);
 
             $case->messages()->create($this->messageAttributes(
@@ -113,7 +122,7 @@ class CounselingCaseController extends Controller
                 'country_code' => $case->country_code,
             ]);
 
-            return $case->load(['assignedProviderProfile', 'latestMessage', 'messages']);
+            return $case->load(['requester', 'assignedProviderProfile', 'latestMessage', 'messages']);
         });
 
         return response()->json(['data' => $this->casePayload($case, includeMessages: true)], 201);
@@ -121,16 +130,20 @@ class CounselingCaseController extends Controller
 
     public function show(Request $request, CounselingCase $counselingCase): JsonResponse
     {
+        abort_unless($this->featureEnabled(), 404, 'Private counseling is currently unavailable.');
+
         $actor = $this->actor($request);
         abort_unless($this->permissions->canViewCase($actor, $counselingCase), 403);
 
-        $counselingCase->load(['assignedProviderProfile', 'assignments', 'messages' => fn ($query) => $query->oldest()]);
+        $counselingCase->load(['requester', 'assignedProviderProfile', 'assignments', 'messages' => fn ($query) => $query->oldest()]);
 
         return response()->json(['data' => $this->casePayload($counselingCase, includeMessages: true)]);
     }
 
     public function close(Request $request, CounselingCase $counselingCase): JsonResponse
     {
+        abort_unless($this->featureEnabled(), 404, 'Private counseling is currently unavailable.');
+
         $actor = $this->actor($request);
         $isRequester = $actor::class === config('counseling.models.requester')
             && (int) $actor->getKey() === (int) $counselingCase->requester_mobile_user_id;
@@ -187,6 +200,11 @@ class CounselingCaseController extends Controller
             'media_mime' => $media['mime'] ?? null,
             'media_size_bytes' => $media['size_bytes'] ?? null,
             'media_duration_seconds' => $duration ? (int) $duration : null,
+            'metadata' => [
+                'sender' => $this->actorPayload($actor),
+                'original_name' => $media['original_name'] ?? null,
+                'reactions' => [],
+            ],
         ];
     }
 
@@ -219,6 +237,7 @@ class CounselingCaseController extends Controller
             'priority' => $case->priority,
             'category' => $case->category,
             'subject' => $case->subject,
+            'requester' => $case->requester ? $this->actorPayload($case->requester) : ($case->metadata['requester'] ?? null),
             'country_code' => $case->country_code,
             'locale' => $case->locale,
             'timezone' => $case->timezone,
@@ -245,16 +264,106 @@ class CounselingCaseController extends Controller
 
     private function messagePayload(CounselingMessage $message, CounselingCase $case): array
     {
+        $mediaUrl = $message->media_disk && $message->media_path
+            ? route('counseling.api.cases.messages.media', [$case, $message], false)
+            : null;
+
         return [
             'id' => $message->id,
             'direction' => $message->direction,
             'message_type' => $message->message_type,
             'body' => $message->body,
+            'sender' => $message->metadata['sender'] ?? $this->actorPayloadFromColumns($message->actor_type, $message->actor_id),
+            'media_url' => $mediaUrl,
             'audio_url' => $message->message_type === CounselingMessage::TYPE_AUDIO
                 ? route('counseling.api.cases.messages.audio', [$case, $message], false)
                 : null,
             'audio_duration_seconds' => $message->media_duration_seconds,
+            'attachment' => in_array($message->message_type, [CounselingMessage::TYPE_IMAGE, CounselingMessage::TYPE_FILE], true) ? [
+                'url' => $mediaUrl,
+                'mime' => $message->media_mime,
+                'size_bytes' => $message->media_size_bytes,
+                'name' => $message->metadata['original_name'] ?? basename((string) $message->media_path),
+            ] : null,
+            'reactions' => $message->metadata['reactions'] ?? [],
             'created_at' => $message->created_at?->toIso8601String(),
         ];
+    }
+
+    private function featureEnabled(): bool
+    {
+        return filter_var(AppSetting::value('counseling_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function storeIncomingMedia(Request $request, string $type): ?array
+    {
+        if ($type === CounselingMessage::TYPE_AUDIO && $request->hasFile('audio')) {
+            return $this->mediaStorage->storeVoiceNote($request->file('audio'));
+        }
+
+        if (in_array($type, [CounselingMessage::TYPE_IMAGE, CounselingMessage::TYPE_FILE], true) && $request->hasFile('attachment')) {
+            return $this->mediaStorage->storeAttachment($request->file('attachment'));
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function allowedAttachmentMimetypes(string $type): array
+    {
+        if ($type === CounselingMessage::TYPE_IMAGE) {
+            return config('counseling.media.allowed_image_mimetypes', []);
+        }
+
+        return config('counseling.media.allowed_file_mimetypes', []);
+    }
+
+    private function actorPayloadFromColumns(?string $type, mixed $id): ?array
+    {
+        if (! $type || ! class_exists($type) || ! $id) {
+            return null;
+        }
+
+        $actor = $type::query()->find($id);
+
+        return $actor ? $this->actorPayload($actor) : null;
+    }
+
+    private function actorPayload(object $actor): array
+    {
+        return [
+            'id' => method_exists($actor, 'getKey') ? (int) $actor->getKey() : null,
+            'type' => $actor::class,
+            'name' => $this->actorName($actor),
+            'email' => property_exists($actor, 'email') || $actor instanceof Model ? (string) ($actor->email ?? '') : '',
+            'phone' => property_exists($actor, 'phone') || $actor instanceof Model ? (string) ($actor->phone ?? '') : '',
+            'avatar' => $this->actorAvatar($actor),
+        ];
+    }
+
+    private function actorName(object $actor): string
+    {
+        foreach (['name', 'display_name', 'full_name'] as $field) {
+            $value = $actor instanceof Model ? $actor->getAttribute($field) : ($actor->{$field} ?? null);
+            if (filled($value)) {
+                return (string) $value;
+            }
+        }
+
+        return 'Member';
+    }
+
+    private function actorAvatar(object $actor): string
+    {
+        foreach (['avatar', 'profile_photo_path', 'photo', 'image'] as $field) {
+            $value = $actor instanceof Model ? $actor->getAttribute($field) : ($actor->{$field} ?? null);
+            if (filled($value)) {
+                return MediaUrl::resolve($value) ?: (string) $value;
+            }
+        }
+
+        return '';
     }
 }

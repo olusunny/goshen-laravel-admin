@@ -65,6 +65,8 @@ class AppSettings extends Page
 
     public bool $testimoniesEnabled = false;
 
+    public bool $counselingEnabled = true;
+
     public bool $goshenRetreatEnabled = true;
 
     public bool $goshenScannerEnabled = true;
@@ -158,6 +160,7 @@ class AppSettings extends Page
 
         $this->googleLoginEnabled = filter_var(AppSetting::value('google_login_enabled', '0'), FILTER_VALIDATE_BOOLEAN);
         $this->testimoniesEnabled = filter_var(AppSetting::value('testimonies_enabled', '0'), FILTER_VALIDATE_BOOLEAN);
+        $this->counselingEnabled = filter_var(AppSetting::value('counseling_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         $this->goshenRetreatEnabled = filter_var(AppSetting::value('goshen_retreat_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         $this->goshenScannerEnabled = filter_var(AppSetting::value('goshen_scanner_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         $this->goshenWalletEnabled = filter_var(AppSetting::value('goshen_wallet_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
@@ -317,6 +320,7 @@ class AppSettings extends Page
             'service_account_path' => ['nullable', 'string', 'max:2048'],
             'google_login_enabled' => ['required', 'boolean'],
             'testimonies_enabled' => ['required', 'boolean'],
+            'counseling_enabled' => ['required', 'boolean'],
             'goshen_retreat_enabled' => ['required', 'boolean'],
             'goshen_scanner_enabled' => ['required', 'boolean'],
             'goshen_wallet_enabled' => ['required', 'boolean'],
@@ -379,6 +383,7 @@ class AppSettings extends Page
             'service_account_path' => $this->serviceAccountPath,
             'google_login_enabled' => $this->googleLoginEnabled,
             'testimonies_enabled' => $this->testimoniesEnabled,
+            'counseling_enabled' => $this->counselingEnabled,
             'goshen_retreat_enabled' => $this->goshenRetreatEnabled,
             'goshen_scanner_enabled' => $this->goshenScannerEnabled,
             'goshen_wallet_enabled' => $this->goshenWalletEnabled,
@@ -430,6 +435,7 @@ class AppSettings extends Page
             ['firebase', 'service_account_path', $values['service_account_path'] ?? '', 'Legacy Firebase service account path. Prefer server environment credentials for production.', true],
             ['features', 'google_login_enabled', $values['google_login_enabled'] ? '1' : '0', 'Turn on Google sign-in and registration in the Flutter app.'],
             ['features', 'testimonies_enabled', $values['testimonies_enabled'] ? '1' : '0', 'Turn the Testimonies & Thanksgiving Wall on or off.'],
+            ['features', 'counseling_enabled', $values['counseling_enabled'] ? '1' : '0', 'Turn private Counseling requests and pastoral care chat on or off in the app and admin.'],
             ['features', 'goshen_retreat_enabled', $values['goshen_retreat_enabled'] ? '1' : '0', 'Show or hide Goshen Retreat in the app.'],
             ['features', 'goshen_scanner_enabled', $values['goshen_scanner_enabled'] ? '1' : '0', 'Allow authorized scanner users to access check-in features.'],
             ['features', 'goshen_wallet_enabled', $values['goshen_wallet_enabled'] ? '1' : '0', 'Allow members to use Goshen wallet features.'],
@@ -576,6 +582,7 @@ class AppSettings extends Page
             'service_account_path',
             'google_login_enabled',
             'testimonies_enabled',
+            'counseling_enabled',
             'goshen_retreat_enabled',
             'goshen_scanner_enabled',
             'goshen_wallet_enabled',

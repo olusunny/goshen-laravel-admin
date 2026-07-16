@@ -76,6 +76,7 @@ class CompatibilityController extends Controller
             'google_login_enabled' => $this->settingEnabled('google_login_enabled'),
             'mobile_phone_otp_login_enabled' => $this->settingEnabled('mobile_phone_otp_login_enabled'),
             'testimonies_enabled' => $this->settingEnabled('testimonies_enabled'),
+            'counseling_enabled' => $this->settingEnabled('counseling_enabled', true),
             'fundraising_enabled' => $this->settingEnabled('fundraising_enabled'),
             'prayer_points_enabled' => $this->settingEnabled('prayer_points_enabled'),
             'interactive_prayer_wall_enabled' => $this->settingEnabled('interactive_prayer_wall_enabled'),
@@ -1799,6 +1800,7 @@ class CompatibilityController extends Controller
             'can_manage_church_events' => $this->canManageChurchEvents($user),
             'can_manage_verse_of_day' => $this->canManageVerseOfDay($user),
             'can_manage_mobile_users' => $this->canManageMobileUsers($user),
+            'can_manage_counseling' => $this->canManageCounseling($user),
             'can_send_admin_messages' => $this->canSendAdminMessages($user),
             'is_go' => $user->hasGeneralOverseerRole(),
             'can_manage_prophetic_decree' => $user->canManagePropheticDecree(),
@@ -1806,9 +1808,9 @@ class CompatibilityController extends Controller
         ];
     }
 
-    private function settingEnabled(string $key): bool
+    private function settingEnabled(string $key, bool $default = false): bool
     {
-        return filter_var(AppSetting::value($key, false), FILTER_VALIDATE_BOOLEAN);
+        return filter_var(AppSetting::value($key, $default ? '1' : '0'), FILTER_VALIDATE_BOOLEAN);
     }
 
     private function normalizedFirebasePhone(string $phone): string
@@ -2101,6 +2103,28 @@ class CompatibilityController extends Controller
             ->contains(fn ($role): bool => in_array(
                 str($role)->lower()->replaceMatches('/[^a-z]/', '')->toString(),
                 ['admin', 'superadmin', 'eventmanager', 'goshenmanager', 'retreatmanager', 'triumphantitmanager'],
+                true,
+            ));
+    }
+
+    private function canManageCounseling(MobileUser $user): bool
+    {
+        if (! $user->canUseCommunity()) {
+            return false;
+        }
+
+        if ($user->can('counseling.triage')
+            || $user->can('counseling.assign')
+            || $user->can('counseling.respond')
+            || $user->can('counseling.settings')) {
+            return true;
+        }
+
+        return $user->roles()
+            ->pluck('name')
+            ->contains(fn ($role): bool => in_array(
+                str($role)->lower()->replaceMatches('/[^a-z]/', '')->toString(),
+                ['admin', 'superadmin', 'counselor', 'counsellingteam', 'counselingteam', 'pastor', 'triageteam', 'triumphantitmanager'],
                 true,
             ));
     }

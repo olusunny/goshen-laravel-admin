@@ -19,7 +19,16 @@ Route::post('cases/{counselingCase}/messages', [CounselingMessageController::cla
     ->whereNumber('counselingCase')
     ->middleware('throttle:12,1')
     ->name('cases.messages.store');
+Route::post('cases/{counselingCase}/messages/{message}/reaction', [CounselingMessageController::class, 'reaction'])
+    ->whereNumber('counselingCase')
+    ->whereNumber('message')
+    ->middleware('throttle:30,1')
+    ->name('cases.messages.reaction');
 Route::get('cases/{counselingCase}/messages/{message}/audio', [CounselingMessageController::class, 'audio'])
     ->whereNumber('counselingCase')
     ->whereNumber('message')
     ->name('cases.messages.audio');
+Route::get('cases/{counselingCase}/messages/{message}/media', [CounselingMessageController::class, 'media'])
+    ->whereNumber('counselingCase')
+    ->whereNumber('message')
+    ->name('cases.messages.media');

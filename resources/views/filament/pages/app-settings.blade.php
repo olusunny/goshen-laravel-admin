@@ -145,6 +145,7 @@
                         @foreach ([
                             'googleLoginEnabled' => ['Google login', 'Show Google sign-in and registration buttons.'],
                             'testimoniesEnabled' => ['Testimonies & Thanksgiving', 'Enable the public testimony wall.'],
+                            'counselingEnabled' => ['Private counseling', 'Show counseling discovery and allow verified members to submit private requests.'],
                             'goshenRetreatEnabled' => ['Goshen Retreat', 'Show Goshen Retreat in the app and web experience.'],
                             'goshenScannerEnabled' => ['Goshen scanner', 'Allow authorized check-in scanner access.'],
                             'goshenWalletEnabled' => ['Goshen wallet', 'Enable wallet balance, transfers, and wallet payments.'],

@@ -4,16 +4,20 @@ namespace ChurchTools\DigitalCounseling\Filament\Resources;
 
 use ChurchTools\DigitalCounseling\Filament\Resources\Concerns\AuthorizesCounselingAdmin;
 use ChurchTools\DigitalCounseling\Filament\Resources\CounselingCaseResource\Pages;
+use ChurchTools\DigitalCounseling\Models\CounselingAssignment;
 use ChurchTools\DigitalCounseling\Models\CounselingCase;
 use ChurchTools\DigitalCounseling\Models\CounselingProviderProfile;
 use Filament\Actions;
 use Filament\Forms;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class CounselingCaseResource extends Resource
 {
@@ -107,6 +111,32 @@ class CounselingCaseResource extends Resource
                     ]),
             ])
             ->recordActions([
+                Actions\Action::make('assign_provider')
+                    ->label('Assign')
+                    ->icon('heroicon-o-user-plus')
+                    ->color('info')
+                    ->form([
+                        Forms\Components\Select::make('provider_profile_id')
+                            ->label('Provider')
+                            ->options(fn (): array => CounselingProviderProfile::query()
+                                ->where('is_active', true)
+                                ->orderBy('display_name')
+                                ->pluck('display_name', 'id')
+                                ->all())
+                            ->default(fn (CounselingCase $record): ?int => $record->assigned_provider_profile_id)
+                            ->searchable()
+                            ->preload()
+                            ->required()
+                            ->native(false),
+                    ])
+                    ->action(function (CounselingCase $record, array $data): void {
+                        self::assignProvider($record, (int) $data['provider_profile_id']);
+
+                        Notification::make()
+                            ->title('Counseling provider assigned')
+                            ->success()
+                            ->send();
+                    }),
                 Actions\ViewAction::make(),
                 Actions\EditAction::make(),
                 Actions\Action::make('close')
@@ -119,6 +149,51 @@ class CounselingCaseResource extends Resource
                         'closed_at' => now(),
                     ])->save()),
             ]);
+    }
+
+    public static function assignProvider(CounselingCase $record, int $providerProfileId): void
+    {
+        DB::transaction(function () use ($record, $providerProfileId): void {
+            $provider = CounselingProviderProfile::query()->findOrFail($providerProfileId);
+            $actor = Auth::user();
+            $adminUserModel = (string) config('auth.providers.users.model', \App\Models\User::class);
+            $requesterModel = (string) config('counseling.models.requester');
+
+            $assigneeType = $provider->admin_user_id ? $adminUserModel : ($provider->mobile_user_id ? $requesterModel : CounselingProviderProfile::class);
+            $assigneeId = (int) ($provider->admin_user_id ?: ($provider->mobile_user_id ?: $provider->getKey()));
+
+            $record->assignments()
+                ->whereNull('ended_at')
+                ->update([
+                    'ended_at' => now(),
+                    'end_reason' => 'reassigned',
+                    'updated_at' => now(),
+                ]);
+
+            CounselingAssignment::query()->create([
+                'case_id' => $record->id,
+                'provider_profile_id' => $provider->id,
+                'assignee_type' => $assigneeType,
+                'assignee_id' => $assigneeId,
+                'assigned_by_type' => $actor ? $actor::class : null,
+                'assigned_by_id' => $actor?->getKey(),
+                'role' => 'primary',
+                'assigned_at' => now(),
+                'metadata' => [
+                    'provider_display_name' => $provider->display_name,
+                    'provider_role' => $provider->role,
+                ],
+            ]);
+
+            $record->forceFill([
+                'assigned_provider_profile_id' => $provider->id,
+                'status' => in_array($record->status, [
+                    CounselingCase::STATUS_SUBMITTED,
+                    CounselingCase::STATUS_TRIAGE,
+                    CounselingCase::STATUS_AWAITING_ASSIGNMENT,
+                ], true) ? CounselingCase::STATUS_ASSIGNED : $record->status,
+            ])->save();
+        });
     }
 
     public static function getPages(): array

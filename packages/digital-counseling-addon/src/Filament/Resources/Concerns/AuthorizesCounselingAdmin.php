@@ -92,6 +92,16 @@ trait AuthorizesCounselingAdmin
         }
 
         try {
+            if (Schema::hasTable('app_settings')) {
+                $enabled = DB::table('app_settings')
+                    ->where('key', 'counseling_enabled')
+                    ->value('value');
+
+                if ($enabled !== null && ! filter_var($enabled, FILTER_VALIDATE_BOOLEAN)) {
+                    return false;
+                }
+            }
+
             if (! Schema::hasTable('addons')) {
                 return app()->environment(['local', 'testing']);
             }

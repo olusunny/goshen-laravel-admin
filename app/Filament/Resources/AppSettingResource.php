@@ -229,6 +229,7 @@ class AppSettingResource extends Resource
         return [
             'google_login_enabled',
             'testimonies_enabled',
+            'counseling_enabled',
             'goshen_retreat_enabled',
             'goshen_scanner_enabled',
             'goshen_wallet_enabled',
@@ -266,6 +267,7 @@ class AppSettingResource extends Resource
             'twitter_page' => 'X/Twitter URL',
             'google_login_enabled' => 'Enable Google login',
             'testimonies_enabled' => 'Enable Testimonies & Thanksgiving Wall',
+            'counseling_enabled' => 'Enable Private Counseling',
             'goshen_retreat_enabled' => 'Enable Goshen Retreat',
             'goshen_scanner_enabled' => 'Enable Goshen scanner',
             'goshen_wallet_enabled' => 'Enable Goshen wallet',
@@ -309,6 +311,7 @@ class AppSettingResource extends Resource
             'whatsapp_page' => 'Use a full WhatsApp link such as https://wa.me/234...',
             'google_login_enabled' => 'Turn on native Google sign-in and registration in the Flutter app.',
             'testimonies_enabled' => 'Turn the Testimonies & Thanksgiving Wall on or off in the mobile app.',
+            'counseling_enabled' => 'Show Private Counseling and allow verified members to submit private counseling requests.',
             'goshen_retreat_enabled' => 'Show or hide the Goshen Retreat module in the mobile app and web experience.',
             'goshen_scanner_enabled' => 'Allow authorized event scanner users to access check-in features.',
             'goshen_wallet_enabled' => 'Allow members to use Goshen wallet features in the mobile app.',

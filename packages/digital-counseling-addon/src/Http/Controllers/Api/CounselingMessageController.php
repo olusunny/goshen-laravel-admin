@@ -3,11 +3,13 @@
 namespace ChurchTools\DigitalCounseling\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\MediaUrl;
 use ChurchTools\DigitalCounseling\Contracts\PermissionResolverContract;
 use ChurchTools\DigitalCounseling\Contracts\ProtectedMediaStorageContract;
 use ChurchTools\DigitalCounseling\Models\CounselingCase;
 use ChurchTools\DigitalCounseling\Models\CounselingCaseEvent;
 use ChurchTools\DigitalCounseling\Models\CounselingMessage;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,15 +32,15 @@ class CounselingMessageController extends Controller
 
         $type = (string) $request->input('message_type', CounselingMessage::TYPE_TEXT);
         $data = $request->validate([
-            'message_type' => ['nullable', Rule::in([CounselingMessage::TYPE_TEXT, CounselingMessage::TYPE_AUDIO])],
-            'body' => [$type === CounselingMessage::TYPE_AUDIO ? 'nullable' : 'required', 'string', 'max:5000'],
+            'message_type' => ['nullable', Rule::in([CounselingMessage::TYPE_TEXT, CounselingMessage::TYPE_AUDIO, CounselingMessage::TYPE_IMAGE, CounselingMessage::TYPE_FILE])],
+            'body' => [in_array($type, [CounselingMessage::TYPE_AUDIO, CounselingMessage::TYPE_IMAGE, CounselingMessage::TYPE_FILE], true) ? 'nullable' : 'required', 'string', 'max:5000'],
             'audio' => [$type === CounselingMessage::TYPE_AUDIO ? 'required' : 'nullable', 'file', 'mimetypes:'.implode(',', config('counseling.media.allowed_audio_mimetypes', [])), 'max:'.(int) config('counseling.media.max_audio_size_kb', 20480)],
+            'attachment' => [in_array($type, [CounselingMessage::TYPE_IMAGE, CounselingMessage::TYPE_FILE], true) ? 'required' : 'nullable', 'file', 'mimetypes:'.implode(',', $this->allowedAttachmentMimetypes($type)), 'max:'.(int) config('counseling.media.max_attachment_size_kb', 20480)],
             'audio_duration_seconds' => [$type === CounselingMessage::TYPE_AUDIO ? 'required' : 'nullable', 'integer', 'min:1', 'max:'.(int) config('counseling.media.max_audio_duration_seconds', 300)],
+            'reaction' => ['nullable', 'string', 'max:32'],
         ]);
 
-        $media = $request->hasFile('audio')
-            ? $this->mediaStorage->storeVoiceNote($request->file('audio'))
-            : null;
+        $media = $this->storeIncomingMedia($request, $type);
 
         $message = DB::transaction(function () use ($actor, $counselingCase, $type, $data, $media): CounselingMessage {
             $isRequester = $actor::class === config('counseling.models.requester')
@@ -55,6 +57,11 @@ class CounselingMessageController extends Controller
                 'media_mime' => $media['mime'] ?? null,
                 'media_size_bytes' => $media['size_bytes'] ?? null,
                 'media_duration_seconds' => isset($data['audio_duration_seconds']) ? (int) $data['audio_duration_seconds'] : null,
+                'metadata' => [
+                    'sender' => $this->actorPayload($actor),
+                    'original_name' => $media['original_name'] ?? null,
+                    'reactions' => [],
+                ],
             ]);
 
             $counselingCase->forceFill([
@@ -78,12 +85,50 @@ class CounselingMessageController extends Controller
         return response()->json(['data' => $this->messagePayload($message, $counselingCase)], 201);
     }
 
-    public function audio(Request $request, CounselingCase $counselingCase, CounselingMessage $message): StreamedResponse
+    public function reaction(Request $request, CounselingCase $counselingCase, CounselingMessage $message): JsonResponse
     {
         $actor = $this->actor($request);
         abort_unless((int) $message->case_id === (int) $counselingCase->id, 404);
         abort_unless($this->permissions->canViewCase($actor, $counselingCase), 403);
-        abort_unless($message->message_type === CounselingMessage::TYPE_AUDIO && $message->media_disk && $message->media_path, 404);
+
+        $data = $request->validate([
+            'reaction' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        $metadata = is_array($message->metadata) ? $message->metadata : [];
+        $reactions = is_array($metadata['reactions'] ?? null) ? $metadata['reactions'] : [];
+        $key = $actor::class.':'.(int) $actor->getKey();
+        $reaction = trim((string) ($data['reaction'] ?? ''));
+
+        if ($reaction === '') {
+            unset($reactions[$key]);
+        } else {
+            $reactions[$key] = [
+                'reaction' => $reaction,
+                'actor' => $this->actorPayload($actor),
+                'reacted_at' => now()->toIso8601String(),
+            ];
+        }
+
+        $metadata['reactions'] = $reactions;
+        $message->forceFill(['metadata' => $metadata])->save();
+
+        return response()->json(['data' => $this->messagePayload($message->fresh(), $counselingCase)]);
+    }
+
+    public function audio(Request $request, CounselingCase $counselingCase, CounselingMessage $message): StreamedResponse
+    {
+        abort_unless($message->message_type === CounselingMessage::TYPE_AUDIO, 404);
+
+        return $this->media($request, $counselingCase, $message);
+    }
+
+    public function media(Request $request, CounselingCase $counselingCase, CounselingMessage $message): StreamedResponse
+    {
+        $actor = $this->actor($request);
+        abort_unless((int) $message->case_id === (int) $counselingCase->id, 404);
+        abort_unless($this->permissions->canViewCase($actor, $counselingCase), 403);
+        abort_unless(in_array($message->message_type, [CounselingMessage::TYPE_AUDIO, CounselingMessage::TYPE_IMAGE, CounselingMessage::TYPE_FILE], true) && $message->media_disk && $message->media_path, 404);
 
         return Storage::disk($message->media_disk)->response($message->media_path, null, [
             'Content-Type' => $message->media_mime ?: 'application/octet-stream',
@@ -101,16 +146,101 @@ class CounselingMessageController extends Controller
 
     private function messagePayload(CounselingMessage $message, CounselingCase $case): array
     {
+        $mediaUrl = $message->media_disk && $message->media_path
+            ? route('counseling.api.cases.messages.media', [$case, $message], false)
+            : null;
+
         return [
             'id' => $message->id,
             'direction' => $message->direction,
             'message_type' => $message->message_type,
             'body' => $message->body,
+            'sender' => $message->metadata['sender'] ?? $this->actorPayloadFromColumns($message->actor_type, $message->actor_id),
+            'media_url' => $mediaUrl,
             'audio_url' => $message->message_type === CounselingMessage::TYPE_AUDIO
                 ? route('counseling.api.cases.messages.audio', [$case, $message], false)
                 : null,
             'audio_duration_seconds' => $message->media_duration_seconds,
+            'attachment' => in_array($message->message_type, [CounselingMessage::TYPE_IMAGE, CounselingMessage::TYPE_FILE], true) ? [
+                'url' => $mediaUrl,
+                'mime' => $message->media_mime,
+                'size_bytes' => $message->media_size_bytes,
+                'name' => $message->metadata['original_name'] ?? basename((string) $message->media_path),
+            ] : null,
+            'reactions' => $message->metadata['reactions'] ?? [],
             'created_at' => $message->created_at?->toIso8601String(),
         ];
+    }
+
+    private function storeIncomingMedia(Request $request, string $type): ?array
+    {
+        if ($type === CounselingMessage::TYPE_AUDIO && $request->hasFile('audio')) {
+            return $this->mediaStorage->storeVoiceNote($request->file('audio'));
+        }
+
+        if (in_array($type, [CounselingMessage::TYPE_IMAGE, CounselingMessage::TYPE_FILE], true) && $request->hasFile('attachment')) {
+            return $this->mediaStorage->storeAttachment($request->file('attachment'));
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function allowedAttachmentMimetypes(string $type): array
+    {
+        if ($type === CounselingMessage::TYPE_IMAGE) {
+            return config('counseling.media.allowed_image_mimetypes', []);
+        }
+
+        return config('counseling.media.allowed_file_mimetypes', []);
+    }
+
+    private function actorPayloadFromColumns(?string $type, mixed $id): ?array
+    {
+        if (! $type || ! class_exists($type) || ! $id) {
+            return null;
+        }
+
+        $actor = $type::query()->find($id);
+
+        return $actor ? $this->actorPayload($actor) : null;
+    }
+
+    private function actorPayload(object $actor): array
+    {
+        return [
+            'id' => method_exists($actor, 'getKey') ? (int) $actor->getKey() : null,
+            'type' => $actor::class,
+            'name' => $this->actorName($actor),
+            'email' => $actor instanceof Model ? (string) ($actor->email ?? '') : '',
+            'phone' => $actor instanceof Model ? (string) ($actor->phone ?? '') : '',
+            'avatar' => $this->actorAvatar($actor),
+        ];
+    }
+
+    private function actorName(object $actor): string
+    {
+        foreach (['name', 'display_name', 'full_name'] as $field) {
+            $value = $actor instanceof Model ? $actor->getAttribute($field) : ($actor->{$field} ?? null);
+            if (filled($value)) {
+                return (string) $value;
+            }
+        }
+
+        return 'Member';
+    }
+
+    private function actorAvatar(object $actor): string
+    {
+        foreach (['avatar', 'profile_photo_path', 'photo', 'image'] as $field) {
+            $value = $actor instanceof Model ? $actor->getAttribute($field) : ($actor->{$field} ?? null);
+            if (filled($value)) {
+                return MediaUrl::resolve($value) ?: (string) $value;
+            }
+        }
+
+        return '';
     }
 }

@@ -61,6 +61,11 @@ class CounselingServiceProvider extends ServiceProvider
                 ->middleware(config('counseling.middleware.api', ['api', 'auth:sanctum']))
                 ->group(__DIR__.'/../routes/api.php');
         }
+
+        Route::prefix('admin')
+            ->as('counseling.admin.')
+            ->middleware(['web', 'auth'])
+            ->group(__DIR__.'/../routes/admin.php');
     }
 
     private function counselingEnabled(): bool
@@ -70,6 +75,16 @@ class CounselingServiceProvider extends ServiceProvider
         }
 
         try {
+            if (Schema::hasTable('app_settings')) {
+                $enabled = DB::table('app_settings')
+                    ->where('key', 'counseling_enabled')
+                    ->value('value');
+
+                if ($enabled !== null && ! filter_var($enabled, FILTER_VALIDATE_BOOLEAN)) {
+                    return false;
+                }
+            }
+
             if (! Schema::hasTable('addons')) {
                 return true;
             }

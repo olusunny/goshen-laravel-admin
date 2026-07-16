@@ -4,7 +4,7 @@
   "composer_name": "church-tools/digital-counseling-addon",
   "name": "Digital Counseling",
   "description": "Private text and voice-note counseling cases between members, pastors, and counselors.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "minimum_php": "8.2",
   "minimum_laravel": "10.0",
   "maximum_laravel": null,

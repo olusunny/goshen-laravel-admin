@@ -48,8 +48,10 @@ return [
     'media' => [
         'disk' => env('COUNSELING_MEDIA_DISK', 'local'),
         'path' => env('COUNSELING_MEDIA_PATH', 'counseling/voice-notes'),
+        'attachment_path' => env('COUNSELING_ATTACHMENT_PATH', 'counseling/attachments'),
         'max_audio_size_kb' => (int) env('COUNSELING_MAX_AUDIO_SIZE_KB', 20480),
         'max_audio_duration_seconds' => (int) env('COUNSELING_MAX_AUDIO_DURATION_SECONDS', 300),
+        'max_attachment_size_kb' => (int) env('COUNSELING_MAX_ATTACHMENT_SIZE_KB', 20480),
         'allowed_audio_mimetypes' => [
             'audio/mpeg',
             'audio/mp4',
@@ -58,6 +60,22 @@ return [
             'audio/x-wav',
             'audio/webm',
             'audio/ogg',
+        ],
+        'allowed_image_mimetypes' => [
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+        ],
+        'allowed_file_mimetypes' => [
+            'application/pdf',
+            'text/plain',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'image/jpeg',
+            'image/png',
+            'image/webp',
         ],
     ],
 
