@@ -34,7 +34,7 @@ class AddonLifecycleService
         return DB::transaction(function () use ($zipPath, $inspection, $manifest, $signature, $packageKey, $version, $stagingPath, $installPath, $admin): Addon {
             $existing = Addon::query()->where('package_key', $packageKey)->lockForUpdate()->first();
             if ($existing && ! in_array($existing->status, [Addon::STATUS_UNINSTALLED, Addon::STATUS_UPDATE_FAILED], true)) {
-                throw new RuntimeException('This add-on is already installed. Upload a newer ZIP to update it.');
+                return $this->updateInstalledAddon($existing, $zipPath, $inspection, $manifest, $signature, $packageKey, $version, $stagingPath, $installPath, $admin);
             }
 
             $this->log(null, $packageKey, 'validate', 'running', 'Validating add-on ZIP.', ['zip' => $zipPath], $admin);
@@ -76,6 +76,97 @@ class AddonLifecycleService
 
             return $addon->fresh();
         });
+    }
+
+    /**
+     * @param array{manifest: array<string, mixed>, checksum: string, root: string|null} $inspection
+     * @param array<string, mixed> $manifest
+     * @param array{verified: bool|null, method: string|null, key_id: string|null} $signature
+     */
+    private function updateInstalledAddon(
+        Addon $addon,
+        string $zipPath,
+        array $inspection,
+        array $manifest,
+        array $signature,
+        string $packageKey,
+        string $version,
+        string $stagingPath,
+        string $installPath,
+        ?User $admin,
+    ): Addon {
+        $currentVersion = (string) $addon->installed_version;
+        if ($currentVersion !== '' && version_compare($version, $currentVersion, '<=')) {
+            throw new RuntimeException("This add-on is already installed at version {$currentVersion}. Upload a newer version to update it.");
+        }
+
+        $wasActive = $addon->status === Addon::STATUS_ACTIVE;
+        $backupPath = storage_path('app/'.trim(config('addons.storage.backups_path'), '/').'/'.$packageKey.'-'.$currentVersion.'-to-'.$version.'-'.Str::ulid());
+
+        try {
+            $this->log($addon, $packageKey, 'update', 'running', 'Validating add-on update ZIP.', ['zip' => $zipPath], $admin);
+            $this->zips->extractToStaging($zipPath, $stagingPath);
+
+            if (File::exists($installPath)) {
+                File::ensureDirectoryExists(dirname($backupPath));
+                File::moveDirectory($installPath, $backupPath, true);
+
+                AddonUpdateBackup::query()->create([
+                    'addon_id' => $addon->id,
+                    'from_version' => $currentVersion,
+                    'to_version' => $version,
+                    'backup_path' => $backupPath,
+                    'created_by' => $admin?->id,
+                ]);
+            }
+
+            File::ensureDirectoryExists(dirname($installPath));
+            File::moveDirectory($stagingPath, $installPath, true);
+
+            $addon->forceFill([
+                'composer_name' => $manifest['composer_name'] ?? null,
+                'name' => $manifest['name'],
+                'description' => $manifest['description'] ?? null,
+                'installed_version' => $version,
+                'available_version' => null,
+                'status' => $wasActive ? Addon::STATUS_ACTIVE : Addon::STATUS_INSTALLED,
+                'provider_class' => $manifest['provider'] ?? null,
+                'namespace' => $manifest['namespace'] ?? null,
+                'autoload_psr4' => $manifest['autoload_psr4'] ?? [],
+                'manifest' => $manifest,
+                'install_path' => $installPath,
+                'uploaded_zip_path' => $zipPath,
+                'checksum' => $inspection['checksum'],
+                'signature_verified' => $signature['verified'],
+                'updated_by' => $admin?->id,
+            ])->save();
+
+            $this->runtimeLoader->registerAddon($manifest, $installPath);
+            $this->runSetupTasks($addon->fresh(), $manifest, $installPath, $admin);
+
+            if ($wasActive) {
+                $this->activate($addon->fresh(), $admin);
+            } else {
+                $this->clearCaches($addon->fresh(), $admin);
+                $this->runtimeLoader->refreshActiveAddonCache();
+            }
+
+            $this->log($addon->fresh(), $packageKey, 'update', 'successful', "Add-on updated to {$version}.", ['backup_path' => $backupPath], $admin);
+
+            return $addon->fresh();
+        } catch (Throwable $exception) {
+            if (! File::exists($installPath) && File::exists($backupPath)) {
+                try {
+                    File::moveDirectory($backupPath, $installPath, true);
+                } catch (Throwable) {
+                    // Preserve the original update failure; lifecycle logs include the backup path.
+                }
+            }
+
+            $addon->forceFill(['status' => Addon::STATUS_UPDATE_FAILED])->save();
+            $this->log($addon, $packageKey, 'update', 'failed', $exception->getMessage(), ['backup_path' => $backupPath], $admin);
+            throw $exception;
+        }
     }
 
     public function activate(Addon $addon, ?User $admin = null): Addon
