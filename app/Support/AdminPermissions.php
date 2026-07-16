@@ -11,6 +11,20 @@ class AdminPermissions
 
     public const CRON_MONITOR = 'manage_cron_monitor';
 
+    public const COUNSELING_REQUEST = 'counseling.request';
+
+    public const COUNSELING_TRIAGE = 'counseling.triage';
+
+    public const COUNSELING_ASSIGN = 'counseling.assign';
+
+    public const COUNSELING_RESPOND = 'counseling.respond';
+
+    public const COUNSELING_SAFEGUARDING = 'counseling.safeguarding';
+
+    public const COUNSELING_SETTINGS = 'counseling.settings';
+
+    public const COUNSELING_BREAK_GLASS = 'counseling.break-glass';
+
     public const FUNDRAISING_VIEW = 'fundraising.view';
 
     public const FUNDRAISING_MANAGE = 'fundraising.manage';
@@ -90,6 +104,13 @@ class AdminPermissions
             ->mapWithKeys(fn ($meta) => [$meta['permission'] => "{$meta['group']} - {$meta['label']}"])
             ->put(self::CLOUD_BACKUPS, 'Settings - Cloud Backups')
             ->put(self::CRON_MONITOR, 'Settings - Cron Jobs')
+            ->put(self::COUNSELING_REQUEST, 'Counseling - Request support')
+            ->put(self::COUNSELING_TRIAGE, 'Counseling - Triage cases')
+            ->put(self::COUNSELING_ASSIGN, 'Counseling - Assign cases')
+            ->put(self::COUNSELING_RESPOND, 'Counseling - Respond to assigned cases')
+            ->put(self::COUNSELING_SAFEGUARDING, 'Counseling - Manage safeguarding')
+            ->put(self::COUNSELING_SETTINGS, 'Counseling - Manage settings')
+            ->put(self::COUNSELING_BREAK_GLASS, 'Counseling - Break-glass access')
             ->put(self::FUNDRAISING_VIEW, 'Fundraising - View campaigns')
             ->put(self::FUNDRAISING_MANAGE, 'Fundraising - Manage campaigns')
             ->put(self::FUNDRAISING_CONTRIBUTE, 'Fundraising - Contribute')

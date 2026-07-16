@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "357d3499f945f1b855ab7b0d10b3aadd",
+    "content-hash": "5e73934e27a1633eb2b5326db11a3a4b",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -783,6 +783,44 @@
                 }
             ],
             "time": "2026-03-20T21:10:52+00:00"
+        },
+        {
+            "name": "church-tools/digital-counseling-addon",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/digital-counseling-addon",
+                "reference": "dc6ff48db286f2ea5f8ec09f81e99124394536ac"
+            },
+            "require": {
+                "illuminate/contracts": "^10.0|^11.0|^12.0",
+                "illuminate/database": "^10.0|^11.0|^12.0",
+                "illuminate/http": "^10.0|^11.0|^12.0",
+                "illuminate/routing": "^10.0|^11.0|^12.0",
+                "illuminate/support": "^10.0|^11.0|^12.0",
+                "php": "^8.2"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "ChurchTools\\DigitalCounseling\\CounselingServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "ChurchTools\\DigitalCounseling\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Private digital counseling addon for Laravel and mobile church applications.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "church-tools/laravel-cloud-backup-addon",

@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "package_key": "church-tools.digital-counseling",
+  "composer_name": "church-tools/digital-counseling-addon",
+  "name": "Digital Counseling",
+  "description": "Private text and voice-note counseling cases between members, pastors, and counselors.",
+  "version": "0.1.0",
+  "minimum_php": "8.2",
+  "minimum_laravel": "10.0",
+  "maximum_laravel": null,
+  "provider": "ChurchTools\\DigitalCounseling\\CounselingServiceProvider",
+  "namespace": "ChurchTools\\DigitalCounseling\\",
+  "autoload_psr4": {
+    "ChurchTools\\DigitalCounseling\\": "src/"
+  },
+  "admin_route_prefix": "admin/counseling",
+  "api_route_prefix": "api/v1/counseling",
+  "web_route_prefix": "counseling",
+  "config_key": "counseling",
+  "commands": {
+    "install": "counseling:install",
+    "update": "counseling:update",
+    "health": "counseling:health",
+    "uninstall": "counseling:uninstall"
+  },
+  "migrations_path": "database/migrations",
+  "seeders": [],
+  "publish_tags": [
+    "counseling-config",
+    "counseling-migrations"
+  ],
+  "permissions": [
+    "counseling.request",
+    "counseling.triage",
+    "counseling.assign",
+    "counseling.respond",
+    "counseling.safeguarding",
+    "counseling.settings",
+    "counseling.break-glass"
+  ],
+  "requires_wallet_gateway": false,
+  "supports_disable": true,
+  "supports_uninstall": true,
+  "supports_update": true
+}
