@@ -10,16 +10,18 @@
         .pg-title { margin:0; font-size:clamp(26px,3vw,38px); line-height:1.08; font-weight:950; letter-spacing:-.03em; }
         .pg-copy { margin:10px 0 0; max-width:760px; color:rgba(255,255,255,.82); font-size:15px; line-height:1.65; }
         .pg-section-head { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; padding-bottom:18px; border-bottom:1px solid var(--pg-line); }
+        .pg-section-head > div { min-width:0; }
         .pg-h2 { margin:0; font-size:20px; font-weight:900; line-height:1.2; }
         .pg-muted { margin:6px 0 0; color:var(--pg-muted); font-size:14px; line-height:1.6; }
         .pg-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
         .pg-grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
-        .pg-mode { display:block; cursor:pointer; }
+        .pg-mode { display:block; min-width:0; cursor:pointer; }
         .pg-mode input { position:absolute; opacity:0; pointer-events:none; }
-        .pg-mode-card { min-height:118px; padding:18px; border:1px solid var(--pg-line); border-radius:18px; background:var(--pg-soft); transition:.18s ease; }
+        .pg-mode-card { display:flex; min-height:118px; height:100%; width:100%; box-sizing:border-box; flex-direction:column; justify-content:center; gap:10px; padding:18px; border:1px solid var(--pg-line); border-radius:18px; background:var(--pg-soft); overflow:hidden; transition:.18s ease; }
         .pg-mode input:checked + .pg-mode-card { border-color:var(--pg-accent); box-shadow:0 0 0 3px rgba(245,158,11,.15), var(--pg-shadow); background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(12,34,48,.03)); }
         .dark .pg-mode input:checked + .pg-mode-card { background:linear-gradient(135deg,rgba(245,158,11,.14),rgba(15,81,60,.12)); }
-        .pg-mode-title { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:18px; font-weight:950; }
+        .pg-mode-title { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; min-width:0; font-size:18px; font-weight:950; line-height:1.25; }
+        .pg-mode-name { min-width:0; overflow-wrap:anywhere; }
         .pg-badge { display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px; font-size:11px; font-weight:900; white-space:nowrap; }
         .pg-badge-ok { background:#dcfae6; color:#067647; }
         .pg-badge-warn { background:#fef0c7; color:#b54708; }
@@ -36,7 +38,7 @@
         .pg-panel { padding:18px; border:1px solid var(--pg-line); border-radius:18px; background:var(--pg-soft); }
         .pg-panel-title { margin:0 0 14px; font-size:16px; font-weight:950; }
         .pg-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:20px; }
-        .pg-button { display:inline-flex; align-items:center; justify-content:center; min-height:44px; border:0; border-radius:13px; padding:10px 16px; background:var(--pg-accent); color:#111827; font:inherit; font-size:14px; font-weight:950; cursor:pointer; box-shadow:0 10px 22px rgba(245,158,11,.22); }
+        .pg-button { display:inline-flex; align-items:center; justify-content:center; min-height:44px; max-width:100%; border:0; border-radius:13px; padding:10px 16px; background:var(--pg-accent); color:#111827; font:inherit; font-size:14px; font-weight:950; line-height:1.35; text-align:center; cursor:pointer; box-shadow:0 10px 22px rgba(245,158,11,.22); }
         .pg-button-dark { background:var(--pg-primary); color:#fff; box-shadow:0 10px 22px rgba(12,34,48,.16); }
         .pg-button-danger { background:#dc2626; color:#fff; box-shadow:none; }
         .pg-note { padding:14px 16px; border-radius:16px; background:#eff6ff; border:1px solid #bfdbfe; color:#155eef; font-size:13px; font-weight:750; line-height:1.55; }
@@ -69,14 +71,14 @@
                 <label class="pg-mode">
                     <input type="radio" wire:model="mode" value="test">
                     <span class="pg-mode-card">
-                        <span class="pg-mode-title">Test mode <span class="pg-badge {{ str_contains($this->stripeStatus('test'), 'saved') ? 'pg-badge-ok' : 'pg-badge-warn' }}">{{ $this->stripeStatus('test') }}</span></span>
+                        <span class="pg-mode-title"><span class="pg-mode-name">Test mode</span> <span class="pg-badge {{ str_contains($this->stripeStatus('test'), 'saved') ? 'pg-badge-ok' : 'pg-badge-warn' }}">{{ $this->stripeStatus('test') }}</span></span>
                         <span class="pg-muted">Use Stripe `sk_test_...` keys for safe test payments.</span>
                     </span>
                 </label>
                 <label class="pg-mode">
                     <input type="radio" wire:model="mode" value="live">
                     <span class="pg-mode-card">
-                        <span class="pg-mode-title">Live mode <span class="pg-badge {{ str_contains($this->stripeStatus('live'), 'saved') ? 'pg-badge-ok' : 'pg-badge-warn' }}">{{ $this->stripeStatus('live') }}</span></span>
+                        <span class="pg-mode-title"><span class="pg-mode-name">Live mode</span> <span class="pg-badge {{ str_contains($this->stripeStatus('live'), 'saved') ? 'pg-badge-ok' : 'pg-badge-warn' }}">{{ $this->stripeStatus('live') }}</span></span>
                         <span class="pg-muted">Use Stripe `sk_live_...` keys only when production payments should be accepted.</span>
                     </span>
                 </label>
