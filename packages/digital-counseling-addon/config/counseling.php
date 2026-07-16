@@ -8,9 +8,16 @@ return [
     'route_prefix' => env('COUNSELING_WEB_PREFIX', 'counseling'),
 
     'middleware' => [
-        'api' => ['api', 'auth:sanctum'],
+        'api' => ['api', \ChurchTools\DigitalCounseling\Http\Middleware\AuthenticateCounselingRequester::class],
         'admin' => ['web', 'auth'],
         'web' => ['web', 'auth'],
+    ],
+
+    'auth' => [
+        'guard' => env('COUNSELING_AUTH_GUARD', 'mobile'),
+        'bearer_token_column' => env('COUNSELING_BEARER_TOKEN_COLUMN', 'api_token_hash'),
+        'bearer_token_hash' => env('COUNSELING_BEARER_TOKEN_HASH', 'sha256'),
+        'token_input' => env('COUNSELING_TOKEN_INPUT', 'api_token'),
     ],
 
     'features' => [
