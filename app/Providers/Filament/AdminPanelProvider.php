@@ -74,7 +74,10 @@ class AdminPanelProvider extends PanelProvider
             )
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources');
 
-        foreach (app(AddonRuntimeLoader::class)->filamentResourceDiscoveries() as $discovery) {
+        $addonRuntimeLoader = app(AddonRuntimeLoader::class);
+        $addonRuntimeLoader->registerActiveAddons();
+
+        foreach ($addonRuntimeLoader->filamentResourceDiscoveries() as $discovery) {
             $panel->discoverResources(in: $discovery['path'], for: $discovery['namespace']);
         }
 
