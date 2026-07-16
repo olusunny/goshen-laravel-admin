@@ -99,6 +99,10 @@ class DefaultPermissionResolver implements PermissionResolverContract
         }
 
         try {
+            if (method_exists($user, 'hasRole') && $user->hasRole('super_admin')) {
+                return true;
+            }
+
             if (method_exists($user, 'can') && $user->can($permission)) {
                 return true;
             }

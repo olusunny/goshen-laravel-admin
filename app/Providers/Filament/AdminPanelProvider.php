@@ -139,6 +139,7 @@ class AdminPanelProvider extends PanelProvider
             NavigationGroup::make('Forms')->collapsed(),
             NavigationGroup::make('Giving')->collapsed(),
             NavigationGroup::make('Fundraising')->collapsed(),
+            NavigationGroup::make('Counseling')->collapsed(),
             NavigationGroup::make('Messaging')->collapsed(),
             NavigationGroup::make('Community')->collapsed(),
             NavigationGroup::make('Content')->collapsed(),

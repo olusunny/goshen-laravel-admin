@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 return new class extends Migration
@@ -18,6 +19,12 @@ return new class extends Migration
             Permission::findOrCreate($permission, 'web');
             Permission::findOrCreate($permission, 'mobile');
         }
+
+        Role::query()
+            ->where('guard_name', 'web')
+            ->where('name', 'super_admin')
+            ->get()
+            ->each(fn (Role $role) => $role->givePermissionTo($this->permissions()));
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }

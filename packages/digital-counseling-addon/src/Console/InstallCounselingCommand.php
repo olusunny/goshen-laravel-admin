@@ -21,7 +21,7 @@ class InstallCounselingCommand extends Command
 
         $this->installCounselingPermissions();
         $this->call('migrate', ['--force' => true]);
-        $this->info('Digital counseling package installed. It remains disabled until COUNSELING_ENABLED is true and the addon is active.');
+        $this->info('Digital counseling package installed. It is available when the addon is active.');
 
         return self::SUCCESS;
     }
