@@ -34,6 +34,31 @@ class SmtpSetting extends Model
         }
     }
 
+    public function getProviderPresetAttribute(): string
+    {
+        return match (strtolower((string) $this->host)) {
+            'smtp.zoho.com' => 'zoho',
+            'smtp.gmail.com' => 'gmail',
+            default => 'custom',
+        };
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(function (self $setting): void {
+            if (! $setting->is_active) {
+                return;
+            }
+
+            static::withoutEvents(function () use ($setting): void {
+                static::query()
+                    ->whereKeyNot($setting->getKey())
+                    ->where('is_active', true)
+                    ->update(['is_active' => false]);
+            });
+        });
+    }
+
     public static function active(): ?self
     {
         return static::query()->where('is_active', true)->latest('id')->first();
