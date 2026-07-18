@@ -220,6 +220,11 @@ class AppSettings extends Page
                 'Referral points, wallet conversion rate, and conversion minimums.',
             ),
             $this->pageQuickLink(
+                GoshenTicketPdfTemplates::class,
+                'Ticket PDF Templates',
+                'Choose the preferred Goshen ticket PDF design and preview options.',
+            ),
+            $this->pageQuickLink(
                 CloudBackups::class,
                 'Cloud Backups',
                 'Google Drive and OneDrive backup providers.',

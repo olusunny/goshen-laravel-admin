@@ -144,12 +144,13 @@ class TicketNotificationService
     private function requiredAttachment(Ticket $ticket, string $type): array
     {
         try {
-            $document = $ticket->documents()->where('type', $type)->first() ?: match ($type) {
-                'qr' => $this->documents->generateQr($ticket),
-                'pdf' => $this->documents->generatePdf($ticket),
-                'ics' => $this->documents->generateIcs($ticket),
-                default => null,
-            };
+            $document = $type === 'pdf'
+                ? $this->documents->generatePdf($ticket)
+                : ($ticket->documents()->where('type', $type)->first() ?: match ($type) {
+                    'qr' => $this->documents->generateQr($ticket),
+                    'ics' => $this->documents->generateIcs($ticket),
+                    default => null,
+                });
 
             if (! $document instanceof TicketDocument) {
                 throw new RuntimeException("Unsupported required ticket attachment type [{$type}].");

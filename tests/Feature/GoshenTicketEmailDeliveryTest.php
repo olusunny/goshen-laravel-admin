@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\GoshenTicketResource;
 use App\Services\DynamicSmtpMailer;
+use App\Services\GoshenTicketPdfTemplateSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
@@ -17,6 +18,7 @@ use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\Ticket;
 use Personal\EventInstallments\Models\TicketEmailLog;
+use Personal\EventInstallments\Services\TicketDocumentService;
 use Personal\EventInstallments\Services\TicketNotificationService;
 use Mockery\MockInterface;
 use Tests\TestCase;
@@ -74,11 +76,32 @@ class GoshenTicketEmailDeliveryTest extends TestCase
         });
     }
 
-    private function configureTicketEmailTest(): void
+    public function test_all_goshen_ticket_pdf_templates_can_generate_a_ticket_pdf(): void
+    {
+        $this->configureTicketEmailTest(mockMailer: false);
+        $ticket = $this->ticketFixture('templates');
+        $settings = app(GoshenTicketPdfTemplateSettings::class);
+        $documents = app(TicketDocumentService::class);
+
+        foreach (array_keys($settings->templates()) as $template) {
+            $settings->save($template);
+
+            $document = $documents->generatePdf($ticket);
+
+            $this->assertSame('pdf', $document->type);
+            $this->assertSame('application/pdf', $document->mime_type);
+            Storage::disk($document->disk)->assertExists($document->path);
+            $this->assertStringStartsWith('%PDF', Storage::disk($document->disk)->get($document->path));
+        }
+    }
+
+    private function configureTicketEmailTest(bool $mockMailer = true): void
     {
         Storage::fake('local');
 
-        $this->mockTicketMailer();
+        if ($mockMailer) {
+            $this->mockTicketMailer();
+        }
 
         Config::set('event-installments.storage.disk', 'local');
         Config::set('event-installments.ticket.qr_secret', 'ticket-email-test-secret');

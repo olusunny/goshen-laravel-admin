@@ -22,8 +22,10 @@ class TicketDocumentController extends Controller
             throw ValidationException::withMessages(['type' => 'Unsupported ticket document type.']);
         }
 
-        $document = $ticket->documents()->where('type', $type)->first()
-            ?: $this->generate($documents, $ticket, $type);
+        $document = $type === 'pdf'
+            ? $this->generate($documents, $ticket, $type)
+            : ($ticket->documents()->where('type', $type)->first()
+                ?: $this->generate($documents, $ticket, $type));
 
         return Storage::disk($document->disk)->download($document->path, $this->filename($ticket, $document));
     }

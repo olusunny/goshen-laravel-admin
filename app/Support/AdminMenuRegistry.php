@@ -7,6 +7,7 @@ use App\Filament\Pages\AppSettings;
 use App\Filament\Pages\CronJobs;
 use App\Filament\Pages\GoshenReferralSettings;
 use App\Filament\Pages\GoshenRetreatConsole;
+use App\Filament\Pages\GoshenTicketPdfTemplates;
 use App\Filament\Pages\GoogleFirebaseSettings;
 use App\Filament\Pages\PaymentGateways;
 use App\Models\AdminMenuRoleVisibility;
@@ -151,6 +152,7 @@ class AdminMenuRegistry
             CronJobs::class,
             GoshenReferralSettings::class,
             GoshenRetreatConsole::class,
+            GoshenTicketPdfTemplates::class,
             GoogleFirebaseSettings::class,
             PaymentGateways::class,
         ];
