@@ -14,6 +14,7 @@ use App\Models\CommunityPrayerRequestFlag;
 use App\Models\MobileUser;
 use App\Models\PropheticDecree;
 use App\Services\CommunityPrayerQuotaService;
+use App\Services\ProfileImageOptimizer;
 use App\Services\PrayerAiService;
 use App\Services\PrayerModerationNotifier;
 use App\Support\MediaUrl;
@@ -457,7 +458,7 @@ class PrayerCommunityController extends Controller
         }
 
         $user->forceFill([
-            'avatar' => $request->file('avatar')->store('mobile-users/avatars', 'public'),
+            'avatar' => app(ProfileImageOptimizer::class)->store($request->file('avatar'), 'mobile-users/avatars'),
         ])->save();
 
         return response()->json(['status' => 'ok', 'user' => $this->mobileUserPayload($user)]);

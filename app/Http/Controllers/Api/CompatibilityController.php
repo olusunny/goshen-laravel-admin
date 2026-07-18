@@ -35,6 +35,7 @@ use App\Services\AutomaticNotificationService;
 use App\Services\DynamicSmtpMailer;
 use App\Services\MergedAccountCredentialService;
 use App\Services\MessagePersonalizationService;
+use App\Services\ProfileImageOptimizer;
 use App\Services\RecurringChurchEventService;
 use App\Services\TriumphantIdService;
 use App\Support\MediaUrl;
@@ -1293,11 +1294,11 @@ class CompatibilityController extends Controller
         ])->validate();
 
         if ($request->hasFile('avatar')) {
-            $validated['avatar'] = $request->file('avatar')->store('mobile-users/avatars', 'public');
+            $validated['avatar'] = app(ProfileImageOptimizer::class)->store($request->file('avatar'), 'mobile-users/avatars');
         }
 
         if ($request->hasFile('cover_photo')) {
-            $validated['cover_photo'] = $request->file('cover_photo')->store('mobile-users/covers', 'public');
+            $validated['cover_photo'] = app(ProfileImageOptimizer::class)->store($request->file('cover_photo'), 'mobile-users/covers');
         }
 
         $fullName = trim((string) ($validated['fullname'] ?? ''));

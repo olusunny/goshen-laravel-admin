@@ -1312,7 +1312,6 @@
                     <div class="detail-list">
                         <div class="mini-row"><strong>Protected account</strong><span>Your email must be verified before member-only actions are enabled.</span></div>
                         <div class="mini-row"><strong>Retreat ready</strong><span>Your profile details will help future bookings and ticket checks stay accurate.</span></div>
-                        <div class="mini-row"><strong>Installable web app</strong><span>Add this page to your phone for quick staging checks without rebuilding the mobile app.</span></div>
                     </div>
                 </div>
             </div>
@@ -4800,6 +4799,10 @@
     loadGroups();
     restoreUser();
     renderAuth();
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+    });
 
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/member-sw.js', { updateViaCache: 'none' })

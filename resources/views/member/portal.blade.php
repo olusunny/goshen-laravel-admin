@@ -4372,6 +4372,10 @@
         restoreUser();
         initializeMigrationNotice();
 
+        window.addEventListener('beforeinstallprompt', (event) => {
+            event.preventDefault();
+        });
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/member-sw.js', { updateViaCache: 'none' })
