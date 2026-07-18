@@ -91,7 +91,10 @@ class GoshenTicketEmailDeliveryTest extends TestCase
             $this->assertSame('pdf', $document->type);
             $this->assertSame('application/pdf', $document->mime_type);
             Storage::disk($document->disk)->assertExists($document->path);
-            $this->assertStringStartsWith('%PDF', Storage::disk($document->disk)->get($document->path));
+            $pdf = Storage::disk($document->disk)->get($document->path);
+
+            $this->assertStringStartsWith('%PDF', $pdf);
+            $this->assertSame(1, $this->pdfPageCount($pdf), "Template [{$template}] should generate a single-page PDF.");
         }
     }
 
@@ -165,6 +168,13 @@ class GoshenTicketEmailDeliveryTest extends TestCase
             fn (array $attachment): bool => ($attachment['mime'] ?? null) === 'application/pdf'
                 && str_ends_with((string) ($attachment['name'] ?? ''), '.pdf')
         );
+    }
+
+    private function pdfPageCount(string $pdf): int
+    {
+        preg_match_all('/\/Type\s*\/Page\b/', $pdf, $matches);
+
+        return count($matches[0]);
     }
 
     private function mockTicketMailer(): void

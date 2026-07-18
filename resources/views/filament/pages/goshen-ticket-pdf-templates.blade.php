@@ -30,7 +30,7 @@
         .gtpt-description { margin:8px 0 0; color:#667085; font-size:13px; line-height:1.5; }
         .dark .gtpt-description { color:#a8b0bd; }
         .gtpt-preview {
-            min-height:420px;
+            min-height:560px;
             border-radius:20px;
             border:1px solid #d8e1eb;
             background:#f8fafc;
@@ -40,8 +40,8 @@
         .dark .gtpt-preview { border-color:rgba(148,163,184,.2); background:#0b1220; }
         .gtpt-ticket {
             width:100%;
-            max-width:310px;
-            min-height:390px;
+            max-width:390px;
+            min-height:530px;
             margin:0 auto;
             background:#fff;
             color:#101820;
@@ -54,8 +54,8 @@
         .gtpt-mini-title { margin:0; font-size:16px; font-weight:950; text-align:center; color:#08283a; }
         .gtpt-mini-sub { margin:3px 0 0; text-align:center; color:#64748b; font-weight:700; }
         .gtpt-qr {
-            width:118px;
-            height:118px;
+            width:132px;
+            height:132px;
             background:
                 linear-gradient(90deg, #000 5px, transparent 5px 10px) 0 0 / 16px 16px,
                 linear-gradient(#000 5px, transparent 5px 10px) 0 0 / 16px 16px,
@@ -73,20 +73,38 @@
         .gtpt-button { min-height:44px; border:0; border-radius:14px; padding:11px 18px; background:#f59e0b; color:#111827; font-weight:950; cursor:pointer; }
         .gtpt-current { color:#667085; font-size:14px; }
         .dark .gtpt-current { color:#a8b0bd; }
+        .gtpt-venue-light { margin-top:14px; padding:12px 14px; border:1px solid #f0c94d; border-radius:14px; background:#fff8df; }
+        .gtpt-venue-dark { margin-top:16px; padding:12px 14px; border-radius:14px; background:#08283a; color:#fff; }
+        .gtpt-venue-dark .gtpt-value { color:#fff; }
         .executive .gtpt-ticket { border:2px solid #d9a920; }
-        .executive .gtpt-preview-main { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+        .executive .gtpt-preview-main { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:18px; align-items:start; }
+        .executive .gtpt-qr { width:170px; height:170px; margin:0 auto 12px; }
         .boarding .gtpt-ticket { padding:0; overflow:hidden; }
-        .boarding .gtpt-band { padding:16px; background:linear-gradient(135deg,#08283a,#0d4b55 70%,#e1b12c); color:#fff; }
+        .boarding .gtpt-band { min-height:170px; padding:20px 18px; background:linear-gradient(135deg,#08283a,#0d4b55 70%,#d9a920); color:#fff; border-radius:18px 18px 0 0; }
         .boarding .gtpt-band .gtpt-mini-title { color:#fff; text-align:left; }
         .boarding .gtpt-band .gtpt-mini-sub { color:#e2e8f0; text-align:left; }
-        .boarding .gtpt-body { padding:14px; display:grid; grid-template-columns:1fr 118px; gap:12px; }
-        .credential .gtpt-ticket { border-top:8px solid #08283a; }
-        .credential .gtpt-id-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px; padding:10px; background:#f8fafc; border-radius:12px; }
-        .credential .gtpt-body { display:grid; grid-template-columns:1fr 118px; gap:12px; margin-top:12px; }
-        .qrhero .gtpt-ticket { border-left:7px solid #d9a920; text-align:center; }
-        .qrhero .gtpt-qr { width:150px; height:150px; margin:18px auto 14px; }
+        .boarding .gtpt-body { margin:-28px 12px 0; display:grid; grid-template-columns:1.25fr .85fr; gap:12px; align-items:start; }
+        .boarding .gtpt-pass-card { min-height:210px; border:1px solid #dbe3ea; border-radius:16px; background:#fff; padding:16px; }
+        .boarding .gtpt-stub { min-height:210px; border:1px solid #dbe3ea; border-radius:16px; background:#fff; padding:18px 10px; text-align:center; }
+        .boarding .gtpt-stub .gtpt-qr { width:125px; height:125px; margin:0 auto 14px; }
+        .credential .gtpt-ticket { padding:12px; }
+        .credential .gtpt-credential-top { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:12px; border-bottom:4px solid #08283a; }
+        .credential .gtpt-credential-top .gtpt-subtitle { color:#d9a920; letter-spacing:.14em; text-align:right; }
+        .credential .gtpt-id-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:18px; padding:18px; background:#f8fafc; border-radius:18px; }
+        .credential .gtpt-body { display:grid; grid-template-columns:1fr 145px; gap:14px; margin-top:16px; align-items:start; }
+        .credential .gtpt-qr { width:138px; height:138px; }
+        .qrhero .gtpt-ticket { border-left:10px solid #fff2cc; text-align:center; }
+        .qrhero .gtpt-hero-head { display:grid; grid-template-columns:95px 1fr 46px; gap:10px; align-items:center; padding-bottom:14px; border-bottom:1px solid #dbe3ea; text-align:left; }
+        .qrhero .gtpt-qr { width:210px; height:210px; margin:22px auto 12px; box-shadow:0 0 0 10px #fff, 0 0 0 12px #08283a; }
+        .qrhero .gtpt-number-pill { display:inline-block; border-radius:999px; background:#08283a; color:#fff; padding:9px 18px; font-weight:950; letter-spacing:.1em; }
+        .qrhero .gtpt-card-grid { display:grid; grid-template-columns:2fr 1fr; gap:10px; margin-top:22px; text-align:left; }
+        .qrhero .gtpt-card-grid .gtpt-detail { border:1px solid #dbe3ea; border-radius:14px; background:#f8fafc; padding:12px; margin:0; }
         .certificate .gtpt-ticket { border:3px double #d9a920; font-family:Georgia,serif; }
-        .certificate .gtpt-body { display:grid; grid-template-columns:120px 1fr; gap:12px; margin-top:14px; }
+        .certificate .gtpt-mini-title { font-family:Georgia,serif; font-size:24px; }
+        .certificate .gtpt-issued { display:flex; justify-content:center; align-items:center; gap:14px; margin:20px 0; }
+        .certificate .gtpt-body { display:grid; grid-template-columns:150px 1fr; gap:16px; margin-top:14px; }
+        .certificate .gtpt-qr { width:145px; height:145px; }
+        .certificate .gtpt-cert-line { display:flex; justify-content:space-between; gap:8px; border-bottom:1px solid #dbe3ea; padding:8px 0; }
         @media (max-width: 980px) { .gtpt-grid { grid-template-columns:1fr; } }
     </style>
 
@@ -125,57 +143,82 @@
                         <div class="gtpt-ticket">
                             @if($key === 'boarding_pass')
                                 <div class="gtpt-band">
-                                    <img class="gtpt-logo" src="{{ asset('images/goshenretreatlogo.png') }}" alt="Goshen Camp Retreat">
+                                    <span style="display:inline-block;background:#fff;border:8px solid #e8eef2;border-radius:16px;padding:4px 6px;">
+                                        <img class="gtpt-logo" src="{{ asset('images/goshenretreatlogo.png') }}" alt="Goshen Camp Retreat">
+                                    </span>
                                     <h4 class="gtpt-mini-title">Goshen Camp Retreat 2026</h4>
                                     <p class="gtpt-mini-sub">Official attendee access pass</p>
+                                    <span style="display:inline-block;margin-top:10px;border-radius:999px;background:rgba(255,255,255,.2);padding:6px 12px;font-weight:950;letter-spacing:.08em;">GOSHEN-2-000003</span>
                                 </div>
                                 <div class="gtpt-body">
-                                    <div>
+                                    <div class="gtpt-pass-card">
                                         <div class="gtpt-avatar"></div>
                                         <div class="gtpt-detail"><span class="gtpt-label">Attendee</span><span class="gtpt-value">Adeoye Oduwaiye</span></div>
-                                        <div class="gtpt-detail"><span class="gtpt-label">Ticket</span><span class="gtpt-value">GOSHEN-2-000003</span></div>
+                                        <div class="gtpt-line"></div>
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                                            <div class="gtpt-detail"><span class="gtpt-label">Ticket type</span><span class="gtpt-value">GOSHEN INDIVIDUAL</span></div>
+                                            <div class="gtpt-detail"><span class="gtpt-label">Amount paid</span><span class="gtpt-value">GBP 280.00</span></div>
+                                        </div>
                                         <span class="gtpt-pill">not checked in</span>
                                     </div>
-                                    <div><div class="gtpt-qr"></div></div>
+                                    <div class="gtpt-stub"><div class="gtpt-qr"></div><strong>Scan at check-in</strong><p style="margin:6px 0 0;color:#64748b;font-size:10px;">Fast validation for this attendee only.</p></div>
                                 </div>
+                                <div class="gtpt-venue-light"><span class="gtpt-label">Retreat venue</span><span class="gtpt-value">High Leigh Conference Centre</span><span style="display:block;color:#64748b;">Lord Street, Hoddesdon, Hertfordshire EN11 8SG</span></div>
                             @elseif($key === 'identity_credential')
-                                <img class="gtpt-logo" src="{{ asset('images/goshenretreatlogo.png') }}" alt="Goshen Camp Retreat">
+                                <div class="gtpt-credential-top">
+                                    <img class="gtpt-logo" src="{{ asset('images/goshenretreatlogo.png') }}" alt="Goshen Camp Retreat">
+                                    <p class="gtpt-subtitle">Official attendee credential</p>
+                                </div>
+                                <h4 class="gtpt-mini-title" style="text-align:left;margin-top:22px;font-size:22px;">Goshen Camp Retreat 2026</h4>
                                 <div class="gtpt-id-head"><div><span class="gtpt-label">Attendee</span><span class="gtpt-value">Adeoye Oduwaiye</span></div><div class="gtpt-avatar"></div></div>
                                 <div class="gtpt-body">
                                     <div>
                                         <div class="gtpt-detail"><span class="gtpt-label">Ticket number</span><span class="gtpt-value">GOSHEN-2-000003</span></div>
-                                        <div class="gtpt-detail"><span class="gtpt-label">Venue</span><span class="gtpt-value">High Leigh Conference Centre</span></div>
+                                        <div class="gtpt-detail"><span class="gtpt-label">Ticket type</span><span class="gtpt-value">GOSHEN INDIVIDUAL</span></div>
+                                        <div class="gtpt-detail"><span class="gtpt-label">Amount paid</span><span class="gtpt-value">GBP 280.00</span></div>
                                         <span class="gtpt-pill">not checked in</span>
                                     </div>
                                     <div><div class="gtpt-qr"></div></div>
                                 </div>
+                                <div class="gtpt-venue-dark"><span class="gtpt-label">Retreat venue</span><span class="gtpt-value">High Leigh Conference Centre • Lord Street, Hoddesdon, Hertfordshire EN11 8SG</span></div>
                             @elseif($key === 'qr_hero')
-                                <img class="gtpt-logo" src="{{ asset('images/goshenretreatlogo.png') }}" alt="Goshen Camp Retreat">
-                                <h4 class="gtpt-mini-title">Goshen Camp Retreat 2026</h4>
+                                <div class="gtpt-hero-head">
+                                    <img class="gtpt-logo" src="{{ asset('images/goshenretreatlogo.png') }}" alt="Goshen Camp Retreat">
+                                    <div><p class="gtpt-subtitle">Official attendee ticket</p><h4 class="gtpt-mini-title" style="text-align:left;">Goshen Camp Retreat 2026</h4></div>
+                                    <div class="gtpt-avatar" style="width:46px;height:46px;"></div>
+                                </div>
                                 <div class="gtpt-qr"></div>
-                                <div class="gtpt-detail"><span class="gtpt-label">Ticket number</span><span class="gtpt-value">GOSHEN-2-000003</span></div>
-                                <div class="gtpt-line"></div>
-                                <div class="gtpt-detail"><span class="gtpt-label">Attendee</span><span class="gtpt-value">Adeoye Oduwaiye</span></div>
-                                <span class="gtpt-pill">not checked in</span>
+                                <div class="gtpt-number-pill">GOSHEN-2-000003</div>
+                                <p style="color:#64748b;">Present this QR code at check-in. It belongs only to the named attendee.</p>
+                                <div class="gtpt-card-grid">
+                                    <div class="gtpt-detail"><span class="gtpt-label">Attendee</span><span class="gtpt-value">Adeoye Oduwaiye</span></div>
+                                    <div class="gtpt-detail"><span class="gtpt-label">Status</span><span class="gtpt-pill">not checked in</span></div>
+                                    <div class="gtpt-detail"><span class="gtpt-label">Ticket type</span><span class="gtpt-value">GOSHEN INDIVIDUAL</span></div>
+                                    <div class="gtpt-detail"><span class="gtpt-label">Amount paid</span><span class="gtpt-value">GBP 280.00</span></div>
+                                </div>
+                                <div class="gtpt-venue-light"><span class="gtpt-label">Retreat venue</span><span class="gtpt-value">High Leigh Conference Centre</span><span style="display:block;color:#64748b;">Lord Street, Hoddesdon, Hertfordshire EN11 8SG</span></div>
                             @elseif($key === 'certificate')
                                 <img class="gtpt-logo" src="{{ asset('images/goshenretreatlogo.png') }}" alt="Goshen Camp Retreat">
                                 <h4 class="gtpt-mini-title">Goshen Camp Retreat 2026</h4>
-                                <div class="gtpt-detail" style="text-align:center;"><span class="gtpt-label">Issued to</span><span class="gtpt-value">Adeoye Oduwaiye</span></div>
+                                <p class="gtpt-subtitle">Official attendee ticket</p>
+                                <div class="gtpt-issued"><div class="gtpt-avatar"></div><div class="gtpt-detail" style="text-align:left;"><span class="gtpt-label">Issued to</span><span class="gtpt-value" style="font-family:Georgia,serif;font-size:20px;">Adeoye Oduwaiye</span></div></div>
                                 <div class="gtpt-body">
                                     <div><div class="gtpt-qr"></div></div>
                                     <div>
-                                        <div class="gtpt-detail"><span class="gtpt-label">Ticket</span><span class="gtpt-value">GOSHEN-2-000003</span></div>
-                                        <div class="gtpt-detail"><span class="gtpt-label">Venue</span><span class="gtpt-value">High Leigh Conference Centre</span></div>
-                                        <span class="gtpt-pill">not checked in</span>
+                                        <div class="gtpt-cert-line"><span class="gtpt-label">Ticket</span><span class="gtpt-value">GOSHEN-2-000003</span></div>
+                                        <div class="gtpt-cert-line"><span class="gtpt-label">Ticket type</span><span class="gtpt-value">GOSHEN INDIVIDUAL</span></div>
+                                        <div class="gtpt-cert-line"><span class="gtpt-label">Amount</span><span class="gtpt-value">GBP 280.00</span></div>
+                                        <div class="gtpt-cert-line"><span class="gtpt-label">Status</span><span class="gtpt-pill">not checked in</span></div>
                                     </div>
                                 </div>
+                                <div class="gtpt-venue-dark"><span class="gtpt-label">Retreat venue</span><span class="gtpt-value">High Leigh Conference Centre • Lord Street, Hoddesdon, Hertfordshire EN11 8SG</span></div>
                             @else
                                 <img class="gtpt-logo" src="{{ asset('images/goshenretreatlogo.png') }}" alt="Goshen Camp Retreat">
                                 <h4 class="gtpt-mini-title">Goshen Camp Retreat 2026</h4>
                                 <p class="gtpt-mini-sub">Official attendee ticket</p>
                                 <div class="gtpt-line"></div>
                                 <div class="gtpt-preview-main">
-                                    <div><div class="gtpt-qr"></div></div>
+                                    <div><div class="gtpt-qr"></div><strong>Scan this QR code at check-in</strong><p style="color:#64748b;">Keep this PDF accessible on your phone or printed copy.</p></div>
                                     <div>
                                         <div class="gtpt-avatar"></div>
                                         <div class="gtpt-detail"><span class="gtpt-label">Ticket</span><span class="gtpt-value">GOSHEN-2-000003</span></div>
@@ -183,6 +226,7 @@
                                         <span class="gtpt-pill">not checked in</span>
                                     </div>
                                 </div>
+                                <div class="gtpt-venue-light"><span class="gtpt-label">Venue</span><span class="gtpt-value">High Leigh Conference Centre</span><span style="display:block;color:#64748b;">Lord Street, Hoddesdon, Hertfordshire EN11 8SG</span></div>
                             @endif
                         </div>
                     </div>
