@@ -24,7 +24,6 @@ use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
@@ -33,7 +32,6 @@ use Mockery\MockInterface;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Mail\TicketIssuedMail;
-use Personal\EventInstallments\Http\Controllers\Admin\TicketDocumentController;
 use Personal\EventInstallments\Models\Booking;
 use Personal\EventInstallments\Models\BookingLine;
 use Personal\EventInstallments\Models\Event;
@@ -1127,7 +1125,6 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             'event-installments.storage.disk' => 'local',
         ]);
         Storage::fake('local');
-        $this->registerTicketDocumentRouteForTest();
 
         [$member, $ticketType, $admin] = $this->issuanceFixture('download-pdf');
         $this->grantTicketViewAndDownloadPermission($admin);
@@ -1146,7 +1143,7 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             ->assertSee('Download PDF ticket');
 
         $url = URL::temporarySignedRoute(
-            'event-installments.tickets.documents.show',
+            'admin.goshen-tickets.documents.show',
             now()->addMinutes(15),
             [
                 'ticket' => $ticket,
@@ -1314,17 +1311,6 @@ class GoshenAdminTicketIssuanceTest extends TestCase
         $role->givePermissionTo(Permission::findOrCreate(AdminPermissions::resourcePermission(GoshenTicketResource::class), 'web'));
         $role->givePermissionTo(Permission::findOrCreate('event-installments.events.manage', 'web'));
         $admin->assignRole($role);
-    }
-
-    private function registerTicketDocumentRouteForTest(): void
-    {
-        if (Route::has('event-installments.tickets.documents.show')) {
-            return;
-        }
-
-        Route::get('event-installments/tickets/{ticket}/documents/{type}', TicketDocumentController::class)
-            ->middleware(['web', 'signed'])
-            ->name('event-installments.tickets.documents.show');
     }
 
     private function voucherCode(EventTicketType $ticketType, User $admin): string

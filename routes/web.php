@@ -10,6 +10,7 @@ use App\Http\Controllers\DynamicFormWebController;
 use App\Http\Controllers\MemberAppController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
+use Personal\EventInstallments\Http\Controllers\Admin\TicketDocumentController;
 
 Route::redirect('/', '/admin');
 
@@ -28,6 +29,9 @@ Route::post('forms/{form}', [DynamicFormWebController::class, 'store'])->name('d
 Route::get('admin/dynamic-form-submissions/{submission}/files/{field}', [DynamicFormSubmissionFileController::class, 'show'])
     ->middleware('auth')
     ->name('dynamic-form-submissions.files.show');
+Route::get('admin/goshen-tickets/{ticket}/documents/{type}', TicketDocumentController::class)
+    ->middleware(['auth', 'signed'])
+    ->name('admin.goshen-tickets.documents.show');
 Route::get('forms/submissions/{submission}/files/{field}', [DynamicFormSubmissionFileController::class, 'show'])
     ->middleware('signed')
     ->name('dynamic-form-submissions.files.signed');

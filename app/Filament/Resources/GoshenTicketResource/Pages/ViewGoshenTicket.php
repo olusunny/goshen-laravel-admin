@@ -22,7 +22,7 @@ class ViewGoshenTicket extends ViewRecord
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('gray')
                 ->url(fn (): string => $this->pdfDownloadUrl())
-                ->hidden(fn (): bool => ! Route::has('event-installments.tickets.documents.show'))
+                ->hidden(fn (): bool => $this->pdfDownloadRouteName() === null)
                 ->openUrlInNewTab(),
             Actions\Action::make('sendTicketEmail')
                 ->label('Send/resend PDF ticket')
@@ -49,17 +49,30 @@ class ViewGoshenTicket extends ViewRecord
 
     private function pdfDownloadUrl(): string
     {
-        if (! Route::has('event-installments.tickets.documents.show')) {
+        $routeName = $this->pdfDownloadRouteName();
+
+        if ($routeName === null) {
             return '#';
         }
 
         return URL::temporarySignedRoute(
-            'event-installments.tickets.documents.show',
+            $routeName,
             now()->addMinutes(15),
             [
                 'ticket' => $this->record,
                 'type' => 'pdf',
             ],
         );
+    }
+
+    private function pdfDownloadRouteName(): ?string
+    {
+        foreach (['admin.goshen-tickets.documents.show', 'event-installments.tickets.documents.show'] as $routeName) {
+            if (Route::has($routeName)) {
+                return $routeName;
+            }
+        }
+
+        return null;
     }
 }
