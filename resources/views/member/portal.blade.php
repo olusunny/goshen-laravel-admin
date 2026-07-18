@@ -3744,8 +3744,8 @@
                         <p class="muted">Your profile image is optional. When uploaded, the same photo will appear in a circular frame on the web app and mobile app.</p>
                         <div class="field">
                             <label>Profile photo (optional)</label>
-                            <input class="input" name="avatar" type="file" accept="image/jpeg,image/png,image/webp">
-                            <small class="muted">Choose JPG, PNG, or WEBP up to 5MB.</small>
+                            <input class="input" name="avatar" type="file" accept="image/*" capture="user">
+                            <small class="muted">Take a new photo on your phone, or choose an existing image up to 5MB.</small>
                         </div>
                     </div>
                     <div class="form-grid profile-form-grid">
