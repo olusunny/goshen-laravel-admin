@@ -70,6 +70,7 @@ class CreateGoshenTicket extends CreateRecord
             'customer_id' => ['required', 'integer'],
             'event_id' => ['required', 'integer'],
             'ticket_type_id' => ['required', 'integer'],
+            'attendee_quantity' => ['nullable', 'integer', 'min:1', 'max:100'],
             'issuance_reason' => ['required', 'string', 'max:500'],
             'payment_method' => ['required', 'in:wallet'],
         ])->validate();
@@ -82,6 +83,7 @@ class CreateGoshenTicket extends CreateRecord
         }
 
         $ticketType = $this->selectedTicketType($data);
+        $attendeeQuantity = $this->validatedAttendeeQuantity($ticketType, $data);
         $admin = User::query()->find(auth()->id());
         abort_unless($admin instanceof User, 403);
         $payer = app(LinkedMobileAccountService::class)->forAdmin($admin);
@@ -105,7 +107,7 @@ class CreateGoshenTicket extends CreateRecord
             throw ValidationException::withMessages(['payment_method' => $exception->getMessage()]);
         }
 
-        $amount = round((float) $ticketType->price, 2);
+        $amount = round((float) $ticketType->price * $attendeeQuantity, 2);
         if ($amount <= 0) {
             throw ValidationException::withMessages([
                 'ticket_type_id' => 'This ticket type does not have a payable full amount.',
@@ -129,7 +131,7 @@ class CreateGoshenTicket extends CreateRecord
             $admin,
             $payer->fresh(),
             'admin_ticket_issue',
-            $issuer->verificationContext($member->fresh(), $ticketType->fresh(['event']), trim((string) $data['issuance_reason'])),
+            $issuer->verificationContext($member->fresh(), $ticketType->fresh(['event']), trim((string) $data['issuance_reason']), $attendeeQuantity),
             request()->ip(),
             request()->userAgent(),
         );
@@ -164,6 +166,7 @@ class CreateGoshenTicket extends CreateRecord
                 filled($data['wallet_otp'] ?? null) ? trim((string) $data['wallet_otp']) : null,
                 request()->ip(),
                 request()->userAgent(),
+                attendeeQuantity: $this->validatedAttendeeQuantity($ticketType, $data),
             );
         } catch (ValidationException $exception) {
             $this->throwFormValidation($exception);
@@ -187,6 +190,28 @@ class CreateGoshenTicket extends CreateRecord
         }
 
         return $ticketType;
+    }
+
+    private function validatedAttendeeQuantity(EventTicketType $ticketType, array $data): int
+    {
+        $min = max(1, (int) ($ticketType->min_per_booking ?: 1));
+        $max = (int) ($ticketType->max_per_booking ?: 0);
+        $quantity = (int) ($data['attendee_quantity'] ?? $min);
+        $quantity = max(1, $quantity);
+
+        if ($quantity < $min) {
+            throw ValidationException::withMessages([
+                'attendee_quantity' => "Please issue at least {$min} attendee(s) for this ticket type.",
+            ]);
+        }
+
+        if ($max > 0 && $quantity > $max) {
+            throw ValidationException::withMessages([
+                'attendee_quantity' => "You can only issue up to {$max} attendee(s) for this ticket type at once.",
+            ]);
+        }
+
+        return $quantity;
     }
 
     private function maskedEmail(string $email): string

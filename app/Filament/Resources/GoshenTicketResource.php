@@ -89,6 +89,7 @@ class GoshenTicketResource extends Resource
                         ->live()
                         ->afterStateUpdated(function (Set $set): void {
                             $set('ticket_type_id', null);
+                            $set('attendee_quantity', 1);
                             static::clearWalletAuthorization($set);
                         })
                         ->required(),
@@ -110,9 +111,24 @@ class GoshenTicketResource extends Resource
                             ->all())
                         ->searchable()
                         ->live()
-                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
+                        ->afterStateUpdated(function (Set $set, mixed $state): void {
+                            $set('attendee_quantity', static::defaultAttendeeQuantity($state));
+                            static::clearWalletAuthorization($set);
+                        })
                         ->required()
                         ->helperText('Only active ticket types for the selected retreat edition are shown.'),
+                    Forms\Components\TextInput::make('attendee_quantity')
+                        ->label('Attendee quantity')
+                        ->numeric()
+                        ->default(1)
+                        ->minValue(fn (Get $get): int => static::ticketTypeMinQuantity($get('ticket_type_id')))
+                        ->maxValue(fn (Get $get): ?int => static::ticketTypeMaxQuantity($get('ticket_type_id')))
+                        ->step(1)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
+                        ->required(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
+                        ->visible(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
+                        ->helperText(fn (Get $get): string => static::attendeeQuantityHelperText($get('ticket_type_id'))),
                 ]),
             Section::make('Payment and authorization')
                 ->description('The full listed ticket amount must be settled by voucher or from your own linked Goshen wallet before the ticket is issued.')
@@ -139,10 +155,10 @@ class GoshenTicketResource extends Resource
                         ->required(),
                     Forms\Components\Placeholder::make('ticket_amount')
                         ->label('Full ticket amount')
-                        ->content(fn (Get $get): string => static::ticketAmountLabel($get('ticket_type_id'))),
+                        ->content(fn (Get $get): string => static::ticketAmountLabel($get('ticket_type_id'), $get('attendee_quantity'))),
                     Forms\Components\Placeholder::make('wallet_payer_summary')
                         ->label('Wallet payer and availability')
-                        ->content(fn (Get $get): string => static::walletPayerSummary($get('ticket_type_id')))
+                        ->content(fn (Get $get): string => static::walletPayerSummary($get('ticket_type_id'), $get('attendee_quantity')))
                         ->visible(fn (Get $get): bool => $get('payment_method') === 'wallet'),
                     Forms\Components\TextInput::make('voucher_code')
                         ->label('Goshen voucher code')
@@ -324,16 +340,66 @@ class GoshenTicketResource extends Resource
         $set('wallet_otp', null);
     }
 
-    private static function ticketAmountLabel(mixed $ticketTypeId): string
+    private static function ticketAmountLabel(mixed $ticketTypeId, mixed $attendeeQuantity = 1): string
+    {
+        $ticketType = EventTicketType::query()->find($ticketTypeId);
+        $quantity = static::resolvedAttendeeQuantity($ticketType, $attendeeQuantity);
+
+        if (! $ticketType) {
+            return 'Select a ticket type to see the full amount.';
+        }
+
+        $amount = round((float) $ticketType->price * $quantity, 2);
+
+        return strtoupper((string) $ticketType->currency).' '.number_format($amount, 2)
+            .($quantity > 1 ? " for {$quantity} attendees" : '');
+    }
+
+    private static function defaultAttendeeQuantity(mixed $ticketTypeId): int
+    {
+        return static::ticketTypeMinQuantity($ticketTypeId);
+    }
+
+    private static function ticketTypeMinQuantity(mixed $ticketTypeId): int
     {
         $ticketType = EventTicketType::query()->find($ticketTypeId);
 
-        return $ticketType
-            ? strtoupper((string) $ticketType->currency).' '.number_format((float) $ticketType->price, 2)
-            : 'Select a ticket type to see the full amount.';
+        return max(1, (int) ($ticketType?->min_per_booking ?: 1));
     }
 
-    private static function walletPayerSummary(mixed $ticketTypeId): string
+    private static function ticketTypeMaxQuantity(mixed $ticketTypeId): ?int
+    {
+        $ticketType = EventTicketType::query()->find($ticketTypeId);
+        $max = (int) ($ticketType?->max_per_booking ?: 0);
+
+        return $max > 0 ? $max : null;
+    }
+
+    private static function ticketTypeUsesAttendeeQuantity(mixed $ticketTypeId): bool
+    {
+        $ticketType = EventTicketType::query()->find($ticketTypeId);
+
+        if (! $ticketType) {
+            return false;
+        }
+
+        return (int) ($ticketType->min_per_booking ?: 1) > 1
+            || (int) ($ticketType->max_per_booking ?: 0) > 1;
+    }
+
+    private static function attendeeQuantityHelperText(mixed $ticketTypeId): string
+    {
+        $min = static::ticketTypeMinQuantity($ticketTypeId);
+        $max = static::ticketTypeMaxQuantity($ticketTypeId);
+
+        if ($max) {
+            return "This ticket type allows {$min} to {$max} attendee(s).";
+        }
+
+        return "This ticket type requires at least {$min} attendee(s).";
+    }
+
+    private static function walletPayerSummary(mixed $ticketTypeId, mixed $attendeeQuantity = 1): string
     {
         $admin = Auth::user();
         if (! $admin) {
@@ -368,6 +434,8 @@ class GoshenTicketResource extends Resource
         if (! $ticketType) {
             return $summary.' · Select a ticket type to check availability.';
         }
+        $quantity = static::resolvedAttendeeQuantity($ticketType, $attendeeQuantity);
+        $amount = round((float) $ticketType->price * $quantity, 2);
 
         if ((bool) $payer->wallet_security_reset_required) {
             return $summary.' · Wallet actions are temporarily restricted.';
@@ -377,11 +445,28 @@ class GoshenTicketResource extends Resource
             return $summary.' · Currency does not match this ticket.';
         }
 
-        if ((float) $wallet->balance + 0.01 < (float) $ticketType->price) {
+        if ((float) $wallet->balance + 0.01 < $amount) {
             return $summary.' · Balance is not enough for this ticket.';
         }
 
-        return $summary.' · Available for this full ticket payment.';
+        return $summary.' · Available for this full ticket payment'
+            .($quantity > 1 ? " ({$quantity} attendees)." : '.');
+    }
+
+    private static function resolvedAttendeeQuantity(?EventTicketType $ticketType, mixed $quantity): int
+    {
+        if (! $ticketType) {
+            return 1;
+        }
+
+        $resolved = max(1, (int) ($quantity ?: static::ticketTypeMinQuantity($ticketType->getKey())));
+        $max = (int) ($ticketType->max_per_booking ?: 0);
+
+        if ($max > 0) {
+            return min($resolved, $max);
+        }
+
+        return $resolved;
     }
 
     private static function maskedEmail(string $email): string

@@ -75,6 +75,30 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             ->assertDontSee('zero-value');
     }
 
+    public function test_family_ticket_type_reveals_attendee_quantity_on_admin_issue_form(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $ticketType->forceFill([
+            'name' => 'Goshen Family',
+            'min_per_booking' => 2,
+            'max_per_booking' => 6,
+        ])->save();
+        $this->grantTicketIssuePermission($admin);
+
+        Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->assertSchemaComponentHidden('attendee_quantity')
+            ->fillForm([
+                'customer_id' => $member->id,
+                'event_id' => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'issuance_reason' => 'Family desk registration',
+                'payment_method' => 'voucher',
+            ])
+            ->assertSchemaComponentVisible('attendee_quantity')
+            ->assertSet('data.attendee_quantity', 2);
+    }
+
     public function test_filament_voucher_submission_creates_a_normal_paid_ticket(): void
     {
         [$member, $ticketType, $admin] = $this->issuanceFixture();
@@ -356,6 +380,49 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             'auditable_type' => $ticket::class,
             'auditable_id' => $ticket->id,
         ]);
+    }
+
+    public function test_admin_can_issue_a_family_ticket_quantity_with_a_voucher(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $ticketType->forceFill([
+            'name' => 'Goshen Family',
+            'price' => 300,
+            'min_per_booking' => 2,
+            'max_per_booking' => 6,
+        ])->save();
+        $voucher = app(GoshenVoucherService::class)->createVoucher([
+            'event_id' => $ticketType->event_id,
+            'currency' => 'GBP',
+            'amount' => 900,
+            'max_uses' => 1,
+        ], adminActor: $admin);
+
+        $ticket = app(GoshenAdminTicketIssuanceService::class)->issue(
+            $member,
+            $ticketType,
+            $admin,
+            'Front desk family registration',
+            'voucher',
+            $voucher['code'],
+            attendeeQuantity: 3,
+        );
+
+        $booking = $ticket->booking()->with(['lines', 'attendees', 'tickets', 'installments.transactions'])->firstOrFail();
+
+        $this->assertSame('900.00', $booking->total);
+        $this->assertSame('900.00', $booking->paid_total);
+        $this->assertSame(3, (int) $booking->lines->sole()->quantity);
+        $this->assertSame('300.00', $booking->lines->sole()->unit_price);
+        $this->assertSame('900.00', $booking->lines->sole()->line_total);
+        $this->assertSame(3, $booking->attendees->count());
+        $this->assertSame(3, $booking->tickets->count());
+        $this->assertSame(3, data_get($booking->metadata, 'attendee_quantity'));
+        $this->assertSame(3, data_get($ticket->metadata, 'attendee_quantity'));
+        $this->assertEqualsCanonicalizing(
+            [1, 2, 3],
+            $booking->attendees->pluck('custom_fields.attendee_index')->all(),
+        );
     }
 
     public function test_admin_ticket_issuance_rejects_a_zero_price_without_creating_financial_records(): void

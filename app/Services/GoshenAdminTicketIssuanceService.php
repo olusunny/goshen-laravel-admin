@@ -35,7 +35,11 @@ class GoshenAdminTicketIssuanceService
         MobileUser $member,
         EventTicketType $ticketType,
         string $reason,
+        int $attendeeQuantity = 1,
     ): array {
+        $attendeeQuantity = $this->normalizedAttendeeQuantity($ticketType, $attendeeQuantity);
+        $total = round((float) $ticketType->price * $attendeeQuantity, 2);
+
         return [
             'recipient_id' => (int) $member->getKey(),
             'recipient_context_hash' => hash('sha256', json_encode([
@@ -51,7 +55,8 @@ class GoshenAdminTicketIssuanceService
                 'status' => (string) $ticketType->event?->status,
             ], JSON_THROW_ON_ERROR)),
             'ticket_type_id' => (int) $ticketType->getKey(),
-            'amount' => number_format(round((float) $ticketType->price, 2), 2, '.', ''),
+            'attendee_quantity' => $attendeeQuantity,
+            'amount' => number_format($total, 2, '.', ''),
             'currency' => strtoupper((string) $ticketType->currency),
             'payment_method' => 'wallet',
             'issuance_reason_hash' => hash('sha256', trim($reason)),
@@ -71,9 +76,11 @@ class GoshenAdminTicketIssuanceService
         ?string $userAgent = null,
         ?float $paymentAmount = null,
         array $extraMetadata = [],
+        int $attendeeQuantity = 1,
     ): Ticket {
         $reason = trim($reason);
         $paymentMethod = strtolower(trim($paymentMethod));
+        $attendeeQuantity = $this->validatedAttendeeQuantity($ticketType, $attendeeQuantity);
 
         if ($reason === '') {
             throw ValidationException::withMessages([
@@ -99,12 +106,13 @@ class GoshenAdminTicketIssuanceService
 
         if ($paymentMethod === 'wallet') {
             [$preflightMember, $preflightTicketType] = $this->availability
-                ->lockAndAssertAvailable($member, $ticketType, 1);
+                ->lockAndAssertAvailable($member, $ticketType, $attendeeQuantity);
             $this->assertPositiveListPrice($preflightTicketType);
             $authorizedWalletContext = $this->verificationContext(
                 $preflightMember,
                 $preflightTicketType,
                 $reason,
+                $attendeeQuantity,
             );
             $payer = $this->linkedAccounts->forAdmin($admin);
             $this->assertWalletRequestCanProceed($admin, $payer, $challenge, $walletCode);
@@ -134,17 +142,18 @@ class GoshenAdminTicketIssuanceService
                 $authorizedWalletContext,
                 $paymentAmount,
                 $extraMetadata,
+                $attendeeQuantity,
             ): Ticket {
                 if ($paymentMethod === 'wallet') {
                     $admin = User::query()->whereKey($admin->id)->lockForUpdate()->firstOrFail();
                 }
 
                 [$member, $ticketType] = $this->availability
-                    ->lockAndAssertAvailable($member, $ticketType, 1);
+                    ->lockAndAssertAvailable($member, $ticketType, $attendeeQuantity);
                 $this->assertPositiveListPrice($ticketType);
 
                 if ($paymentMethod === 'wallet') {
-                    $currentContext = $this->verificationContext($member, $ticketType, $reason);
+                    $currentContext = $this->verificationContext($member, $ticketType, $reason, $attendeeQuantity);
                     if (! hash_equals(
                         $this->walletVerification->fingerprint($authorizedWalletContext ?? []),
                         $this->walletVerification->fingerprint($currentContext),
@@ -156,8 +165,9 @@ class GoshenAdminTicketIssuanceService
                 }
 
                 $listPrice = round((float) $ticketType->price, 2);
+                $listedTotal = round($listPrice * $attendeeQuantity, 2);
                 $paymentTotal = $paymentAmount === null
-                    ? $listPrice
+                    ? $listedTotal
                     : round((float) $paymentAmount, 2);
                 if ($paymentTotal <= 0) {
                     throw ValidationException::withMessages([
@@ -173,9 +183,11 @@ class GoshenAdminTicketIssuanceService
                     'payment_method' => $paymentMethod,
                     'issuance_reason' => $reason,
                     'listed_ticket_price' => $listPrice,
+                    'attendee_quantity' => $attendeeQuantity,
+                    'listed_ticket_total' => $listedTotal,
                     'amount_paid' => $paymentTotal,
                     'historical_paid_amount' => $paymentAmount === null ? null : $paymentTotal,
-                    'historical_discount_amount' => $paymentAmount === null ? null : max(0, round($listPrice - $paymentTotal, 2)),
+                    'historical_discount_amount' => $paymentAmount === null ? null : max(0, round($listedTotal - $paymentTotal, 2)),
                 ], $extraMetadata), fn ($value): bool => $value !== null && $value !== '');
 
                 $booking = Booking::query()->create([
@@ -196,31 +208,42 @@ class GoshenAdminTicketIssuanceService
                 BookingLine::query()->create([
                     'booking_id' => $booking->id,
                     'ticket_type_id' => $ticketType->id,
-                    'quantity' => 1,
+                    'quantity' => $attendeeQuantity,
                     'currency' => $currency,
-                    'unit_price' => $paymentTotal,
+                    'unit_price' => $paymentAmount === null
+                        ? $listPrice
+                        : round($paymentTotal / $attendeeQuantity, 2),
                     'line_total' => $paymentTotal,
                     'metadata' => [
                         'source' => 'filament_admin_ticket_issue',
                         'listed_ticket_price' => $listPrice,
+                        'listed_ticket_total' => $listedTotal,
                         'amount_paid' => $paymentTotal,
+                        'attendee_quantity' => $attendeeQuantity,
                     ],
                 ]);
 
-                $attendee = Attendee::query()->create([
-                    'booking_id' => $booking->id,
-                    'ticket_type_id' => $ticketType->id,
-                    'first_name' => $member->first_name ?: $member->name,
-                    'last_name' => $member->last_name,
-                    'email' => $member->email,
-                    'phone' => $member->phone,
-                    'custom_fields' => array_filter([
-                        'title' => $member->title,
-                        'gender' => $member->gender,
-                        'marital_status' => $member->marital_status,
-                        'source' => 'filament_admin_ticket_issue',
-                    ], fn ($value): bool => filled($value)),
-                ]);
+                $firstAttendee = null;
+                for ($index = 0; $index < $attendeeQuantity; $index++) {
+                    $attendee = Attendee::query()->create([
+                        'booking_id' => $booking->id,
+                        'ticket_type_id' => $ticketType->id,
+                        'first_name' => $member->first_name ?: $member->name,
+                        'last_name' => $member->last_name,
+                        'email' => $member->email,
+                        'phone' => $member->phone,
+                        'custom_fields' => array_filter([
+                            'title' => $member->title,
+                            'gender' => $member->gender,
+                            'marital_status' => $member->marital_status,
+                            'source' => 'filament_admin_ticket_issue',
+                            'attendee_index' => $index + 1,
+                            'admin_issued_family_quantity' => $attendeeQuantity > 1 ? $attendeeQuantity : null,
+                        ], fn ($value): bool => filled($value)),
+                    ]);
+
+                    $firstAttendee ??= $attendee;
+                }
 
                 $fullPayment = $this->fullPayments->createForBooking($booking);
                 $paymentReferences = [];
@@ -265,7 +288,7 @@ class GoshenAdminTicketIssuanceService
                 }
 
                 $ticket = $booking->tickets()
-                    ->where('attendee_id', $attendee->id)
+                    ->where('attendee_id', $firstAttendee?->id)
                     ->first();
 
                 if (! $ticket instanceof Ticket) {
@@ -294,6 +317,7 @@ class GoshenAdminTicketIssuanceService
                         'ticket_public_id' => $ticket->public_id,
                         'member_id' => $member->id,
                         'ticket_type_id' => $ticketType->id,
+                        'attendee_quantity' => $attendeeQuantity,
                         'booking_id' => $booking->id,
                         'payment_transaction_id' => $transaction->id,
                     ],
@@ -318,6 +342,37 @@ class GoshenAdminTicketIssuanceService
                 'ticket_type_id' => 'Admin-issued tickets must have a positive listed price.',
             ]);
         }
+    }
+
+    private function validatedAttendeeQuantity(EventTicketType $ticketType, int $quantity): int
+    {
+        $quantity = max(1, $quantity);
+        $min = max(1, (int) ($ticketType->min_per_booking ?: 1));
+        $max = (int) ($ticketType->max_per_booking ?: 0);
+
+        if ($quantity < $min) {
+            throw ValidationException::withMessages([
+                'attendee_quantity' => "Please issue at least {$min} attendee(s) for this ticket type.",
+            ]);
+        }
+
+        if ($max > 0 && $quantity > $max) {
+            throw ValidationException::withMessages([
+                'attendee_quantity' => "You can only issue up to {$max} attendee(s) for this ticket type at once.",
+            ]);
+        }
+
+        return $quantity;
+    }
+
+    private function normalizedAttendeeQuantity(EventTicketType $ticketType, int $quantity): int
+    {
+        $quantity = max(1, $quantity);
+        $min = max(1, (int) ($ticketType->min_per_booking ?: 1));
+        $max = (int) ($ticketType->max_per_booking ?: 0);
+        $quantity = max($quantity, $min);
+
+        return $max > 0 ? min($quantity, $max) : $quantity;
     }
 
     private function assertWalletRequestCanProceed(
