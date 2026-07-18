@@ -6,6 +6,8 @@ use App\Filament\Resources\GoshenTicketResource;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\URL;
 use Personal\EventInstallments\Services\TicketNotificationService;
 
 class ViewGoshenTicket extends ViewRecord
@@ -15,6 +17,13 @@ class ViewGoshenTicket extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('downloadPdfTicket')
+                ->label('Download PDF ticket')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('gray')
+                ->url(fn (): string => $this->pdfDownloadUrl())
+                ->hidden(fn (): bool => ! Route::has('event-installments.tickets.documents.show'))
+                ->openUrlInNewTab(),
             Actions\Action::make('sendTicketEmail')
                 ->label('Send/resend PDF ticket')
                 ->icon('heroicon-o-envelope')
@@ -36,5 +45,21 @@ class ViewGoshenTicket extends ViewRecord
                     GoshenTicketResource::sendTicketEmail($this->record, $recipient, $notifications);
                 }),
         ];
+    }
+
+    private function pdfDownloadUrl(): string
+    {
+        if (! Route::has('event-installments.tickets.documents.show')) {
+            return '#';
+        }
+
+        return URL::temporarySignedRoute(
+            'event-installments.tickets.documents.show',
+            now()->addMinutes(15),
+            [
+                'ticket' => $this->record,
+                'type' => 'pdf',
+            ],
+        );
     }
 }

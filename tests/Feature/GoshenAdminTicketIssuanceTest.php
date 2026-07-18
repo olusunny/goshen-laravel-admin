@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Pages\GoshenRetreatConsole;
 use App\Filament\Resources\GoshenTicketResource;
 use App\Filament\Resources\GoshenTicketResource\Pages\CreateGoshenTicket;
+use App\Filament\Resources\GoshenTicketResource\Pages\ViewGoshenTicket;
 use App\Models\GoshenWallet;
 use App\Models\MobileUser;
 use App\Models\SmtpSetting;
@@ -23,13 +24,16 @@ use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Mockery\MockInterface;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Mail\TicketIssuedMail;
+use Personal\EventInstallments\Http\Controllers\Admin\TicketDocumentController;
 use Personal\EventInstallments\Models\Booking;
 use Personal\EventInstallments\Models\BookingLine;
 use Personal\EventInstallments\Models\Event;
@@ -1116,6 +1120,50 @@ class GoshenAdminTicketIssuanceTest extends TestCase
         });
     }
 
+    public function test_admin_ticket_view_exposes_a_downloadable_pdf_ticket_button(): void
+    {
+        config([
+            'event-installments.ticket.qr_secret' => 'testing-secret',
+            'event-installments.storage.disk' => 'local',
+        ]);
+        Storage::fake('local');
+        $this->registerTicketDocumentRouteForTest();
+
+        [$member, $ticketType, $admin] = $this->issuanceFixture('download-pdf');
+        $this->grantTicketViewAndDownloadPermission($admin);
+
+        $ticket = app(GoshenAdminTicketIssuanceService::class)->issue(
+            $member,
+            $ticketType,
+            $admin,
+            'Front desk download test',
+            'voucher',
+            $this->voucherCode($ticketType, $admin),
+        );
+
+        Livewire::actingAs($admin)
+            ->test(ViewGoshenTicket::class, ['record' => $ticket->getRouteKey()])
+            ->assertSee('Download PDF ticket');
+
+        $url = URL::temporarySignedRoute(
+            'event-installments.tickets.documents.show',
+            now()->addMinutes(15),
+            [
+                'ticket' => $ticket,
+                'type' => 'pdf',
+            ],
+        );
+
+        $response = $this->actingAs($admin)->get($url);
+
+        $response->assertOk();
+        $response->assertDownload($ticket->formatted_number.'.pdf');
+        $this->assertStringContainsString(
+            'attachment; filename='.$ticket->formatted_number.'.pdf',
+            (string) $response->headers->get('content-disposition'),
+        );
+    }
+
     public function test_ticket_email_is_not_sent_when_required_pdf_attachment_cannot_be_generated(): void
     {
         config([
@@ -1258,6 +1306,25 @@ class GoshenAdminTicketIssuanceTest extends TestCase
         $role = Role::findOrCreate('ticket_form_issuer_'.$admin->id, 'web');
         $role->givePermissionTo($permission);
         $admin->assignRole($role);
+    }
+
+    private function grantTicketViewAndDownloadPermission(User $admin): void
+    {
+        $role = Role::findOrCreate('ticket_viewer_'.$admin->id, 'web');
+        $role->givePermissionTo(Permission::findOrCreate(AdminPermissions::resourcePermission(GoshenTicketResource::class), 'web'));
+        $role->givePermissionTo(Permission::findOrCreate('event-installments.events.manage', 'web'));
+        $admin->assignRole($role);
+    }
+
+    private function registerTicketDocumentRouteForTest(): void
+    {
+        if (Route::has('event-installments.tickets.documents.show')) {
+            return;
+        }
+
+        Route::get('event-installments/tickets/{ticket}/documents/{type}', TicketDocumentController::class)
+            ->middleware(['web', 'signed'])
+            ->name('event-installments.tickets.documents.show');
     }
 
     private function voucherCode(EventTicketType $ticketType, User $admin): string
