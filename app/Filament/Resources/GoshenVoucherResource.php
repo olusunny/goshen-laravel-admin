@@ -49,7 +49,8 @@ class GoshenVoucherResource extends Resource
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('code_suffix')
                     ->label('Vouchers')
-                    ->badge(),
+                    ->badge()
+                    ->color(fn (GoshenVoucher $record): string => (int) $record->used_count > 0 ? 'danger' : 'success'),
                 Tables\Columns\TextColumn::make('purpose')
                     ->label('Purpose')
                     ->badge()
@@ -59,12 +60,14 @@ class GoshenVoucherResource extends Resource
                     ->money(fn (GoshenVoucher $record): string => $record->currency)
                     ->sortable(),
                 Tables\Columns\TextColumn::make('usage')
-                    ->state(fn (GoshenVoucher $record): string => "{$record->used_count}/{$record->max_uses}"),
+                    ->state(fn (GoshenVoucher $record): string => "{$record->used_count}/{$record->max_uses}")
+                    ->badge()
+                    ->color(fn (GoshenVoucher $record): string => (int) $record->used_count > 0 ? 'danger' : 'success'),
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         GoshenVoucher::STATUS_ACTIVE => 'success',
-                        GoshenVoucher::STATUS_EXHAUSTED => 'gray',
+                        GoshenVoucher::STATUS_EXHAUSTED => 'danger',
                         GoshenVoucher::STATUS_PAUSED => 'warning',
                         GoshenVoucher::STATUS_VOID => 'danger',
                         default => 'gray',
