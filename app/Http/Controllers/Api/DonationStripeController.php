@@ -11,6 +11,7 @@ use App\Services\GoshenWalletService;
 use App\Services\DynamicFormService;
 use App\Services\StripePaymentSettings;
 use App\Services\WalletSecurityResetService;
+use App\Support\StripeAppReturnUrls;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -280,6 +281,7 @@ class DonationStripeController extends Controller
             'purpose' => ['nullable', 'string', 'max:180'],
             'anonymous' => ['nullable', 'boolean'],
             'api_token' => ['nullable', 'string', 'max:255'],
+            'return_to_app' => ['nullable', 'boolean'],
         ])->validate();
 
         $user = $this->mobileUserFromRequest($request, $validated);
@@ -322,6 +324,13 @@ class DonationStripeController extends Controller
             $metadata['mobile_user_id'] = $user->id;
         }
 
+        $returnUrls = StripeAppReturnUrls::requested($validated)
+            ? StripeAppReturnUrls::giving()
+            : [
+                'success_url' => $this->requiredConfig('success_url'),
+                'cancel_url' => $this->requiredConfig('cancel_url'),
+            ];
+
         $donation = Donation::query()->create([
             'name' => $name,
             'email' => $email,
@@ -345,8 +354,8 @@ class DonationStripeController extends Controller
         try {
             $payload = $this->createCheckoutSession([
                 'mode' => 'payment',
-                'success_url' => $this->requiredConfig('success_url'),
-                'cancel_url' => $this->requiredConfig('cancel_url'),
+                'success_url' => $returnUrls['success_url'],
+                'cancel_url' => $returnUrls['cancel_url'],
                 'client_reference_id' => $reference,
                 'customer_email' => $donation->email ?: null,
                 'automatic_payment_methods' => ['enabled' => true],

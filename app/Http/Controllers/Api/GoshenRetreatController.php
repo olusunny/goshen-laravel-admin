@@ -18,6 +18,7 @@ use App\Services\GoshenSingleFullPaymentService;
 use App\Services\GoshenVoucherService;
 use App\Services\GoshenWalletService;
 use App\Services\WalletSecurityResetService;
+use App\Support\StripeAppReturnUrls;
 use App\Support\MediaUrl;
 use chillerlan\QRCode\Output\QROutputInterface;
 use chillerlan\QRCode\QRCode;
@@ -2261,8 +2262,13 @@ class GoshenRetreatController extends Controller
             ], 422);
         }
 
+        $data = $this->payload($request);
+        $appReturnUrls = StripeAppReturnUrls::requested($data)
+            ? StripeAppReturnUrls::retreat()
+            : null;
+
         try {
-            $checkoutPayload = DB::transaction(function () use ($booking, $installment, $gateway): array {
+            $checkoutPayload = DB::transaction(function () use ($booking, $installment, $gateway, $appReturnUrls): array {
                 $lockedBooking = Booking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
                 $lockedRecord = PaymentInstallment::query()
                     ->whereKey($installment->id)
@@ -2274,6 +2280,13 @@ class GoshenRetreatController extends Controller
 
                 if ($active = $fullPayments->activeExternalCheckout($lockedRecord)) {
                     return $fullPayments->checkoutPayload($active);
+                }
+
+                if ($appReturnUrls !== null) {
+                    config([
+                        'event-installments.payments.stripe.success_url' => $appReturnUrls['success_url'],
+                        'event-installments.payments.stripe.cancel_url' => $appReturnUrls['cancel_url'],
+                    ]);
                 }
 
                 $checkout = $gateway->createCheckout($lockedRecord);

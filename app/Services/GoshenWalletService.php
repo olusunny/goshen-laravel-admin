@@ -13,6 +13,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Support\StripeAppReturnUrls;
 use RuntimeException;
 use Stripe\Exception\ApiErrorException;
 use Stripe\StripeClient;
@@ -563,11 +564,18 @@ class GoshenWalletService
             'mobile_user_id' => (string) $wallet->mobile_user_id,
         ];
 
-        try {
-            $session = $this->stripe()->checkout->sessions->create(array_filter([
-                'mode' => 'payment',
+        $returnUrls = StripeAppReturnUrls::requested($data)
+            ? StripeAppReturnUrls::wallet()
+            : [
                 'success_url' => $this->stripeSettings->walletSuccessUrl(),
                 'cancel_url' => $this->stripeSettings->walletCancelUrl(),
+            ];
+
+        try {
+            $session = $this->createCheckoutSession(array_filter([
+                'mode' => 'payment',
+                'success_url' => $returnUrls['success_url'],
+                'cancel_url' => $returnUrls['cancel_url'],
                 'client_reference_id' => $reference,
                 'customer' => $wallet->stripe_customer_id ?: null,
                 'customer_email' => $wallet->stripe_customer_id ? null : $wallet->user?->email,
@@ -1373,6 +1381,11 @@ class GoshenWalletService
     private function scheduledTopUpReference(GoshenWalletSavingsPlan $plan, \Carbon\CarbonInterface $dueAt): string
     {
         return 'gw_auto_' . $plan->id . '_' . $dueAt->copy()->utc()->format('YmdHis');
+    }
+
+    protected function createCheckoutSession(array $payload, array $options): object
+    {
+        return $this->stripe()->checkout->sessions->create($payload, $options);
     }
 
     private function stripe(): StripeClient

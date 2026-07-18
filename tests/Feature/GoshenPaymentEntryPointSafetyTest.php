@@ -73,6 +73,32 @@ class GoshenPaymentEntryPointSafetyTest extends TestCase
         $this->assertSame(2, PaymentTransaction::query()->where('booking_id', $booking->id)->count());
     }
 
+    public function test_mobile_checkout_request_uses_app_return_urls_for_new_stripe_checkout(): void
+    {
+        [, $booking, $record, $token] = $this->memberBooking();
+        $gateway = new FakeEntryPointGateway();
+
+        $response = app(GoshenRetreatController::class)->checkoutPayment(
+            Request::create('/', 'POST', ['data' => [
+                'api_token' => $token,
+                'return_to_app' => true,
+            ]]),
+            $booking->public_id,
+            $record->public_id,
+            $gateway,
+        );
+
+        $this->assertSame('ok', $response->getData(true)['status']);
+        $this->assertSame(
+            'triumphant://goshen-payment/success?flow=retreat&session_id={CHECKOUT_SESSION_ID}',
+            $gateway->lastSuccessUrl,
+        );
+        $this->assertSame(
+            'triumphant://goshen-payment/cancelled?flow=retreat',
+            $gateway->lastCancelUrl,
+        );
+    }
+
     public function test_voucher_payment_rejects_while_external_checkout_is_live(): void
     {
         [$member, $booking, $record] = $this->memberBooking();
@@ -214,15 +240,26 @@ class FakeEntryPointGateway implements PaymentGateway
 {
     public int $checkoutCalls = 0;
 
+    public ?string $lastSuccessUrl = null;
+
+    public ?string $lastCancelUrl = null;
+
     public function createCheckout(PaymentInstallment $installment): GatewayCheckout
     {
         $this->checkoutCalls++;
+        $this->lastSuccessUrl = config('event-installments.payments.stripe.success_url');
+        $this->lastCancelUrl = config('event-installments.payments.stripe.cancel_url');
 
         return new GatewayCheckout(
             'stripe',
             'new_checkout_' . $this->checkoutCalls,
             'https://stripe.test/new',
-            ['url' => 'https://stripe.test/new', 'expires_at' => now()->addHour()->timestamp],
+            [
+                'url' => 'https://stripe.test/new',
+                'expires_at' => now()->addHour()->timestamp,
+                'success_url' => $this->lastSuccessUrl,
+                'cancel_url' => $this->lastCancelUrl,
+            ],
         );
     }
 

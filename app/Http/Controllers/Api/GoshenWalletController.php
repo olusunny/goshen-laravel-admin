@@ -319,6 +319,7 @@ class GoshenWalletController extends Controller
             'currency' => ['nullable', 'string', 'size:3'],
             'save_payment_method' => ['nullable', 'boolean'],
             'savings_plan_id' => ['nullable', 'integer'],
+            'return_to_app' => ['nullable', 'boolean'],
         ])->validate();
         $validated['request_ip'] = $request->ip();
         $validated['request_user_agent'] = $request->userAgent();

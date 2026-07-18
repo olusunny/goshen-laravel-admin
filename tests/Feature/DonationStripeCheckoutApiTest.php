@@ -130,6 +130,37 @@ class DonationStripeCheckoutApiTest extends TestCase
         $this->assertSame('stripe-member@example.test', $checkout['payload']['customer_email']);
     }
 
+    public function test_mobile_giving_checkout_can_request_app_return_urls(): void
+    {
+        $this->fakeStripeGateway();
+        $member = $this->member();
+        $token = $member->issueApiToken();
+        $category = $this->category();
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/giving/stripe/checkout', [
+                'data' => [
+                    'amount' => 30,
+                    'currency' => 'GBP',
+                    'donation_category_id' => $category->id,
+                    'return_to_app' => true,
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('status', 'ok');
+
+        $checkout = FakeDonationStripeController::$checkoutSessions[0];
+
+        $this->assertSame(
+            'triumphant://goshen-payment/success?flow=giving&session_id={CHECKOUT_SESSION_ID}',
+            $checkout['payload']['success_url'],
+        );
+        $this->assertSame(
+            'triumphant://goshen-payment/cancelled?flow=giving',
+            $checkout['payload']['cancel_url'],
+        );
+    }
+
     private function fakeStripeGateway(): void
     {
         config([
