@@ -2103,8 +2103,9 @@ class GoshenRetreatController extends Controller
             'amount' => ['required', 'numeric', 'min:1'],
             'currency' => ['required', 'string', 'size:3'],
             'purpose' => ['required', Rule::in(array_keys(GoshenVoucher::purposeOptions()))],
+            'redemption_type' => ['nullable', Rule::in(array_keys(GoshenVoucher::redemptionTypeOptions()))],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:200'],
-            'max_uses' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'max_uses' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'starts_at' => ['nullable', 'date'],
             'expires_at' => ['nullable', 'date', 'after:starts_at'],
         ]);

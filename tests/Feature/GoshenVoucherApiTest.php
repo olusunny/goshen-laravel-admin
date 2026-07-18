@@ -90,6 +90,101 @@ class GoshenVoucherApiTest extends TestCase
         $this->assertSame(0, Booking::query()->where('customer_id', $secondMember->id)->count());
     }
 
+    public function test_pool_voucher_deducts_each_booking_from_shared_balance(): void
+    {
+        $firstMember = $this->verifiedMember('pool-first@example.test', 'Pool First', '+2348011190001');
+        $secondMember = $this->verifiedMember('pool-second@example.test', 'Pool Second', '+2348011190002');
+        $thirdMember = $this->verifiedMember('pool-third@example.test', 'Pool Third', '+2348011190003');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 100);
+
+        $created = app(GoshenVoucherService::class)->createVoucher([
+            'event_id' => $event->id,
+            'label' => 'Shared family and group pool',
+            'amount' => 300,
+            'currency' => 'NGN',
+            'max_uses' => 10,
+            'redemption_type' => GoshenVoucher::REDEMPTION_POOL,
+        ]);
+
+        foreach ([$firstMember, $secondMember] as $member) {
+            $this->postJson('/api/goshen-retreat/bookings', [
+                'data' => $this->bookingPayload($member->issueApiToken(), $event, $ticketType, [
+                    'payment_mode' => 'voucher',
+                    'voucher_code' => $created['code'],
+                ]),
+            ])->assertOk();
+        }
+
+        $voucher = $created['voucher']->fresh();
+        $this->assertSame(GoshenVoucher::REDEMPTION_POOL, $voucher->redemption_type);
+        $this->assertSame(GoshenVoucher::STATUS_ACTIVE, $voucher->status);
+        $this->assertSame(2, $voucher->used_count);
+        $this->assertSame('100.00', $voucher->remaining_amount);
+        $this->assertSame(2, GoshenVoucherUsage::query()->count());
+
+        $ticketType->forceFill(['price' => 125])->save();
+
+        $this->postJson('/api/goshen-retreat/bookings', [
+            'data' => $this->bookingPayload($thirdMember->issueApiToken(), $event, $ticketType->fresh(), [
+                'payment_mode' => 'voucher',
+                'voucher_code' => $created['code'],
+            ]),
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('status', 'error');
+
+        $this->assertSame('100.00', $voucher->fresh()->remaining_amount);
+        $this->assertSame(2, GoshenVoucherUsage::query()->count());
+    }
+
+    public function test_pool_voucher_covers_one_family_ticket_and_multiple_individual_tickets(): void
+    {
+        $familyMember = $this->verifiedMember('pool-family@example.test', 'Pool Family', '+2348011190010');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 300);
+
+        $created = app(GoshenVoucherService::class)->createVoucher([
+            'event_id' => $event->id,
+            'label' => 'One family plus ten individuals',
+            'amount' => 4200,
+            'currency' => 'NGN',
+            'max_uses' => 20,
+            'redemption_type' => GoshenVoucher::REDEMPTION_POOL,
+        ]);
+
+        $this->postJson('/api/goshen-retreat/bookings', [
+            'data' => $this->bookingPayload($familyMember->issueApiToken(), $event, $ticketType, [
+                'quantity' => 4,
+                'payment_mode' => 'voucher',
+                'voucher_code' => $created['code'],
+                'attendees' => $this->attendeeRows(4),
+            ]),
+        ])->assertOk();
+
+        $this->assertSame('3000.00', $created['voucher']->fresh()->remaining_amount);
+
+        for ($index = 1; $index <= 10; $index++) {
+            $member = $this->verifiedMember(
+                "pool-individual-{$index}@example.test",
+                "Pool Individual {$index}",
+                '+2348011191'.str_pad((string) $index, 3, '0', STR_PAD_LEFT),
+            );
+
+            $this->postJson('/api/goshen-retreat/bookings', [
+                'data' => $this->bookingPayload($member->issueApiToken(), $event, $ticketType, [
+                    'payment_mode' => 'voucher',
+                    'voucher_code' => $created['code'],
+                ]),
+            ])->assertOk();
+        }
+
+        $voucher = $created['voucher']->fresh();
+        $this->assertSame(GoshenVoucher::STATUS_EXHAUSTED, $voucher->status);
+        $this->assertSame(11, $voucher->used_count);
+        $this->assertSame('0.00', $voucher->remaining_amount);
+        $this->assertSame(11, GoshenVoucherUsage::query()->count());
+        $this->assertSame(14, Ticket::query()->count());
+    }
+
     public function test_admin_reservation_blocks_mobile_registration_without_consuming_voucher(): void
     {
         $member = $this->verifiedMember('admin-reserved@example.test', 'Admin Reserved', '+2348011116677');
@@ -234,6 +329,36 @@ class GoshenVoucherApiTest extends TestCase
         $voucher = GoshenVoucher::query()->firstOrFail();
         $this->assertNull($voucher->event_id);
         $this->assertSame(GoshenVoucher::PURPOSE_WALLET_FUNDING, $voucher->purpose);
+    }
+
+    public function test_event_manager_can_generate_pool_balance_voucher_via_api(): void
+    {
+        $manager = $this->manager('pool-voucher-manager@example.test');
+        [$event] = $this->publishedRetreatEvent(price: 300);
+
+        $this->postJson('/api/goshen-retreat/vouchers/generate', [
+            'data' => [
+                'api_token' => $manager->issueApiToken(),
+                'event_id' => $event->public_id,
+                'label' => 'Shared family and group pool',
+                'amount' => 4200,
+                'currency' => 'GBP',
+                'purpose' => GoshenVoucher::PURPOSE_PAYMENTS,
+                'redemption_type' => GoshenVoucher::REDEMPTION_POOL,
+                'quantity' => 1,
+                'max_uses' => 20,
+            ],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('data.0.voucher.redemption_type', GoshenVoucher::REDEMPTION_POOL)
+            ->assertJsonPath('data.0.voucher.remaining_amount', 4200)
+            ->assertJsonPath('data.0.voucher.available_amount', 4200);
+
+        $voucher = GoshenVoucher::query()->firstOrFail();
+        $this->assertSame(GoshenVoucher::REDEMPTION_POOL, $voucher->redemption_type);
+        $this->assertSame('4200.00', $voucher->remaining_amount);
+        $this->assertSame(20, $voucher->max_uses);
     }
 
     public function test_invalid_voucher_purpose_is_rejected_by_generation_api(): void
@@ -525,5 +650,26 @@ class GoshenVoucherApiTest extends TestCase
                 ],
             ],
         ], $overrides);
+    }
+
+    private function attendeeRows(int $count): array
+    {
+        $rows = [];
+
+        for ($index = 1; $index <= $count; $index++) {
+            $rows[] = [
+                'title' => 'Mr.',
+                'first_name' => "Family{$index}",
+                'last_name' => 'Attendee',
+                'designation' => 'member',
+                'gender' => 'male',
+                'marital_status' => 'Single',
+                'age_group' => 'child',
+                'free_church_bus_interest' => 'no_thanks',
+                'volunteer_department' => 'no_chance_at_the_moment',
+            ];
+        }
+
+        return $rows;
     }
 }

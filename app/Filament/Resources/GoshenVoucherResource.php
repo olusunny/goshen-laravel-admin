@@ -56,9 +56,20 @@ class GoshenVoucherResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => GoshenVoucher::purposeOptions()[$state] ?? str($state)->headline()->toString())
                     ->color(fn (string $state): string => $state === GoshenVoucher::PURPOSE_WALLET_FUNDING ? 'info' : 'success'),
+                Tables\Columns\TextColumn::make('redemption_type')
+                    ->label('Category')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => GoshenVoucher::redemptionTypeOptions()[$state ?: GoshenVoucher::REDEMPTION_FIXED] ?? str($state ?: GoshenVoucher::REDEMPTION_FIXED)->headline()->toString())
+                    ->color(fn (?string $state): string => ($state ?: GoshenVoucher::REDEMPTION_FIXED) === GoshenVoucher::REDEMPTION_POOL ? 'warning' : 'gray'),
                 Tables\Columns\TextColumn::make('amount')
                     ->money(fn (GoshenVoucher $record): string => $record->currency)
                     ->sortable(),
+                Tables\Columns\TextColumn::make('remaining_amount')
+                    ->label('Pool balance')
+                    ->money(fn (GoshenVoucher $record): string => $record->currency)
+                    ->placeholder('Not pooled')
+                    ->sortable()
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('usage')
                     ->state(fn (GoshenVoucher $record): string => "{$record->used_count}/{$record->max_uses}")
                     ->badge()
@@ -91,6 +102,9 @@ class GoshenVoucherResource extends Resource
                     ]),
                 Tables\Filters\SelectFilter::make('purpose')
                     ->options(GoshenVoucher::purposeOptions()),
+                Tables\Filters\SelectFilter::make('redemption_type')
+                    ->label('Category')
+                    ->options(GoshenVoucher::redemptionTypeOptions()),
             ])
             ->recordActions([
                 Actions\EditAction::make(),
@@ -174,6 +188,15 @@ class GoshenVoucherResource extends Resource
                     ->required()
                     ->live()
                     ->helperText('Wallet Funding vouchers can only add funds to a member wallet. For Payments vouchers can be used for eligible Goshen payments.'),
+                Forms\Components\Select::make('redemption_type')
+                    ->label('Voucher category')
+                    ->options(GoshenVoucher::redemptionTypeOptions())
+                    ->default(GoshenVoucher::REDEMPTION_FIXED)
+                    ->required()
+                    ->live()
+                    ->hidden(fn (callable $get): bool => $get('purpose') === GoshenVoucher::PURPOSE_WALLET_FUNDING)
+                    ->dehydrated(fn (callable $get): bool => $get('purpose') !== GoshenVoucher::PURPOSE_WALLET_FUNDING)
+                    ->helperText('Fixed amount: each redemption can cover up to the voucher amount and consumes one use. Pool balance: the voucher amount is one shared pot; each paid ticket/booking deducts from the remaining balance until it is exhausted.'),
                 Forms\Components\Select::make('event_id')
                     ->label('Retreat edition')
                     ->options(fn (): array => self::goshenEvents())
@@ -183,9 +206,11 @@ class GoshenVoucherResource extends Resource
                 Forms\Components\TextInput::make('label')
                     ->maxLength(255),
                 Forms\Components\TextInput::make('amount')
+                    ->label('Amount / pool budget')
                     ->numeric()
                     ->minValue(1)
-                    ->required(),
+                    ->required()
+                    ->helperText('For a fixed voucher this is the maximum value per redemption. For a pool voucher this is the total shared budget.'),
                 Forms\Components\TextInput::make('currency')
                     ->maxLength(3)
                     ->default('GBP')
@@ -197,12 +222,13 @@ class GoshenVoucherResource extends Resource
                     ->default(1)
                     ->required(),
                 Forms\Components\TextInput::make('max_uses')
-                    ->label('Uses per voucher')
+                    ->label('Use limit per voucher')
                     ->numeric()
                     ->minValue(1)
-                    ->maxValue(100)
+                    ->maxValue(1000)
                     ->default(1)
-                    ->required(),
+                    ->required()
+                    ->helperText('Fixed vouchers normally use 1. Pool vouchers should allow enough redemptions for all intended families/individuals; balance is still enforced separately.'),
                 Forms\Components\DateTimePicker::make('starts_at'),
                 Forms\Components\DateTimePicker::make('expires_at'),
             ])

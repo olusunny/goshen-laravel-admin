@@ -57,6 +57,21 @@ class GoshenVoucherService
             throw new RuntimeException('Voucher purpose is not valid.');
         }
 
+        $redemptionType = (string) ($data['redemption_type'] ?? GoshenVoucher::REDEMPTION_FIXED);
+        if (! array_key_exists($redemptionType, GoshenVoucher::redemptionTypeOptions())) {
+            throw new RuntimeException('Voucher category is not valid.');
+        }
+
+        if ($purpose === GoshenVoucher::PURPOSE_WALLET_FUNDING && $redemptionType === GoshenVoucher::REDEMPTION_POOL) {
+            throw new RuntimeException('Pool balance vouchers are only available for Goshen payment vouchers.');
+        }
+
+        $amount = round((float) ($data['amount'] ?? 0), 2);
+        $rawMaxUses = array_key_exists('max_uses', $data) ? (int) $data['max_uses'] : null;
+        $maxUses = $redemptionType === GoshenVoucher::REDEMPTION_POOL
+            ? ($rawMaxUses !== null && $rawMaxUses > 1 ? max(2, $rawMaxUses) : 1000)
+            : max(1, (int) ($data['max_uses'] ?? 1));
+
         $code = isset($data['code']) && is_string($data['code']) && trim($data['code']) !== ''
             ? $data['code']
             : $this->generateCode();
@@ -69,6 +84,7 @@ class GoshenVoucherService
         $voucher = GoshenVoucher::query()->create([
             'event_id' => $data['event_id'] ?? null,
             'purpose' => $purpose,
+            'redemption_type' => $redemptionType,
             'created_by_id' => $adminActor?->id,
             'created_by_mobile_user_id' => $mobileActor?->id,
             'label' => $data['label'] ?? null,
@@ -76,8 +92,9 @@ class GoshenVoucherService
             'code_hash' => $this->hashCode($normalized),
             'code_suffix' => substr($normalized, -6),
             'currency' => strtoupper((string) ($data['currency'] ?? 'GBP')),
-            'amount' => round((float) ($data['amount'] ?? 0), 2),
-            'max_uses' => max(1, (int) ($data['max_uses'] ?? 1)),
+            'amount' => $amount,
+            'remaining_amount' => $redemptionType === GoshenVoucher::REDEMPTION_POOL ? $amount : null,
+            'max_uses' => $maxUses,
             'used_count' => 0,
             'status' => GoshenVoucher::STATUS_ACTIVE,
             'starts_at' => $data['starts_at'] ?? null,
@@ -85,7 +102,7 @@ class GoshenVoucherService
             'metadata' => $data['metadata'] ?? null,
         ]);
 
-        if ((float) $voucher->amount <= 0) {
+        if ($amount <= 0) {
             $voucher->delete();
             throw new RuntimeException('Voucher amount must be greater than zero.');
         }
@@ -190,6 +207,9 @@ class GoshenVoucherService
 
             $this->assertVoucherPurpose($voucher, GoshenVoucher::PURPOSE_PAYMENTS);
             $this->assertVoucherCanPay($voucher, $booking->event, $amountDue, (string) $booking->currency);
+            $redemptionType = $voucher->redemption_type ?: GoshenVoucher::REDEMPTION_FIXED;
+            $poolBalanceBefore = $voucher->isPoolVoucher() ? round((float) $voucher->remaining_amount, 2) : null;
+            $poolBalanceAfter = $poolBalanceBefore !== null ? round(max(0, $poolBalanceBefore - $amountDue), 2) : null;
 
             $transaction = PaymentTransaction::query()->create([
                 'booking_id' => $booking->id,
@@ -203,6 +223,9 @@ class GoshenVoucherService
                     'source' => $source,
                     'voucher_id' => $voucher->id,
                     'voucher_code_suffix' => $voucher->code_suffix,
+                    'voucher_redemption_type' => $redemptionType,
+                    'voucher_balance_before' => $poolBalanceBefore,
+                    'voucher_balance_after' => $poolBalanceAfter,
                     'beneficiary_mobile_user_id' => $beneficiary->id,
                     'redeemed_by_mobile_user_id' => $redeemedBy?->id,
                     'redeemed_by_id' => $adminActor?->id,
@@ -228,23 +251,23 @@ class GoshenVoucherService
                 'metadata' => [
                     'booking_public_id' => $booking->public_id,
                     'event_name' => $booking->event?->name,
+                    'voucher_redemption_type' => $redemptionType,
+                    'voucher_balance_before' => $poolBalanceBefore,
+                    'voucher_balance_after' => $poolBalanceAfter,
                     'request_ip' => $context['request_ip'] ?? null,
                     'request_user_agent' => $context['request_user_agent'] ?? null,
                 ],
             ]);
 
-            $voucher->forceFill([
-                'used_count' => (int) $voucher->used_count + 1,
-                'status' => ((int) $voucher->used_count + 1) >= (int) $voucher->max_uses
-                    ? GoshenVoucher::STATUS_EXHAUSTED
-                    : $voucher->status,
-            ])->save();
+            $this->markVoucherRedeemed($voucher, $amountDue);
 
             $installment->forceFill([
                 'metadata' => array_merge($installment->metadata ?? [], [
                     'payment_mode' => 'voucher',
                     'voucher_id' => $voucher->id,
                     'voucher_code_suffix' => $voucher->code_suffix,
+                    'voucher_redemption_type' => $redemptionType,
+                    'voucher_balance_after' => $poolBalanceAfter,
                     'voucher_usage_id' => $usage->id,
                 ]),
             ])->save();
@@ -255,6 +278,8 @@ class GoshenVoucherService
                     'paid_with_voucher' => true,
                     'voucher_id' => $voucher->id,
                     'voucher_code_suffix' => $voucher->code_suffix,
+                    'voucher_redemption_type' => $redemptionType,
+                    'voucher_balance_after' => $poolBalanceAfter,
                     'voucher_usage_id' => $usage->id,
                 ]),
             ])->save();
@@ -289,6 +314,10 @@ class GoshenVoucherService
             }
 
             $this->assertVoucherPurpose($voucher, GoshenVoucher::PURPOSE_WALLET_FUNDING);
+            if ($voucher->isPoolVoucher()) {
+                throw new RuntimeException('Pool balance vouchers cannot be used for wallet funding.');
+            }
+
             $this->assertVoucherCanPay($voucher, null, null, (string) $lockedWallet->currency);
 
             $amount = round((float) $voucher->amount, 2);
@@ -312,6 +341,7 @@ class GoshenVoucherService
                     'source' => 'wallet_voucher_top_up',
                     'voucher_id' => $voucher->id,
                     'voucher_code_suffix' => $voucher->code_suffix,
+                    'voucher_redemption_type' => $voucher->redemption_type ?: GoshenVoucher::REDEMPTION_FIXED,
                     'request_ip' => $context['request_ip'] ?? null,
                     'request_user_agent' => $context['request_user_agent'] ?? null,
                 ],
@@ -331,17 +361,13 @@ class GoshenVoucherService
                     'wallet_id' => $lockedWallet->id,
                     'wallet_ledger_entry_id' => $entry->id,
                     'wallet_balance_after' => (float) $lockedWallet->balance,
+                    'voucher_redemption_type' => $voucher->redemption_type ?: GoshenVoucher::REDEMPTION_FIXED,
                     'request_ip' => $context['request_ip'] ?? null,
                     'request_user_agent' => $context['request_user_agent'] ?? null,
                 ],
             ]);
 
-            $voucher->forceFill([
-                'used_count' => (int) $voucher->used_count + 1,
-                'status' => ((int) $voucher->used_count + 1) >= (int) $voucher->max_uses
-                    ? GoshenVoucher::STATUS_EXHAUSTED
-                    : $voucher->status,
-            ])->save();
+            $this->markVoucherRedeemed($voucher, $amount);
 
             return $usage->fresh(['voucher', 'mobileUser', 'redeemedByMobileUser']) ?? $usage;
         });
@@ -353,11 +379,15 @@ class GoshenVoucherService
             'id' => $voucher->id,
             'event_id' => $voucher->event_id,
             'purpose' => $voucher->purpose,
+            'redemption_type' => $voucher->redemption_type ?: GoshenVoucher::REDEMPTION_FIXED,
+            'redemption_type_label' => GoshenVoucher::redemptionTypeOptions()[$voucher->redemption_type ?: GoshenVoucher::REDEMPTION_FIXED] ?? 'Fixed amount voucher',
             'label' => $voucher->label,
             'batch_reference' => $voucher->batch_reference,
             'code_suffix' => $voucher->code_suffix,
             'currency' => $voucher->currency,
             'amount' => (float) $voucher->amount,
+            'remaining_amount' => $voucher->isPoolVoucher() ? (float) $voucher->remaining_amount : null,
+            'available_amount' => $voucher->availableAmount(),
             'max_uses' => (int) $voucher->max_uses,
             'used_count' => (int) $voucher->used_count,
             'remaining_uses' => max(0, (int) $voucher->max_uses - (int) $voucher->used_count),
@@ -413,7 +443,9 @@ class GoshenVoucherService
         }
 
         if ((int) $voucher->used_count >= (int) $voucher->max_uses) {
-            throw new RuntimeException('This voucher has already been used.');
+            throw new RuntimeException($voucher->isPoolVoucher()
+                ? 'This pool voucher has reached its redemption limit.'
+                : 'This voucher has already been used.');
         }
 
         if ($voucher->starts_at && $voucher->starts_at->isFuture()) {
@@ -432,9 +464,45 @@ class GoshenVoucherService
             throw new RuntimeException("This voucher is in {$voucher->currency}, but this payment is in {$currency}.");
         }
 
-        if ($amount !== null && (float) $voucher->amount + 0.01 < (float) $amount) {
+        if ($amount === null) {
+            return;
+        }
+
+        if ($voucher->isPoolVoucher()) {
+            if ((float) $voucher->remaining_amount <= 0) {
+                throw new RuntimeException('This pool voucher has no remaining balance.');
+            }
+
+            if ((float) $voucher->remaining_amount + 0.01 < (float) $amount) {
+                throw new RuntimeException('This pool voucher remaining balance is lower than the payment due.');
+            }
+
+            return;
+        }
+
+        if ((float) $voucher->amount + 0.01 < (float) $amount) {
             throw new RuntimeException('This voucher amount is lower than the payment due.');
         }
+    }
+
+    private function markVoucherRedeemed(GoshenVoucher $voucher, float $amount): void
+    {
+        $usedCount = (int) $voucher->used_count + 1;
+        $updates = [
+            'used_count' => $usedCount,
+        ];
+
+        if ($voucher->isPoolVoucher()) {
+            $remaining = round(max(0, (float) $voucher->remaining_amount - $amount), 2);
+            $updates['remaining_amount'] = $remaining;
+            if ($remaining <= 0.01 || $usedCount >= (int) $voucher->max_uses) {
+                $updates['status'] = GoshenVoucher::STATUS_EXHAUSTED;
+            }
+        } elseif ($usedCount >= (int) $voucher->max_uses) {
+            $updates['status'] = GoshenVoucher::STATUS_EXHAUSTED;
+        }
+
+        $voucher->forceFill($updates)->save();
     }
 
     private function assertVoucherPurpose(GoshenVoucher $voucher, string $requiredPurpose): void
