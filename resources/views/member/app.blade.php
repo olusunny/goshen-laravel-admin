@@ -18,7 +18,7 @@
     <meta name="twitter:image" content="/icons/goshen-icon-512.png">
     <title>Goshen Retreat Portal | MFM Triumphant Church</title>
     <link rel="manifest" href="/member-manifest.json?v=20260718">
-    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/favicon.ico?v=20260718" sizes="any">
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/goshen-icon-32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/goshen-icon-192.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/goshen-icon-180.png">
@@ -608,7 +608,7 @@
             min-height: 12rem;
             background:
                 linear-gradient(135deg, rgba(12, 34, 48, .85), rgba(15, 90, 69, .72)),
-                url("/favicon.png") center/5rem no-repeat;
+                url("/icons/goshen-icon-192.png") center/5rem no-repeat;
             position: relative;
         }
 
@@ -704,7 +704,7 @@
             aspect-ratio: 16 / 9;
             background:
                 linear-gradient(135deg, rgba(12, 34, 48, .94), rgba(15, 90, 69, .82)),
-                url("/favicon.png") center/4rem no-repeat;
+                url("/icons/goshen-icon-192.png") center/4rem no-repeat;
         }
 
         .video-frame iframe {
@@ -1170,7 +1170,7 @@
     <section id="retreatHero" class="hero retreat-hero">
         <div class="brand">
             <div class="brand-main">
-                <img src="/favicon.png" alt="Goshen logo">
+                <img src="/icons/goshen-icon-192.png" alt="Goshen logo">
                 <div>
                     <div class="eyebrow">MFM Triumphant Church</div>
                     <strong>Member web app</strong>
@@ -1195,7 +1195,7 @@
             </div>
             <div id="retreatHeroMedia" class="hero-media-card">
                 <div class="hero-media-fallback">
-                    <img src="/favicon.png" alt="">
+                    <img src="/icons/goshen-icon-192.png" alt="">
                     <strong>Goshen Retreat</strong>
                     <span>Feature banner will appear here when published.</span>
                 </div>
@@ -2394,7 +2394,7 @@
             applyHeroCountdown(null);
             retreatHeroMedia.innerHTML = `
                 <div class="hero-media-fallback">
-                    <img src="/favicon.png" alt="">
+                    <img src="/icons/goshen-icon-192.png" alt="">
                     <strong>Goshen Retreat</strong>
                     <span>Feature banner will appear here when published.</span>
                 </div>
@@ -2423,7 +2423,7 @@
             `
             : `
                 <div class="hero-media-fallback">
-                    <img src="/favicon.png" alt="">
+                    <img src="/icons/goshen-icon-192.png" alt="">
                     <strong>${escapeHtml(title)}</strong>
                     <span>${escapeHtml(venue)}</span>
                 </div>

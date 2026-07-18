@@ -1,8 +1,7 @@
 const CACHE_NAME = 'goshen-member-shell-v8';
 const APP_SHELL = [
   '/member-manifest.json',
-  '/favicon.ico',
-  '/favicon.png',
+  '/favicon.ico?v=20260718',
   '/icons/goshen-icon-192.png',
   '/icons/goshen-icon-512.png'
 ];

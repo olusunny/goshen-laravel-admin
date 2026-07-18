@@ -17,7 +17,7 @@
     <meta name="twitter:image" content="/icons/goshen-icon-512.png">
     <title>Goshen Retreat Portal | MFM Triumphant Church</title>
     <link rel="manifest" href="/member-manifest.json?v=20260718">
-    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/favicon.ico?v=20260718" sizes="any">
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/goshen-icon-32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/goshen-icon-192.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/goshen-icon-180.png">
@@ -1464,7 +1464,7 @@
     <section id="authShell" class="auth-shell">
         <div class="auth-card">
             <div class="auth-head">
-                <img class="auth-logo" src="/favicon.png" alt="MFM Triumphant Church">
+                <img class="auth-logo" src="/icons/goshen-icon-192.png" alt="Goshen Retreat">
                 <p class="eyebrow">MFM Triumphant Church</p>
                 <h1>Welcome to Goshen Retreat</h1>
                 <p>Sign in or create your account to manage registration, tickets, payments, and retreat updates.</p>
@@ -1630,7 +1630,7 @@
     <div id="portalShell" class="portal-shell" hidden>
         <aside class="sidebar" aria-label="Portal navigation">
             <div class="sidebar-brand">
-                <img class="brand-logo" src="/favicon.png" alt="">
+                <img class="brand-logo" src="/icons/goshen-icon-192.png" alt="">
                 <div>
                     <strong>Goshen Retreat</strong>
                     <span>User portal</span>
@@ -1675,7 +1675,7 @@
         <div id="drawerBackdrop" class="drawer-backdrop" hidden>
             <div class="drawer" role="dialog" aria-modal="true" aria-label="Portal navigation">
                 <div class="drawer-brand">
-                    <img class="brand-logo" src="/favicon.png" alt="">
+                    <img class="brand-logo" src="/icons/goshen-icon-192.png" alt="">
                     <div>
                         <strong>Goshen Retreat</strong>
                         <span>User portal</span>
