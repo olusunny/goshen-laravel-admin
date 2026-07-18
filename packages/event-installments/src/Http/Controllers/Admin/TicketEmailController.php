@@ -19,6 +19,12 @@ class TicketEmailController extends Controller
         $recipient = $request->input('recipient');
         $log = $notifications->sendTicket($ticket, is_string($recipient) && $recipient !== '' ? $recipient : null);
 
+        if ($log->status !== 'sent') {
+            return back()->withErrors([
+                'ticket_email' => $log->error ?: 'The ticket email could not be sent. Please check mail and ticket PDF generation settings.',
+            ]);
+        }
+
         return back()->with('status', 'Ticket email sent to ' . $log->recipient . '.');
     }
 }

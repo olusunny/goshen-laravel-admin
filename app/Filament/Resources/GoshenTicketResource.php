@@ -13,6 +13,7 @@ use chillerlan\QRCode\QROptions;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -22,12 +23,14 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 use Livewire\Component;
 use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\Ticket;
 use Personal\EventInstallments\Services\QrPayloadService;
+use Personal\EventInstallments\Services\TicketNotificationService;
 use Throwable;
 
 class GoshenTicketResource extends Resource
@@ -270,11 +273,67 @@ class GoshenTicketResource extends Resource
                 Tables\Columns\TextColumn::make('attendee.last_name')->label('Last name')->searchable(),
                 Tables\Columns\TextColumn::make('ticketType.name')->label('Type')->searchable(),
                 Tables\Columns\TextColumn::make('status')->badge()->sortable(),
+                Tables\Columns\TextColumn::make('last_ticket_email_status')
+                    ->label('Last email')
+                    ->badge()
+                    ->state(fn (Ticket $record): string => (string) ($record->emailLogs()->latest('id')->value('status') ?: 'not_sent'))
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'sent' => 'Sent',
+                        'failed' => 'Failed',
+                        'pending' => 'Pending',
+                        default => 'Not sent',
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        'sent' => 'success',
+                        'failed' => 'danger',
+                        'pending' => 'warning',
+                        default => 'gray',
+                    }),
                 Tables\Columns\TextColumn::make('issued_at')->dateTime()->sortable(),
             ])
             ->recordUrl(fn (Model $record): string => static::getUrl('view', ['record' => $record]))
             ->recordActions([
                 Actions\ViewAction::make()->label('View details'),
+                static::sendTicketEmailAction(),
+            ])
+            ->toolbarActions([
+                Actions\BulkActionGroup::make([
+                    Actions\BulkAction::make('sendSelectedTicketEmails')
+                        ->label('Send/resend selected ticket emails')
+                        ->icon('heroicon-o-envelope')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->modalHeading('Send selected Goshen tickets')
+                        ->modalDescription('Each selected ticket will be sent to its attendee or booking email with the generated ticket PDF attached.')
+                        ->modalSubmitActionLabel('Send ticket emails')
+                        ->action(function (Collection $records, TicketNotificationService $notifications): void {
+                            $sent = 0;
+                            $failed = 0;
+                            $skipped = 0;
+
+                            $records->each(function (Ticket $ticket) use ($notifications, &$sent, &$failed, &$skipped): void {
+                                if (blank(static::defaultTicketEmailRecipient($ticket))) {
+                                    $skipped++;
+
+                                    return;
+                                }
+
+                                $log = $notifications->sendTicket($ticket);
+
+                                if ($log->status === 'sent') {
+                                    $sent++;
+                                } else {
+                                    $failed++;
+                                }
+                            });
+
+                            $notification = Notification::make()
+                                ->title("Ticket email resend complete: {$sent} sent, {$failed} failed")
+                                ->body($skipped > 0 ? "{$skipped} ticket(s) skipped because no recipient email was available." : null);
+
+                            ($failed > 0 || $skipped > 0 ? $notification->warning() : $notification->success())->send();
+                        }),
+                ]),
             ]);
     }
 
@@ -332,6 +391,68 @@ class GoshenTicketResource extends Resource
             $user->triumphant_id,
             $user->email,
         ])->filter(fn ($value): bool => filled($value))->implode(' · ');
+    }
+
+    public static function sendTicketEmailAction(): Actions\Action
+    {
+        return Actions\Action::make('sendTicketEmail')
+            ->label('Send/resend ticket')
+            ->icon('heroicon-o-envelope')
+            ->color('success')
+            ->modalHeading(fn (Ticket $record): string => 'Send Goshen ticket '.($record->formatted_number ?: $record->ticket_number))
+            ->modalDescription('Send this ticket to the registered attendee email or enter another email address. The generated ticket PDF will be attached.')
+            ->modalSubmitActionLabel('Send ticket')
+            ->form([
+                Forms\Components\TextInput::make('recipient')
+                    ->label('Recipient email')
+                    ->email()
+                    ->required()
+                    ->default(fn (Ticket $record): string => (string) static::defaultTicketEmailRecipient($record))
+                    ->helperText('Defaults to the ticket owner when an email is available. You may replace it with another email address.'),
+            ])
+            ->action(function (Ticket $record, array $data, TicketNotificationService $notifications): void {
+                static::sendTicketEmail($record, trim((string) ($data['recipient'] ?? '')), $notifications);
+            });
+    }
+
+    public static function sendTicketEmail(Ticket $ticket, ?string $recipient, TicketNotificationService $notifications): void
+    {
+        $recipient = filled($recipient) ? trim((string) $recipient) : static::defaultTicketEmailRecipient($ticket);
+
+        if (blank($recipient)) {
+            Notification::make()
+                ->title('Ticket email not sent')
+                ->body('This ticket does not have an attendee or booking email address.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $log = $notifications->sendTicket($ticket, $recipient);
+
+        if ($log->status === 'sent') {
+            Notification::make()
+                ->title('Ticket email sent')
+                ->body('The ticket PDF and details were sent to '.$log->recipient.'.')
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('Ticket email could not be sent')
+            ->body($log->error ?: 'The mail service rejected the ticket email. Please check SMTP settings and try again.')
+            ->danger()
+            ->send();
+    }
+
+    private static function defaultTicketEmailRecipient(Ticket $ticket): ?string
+    {
+        $ticket->loadMissing(['attendee', 'booking']);
+
+        return $ticket->attendee?->email ?: $ticket->booking?->customer_email;
     }
 
     private static function clearWalletAuthorization(Set $set): void

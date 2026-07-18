@@ -8,6 +8,7 @@ use Personal\EventInstallments\Mail\TicketIssuedMail;
 use Personal\EventInstallments\Models\Ticket;
 use Personal\EventInstallments\Models\TicketDocument;
 use Personal\EventInstallments\Models\TicketEmailLog;
+use RuntimeException;
 use Throwable;
 
 class TicketNotificationService
@@ -20,7 +21,7 @@ class TicketNotificationService
     {
         $ticket->loadMissing(['event', 'booking', 'attendee', 'ticketType']);
 
-        $recipient ??= $ticket->attendee?->email ?: $ticket->booking->customer_email;
+        $recipient = trim((string) ($recipient ?: ($ticket->attendee?->email ?: $ticket->booking->customer_email)));
         $subject = (string) config('event-installments.ticket.email.subject', 'Your event ticket');
 
         $log = TicketEmailLog::query()->create([
@@ -33,6 +34,14 @@ class TicketNotificationService
         ]);
 
         try {
+            if ($recipient === '' || filter_var($recipient, FILTER_VALIDATE_EMAIL) === false) {
+                throw new RuntimeException('A valid recipient email address is required before the ticket can be sent.');
+            }
+
+            if (! config('event-installments.ticket.email.enabled', true)) {
+                throw new RuntimeException('Ticket email sending is currently disabled.');
+            }
+
             $attachments = $this->buildAttachments($ticket);
 
             Mail::to($recipient)->send(new TicketIssuedMail($ticket, $attachments));
@@ -62,8 +71,11 @@ class TicketNotificationService
             ->where('booking_id', $bookingId)
             ->with(['event', 'booking', 'attendee', 'ticketType'])
             ->each(function (Ticket $ticket) use (&$sent) {
-                $this->sendTicket($ticket);
-                $sent++;
+                $log = $this->sendTicket($ticket);
+
+                if ($log->status === 'sent') {
+                    $sent++;
+                }
             });
 
         return $sent;
@@ -83,11 +95,7 @@ class TicketNotificationService
         }
 
         if (config('event-installments.ticket.email.attach_pdf', true)) {
-            $attachment = $this->optionalAttachment($ticket, 'pdf');
-
-            if ($attachment !== null) {
-                $attachments[] = $attachment;
-            }
+            $attachments[] = $this->requiredAttachment($ticket, 'pdf');
         }
 
         if (config('event-installments.ticket.email.attach_ics', true)) {
@@ -126,6 +134,40 @@ class TicketNotificationService
             ]);
 
             return null;
+        }
+    }
+
+    /**
+     * @return array{disk: string, path: string, name: string, mime: string|null}
+     */
+    private function requiredAttachment(Ticket $ticket, string $type): array
+    {
+        try {
+            $document = $ticket->documents()->where('type', $type)->first() ?: match ($type) {
+                'qr' => $this->documents->generateQr($ticket),
+                'pdf' => $this->documents->generatePdf($ticket),
+                'ics' => $this->documents->generateIcs($ticket),
+                default => null,
+            };
+
+            if (! $document instanceof TicketDocument) {
+                throw new RuntimeException("Unsupported required ticket attachment type [{$type}].");
+            }
+
+            return $this->attachmentFromDocument($document, $ticket);
+        } catch (Throwable $exception) {
+            Log::warning('Required ticket email attachment could not be generated.', [
+                'ticket_id' => $ticket->id,
+                'ticket_public_id' => $ticket->public_id,
+                'type' => $type,
+                'error' => $exception->getMessage(),
+            ]);
+
+            throw new RuntimeException(
+                strtoupper($type).' ticket attachment could not be generated: '.$exception->getMessage(),
+                0,
+                $exception,
+            );
         }
     }
 

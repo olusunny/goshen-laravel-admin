@@ -21,9 +21,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Mockery\MockInterface;
+use Personal\EventInstallments\Mail\TicketIssuedMail;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Models\Booking;
@@ -34,6 +37,9 @@ use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentTransaction;
 use Personal\EventInstallments\Models\Ticket;
+use Personal\EventInstallments\Models\TicketDocument;
+use Personal\EventInstallments\Services\TicketDocumentService;
+use Personal\EventInstallments\Services\TicketNotificationService;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -1034,6 +1040,106 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             'voucher',
             'GSH-UNUSED-CODE',
         );
+    }
+
+    public function test_admin_can_send_or_resend_ticket_email_with_generated_pdf_attachment(): void
+    {
+        config([
+            'event-installments.ticket.email.enabled' => false,
+            'event-installments.ticket.email.attach_pdf' => true,
+            'event-installments.ticket.email.attach_ics' => false,
+            'event-installments.ticket.qr_secret' => 'testing-secret',
+            'event-installments.storage.disk' => 'local',
+        ]);
+        Storage::fake('local');
+        Mail::fake();
+
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $ticket = app(GoshenAdminTicketIssuanceService::class)->issue(
+            $member,
+            $ticketType,
+            $admin,
+            'Front desk registration',
+            'voucher',
+            $this->voucherCode($ticketType, $admin),
+        );
+        $ticket->documents()->delete();
+
+        config(['event-installments.ticket.email.enabled' => true]);
+        $this->mock(TicketDocumentService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('generateQr')->andThrow(new \RuntimeException('QR renderer unavailable.'));
+            $mock->shouldReceive('generatePdf')->once()->andReturnUsing(function (Ticket $ticket): TicketDocument {
+                $path = 'event-installments/tickets/pdf/'.$ticket->public_id.'.pdf';
+                Storage::disk('local')->put($path, "%PDF-1.4\n% test ticket\n%%EOF");
+
+                return TicketDocument::query()->updateOrCreate(
+                    ['ticket_id' => $ticket->id, 'type' => 'pdf'],
+                    [
+                        'disk' => 'local',
+                        'path' => $path,
+                        'mime_type' => 'application/pdf',
+                        'generated_at' => now(),
+                    ],
+                );
+            });
+        });
+
+        $log = app(TicketNotificationService::class)->sendTicket($ticket, 'resend@example.test');
+
+        $this->assertSame('sent', $log->status);
+        $this->assertSame('resend@example.test', $log->recipient);
+        $this->assertTrue(collect($log->attachments)->contains(
+            fn (array $attachment): bool => $attachment['mime'] === 'application/pdf'
+                && str_ends_with($attachment['name'], '.pdf')
+                && str_ends_with($attachment['path'], $ticket->public_id.'.pdf'),
+        ));
+
+        $pdfAttachment = collect($log->attachments)->firstWhere('mime', 'application/pdf');
+        $this->assertIsArray($pdfAttachment);
+        Storage::disk('local')->assertExists($pdfAttachment['path']);
+        $this->assertStringStartsWith('%PDF', Storage::disk('local')->get($pdfAttachment['path']));
+
+        Mail::assertSent(TicketIssuedMail::class, function (TicketIssuedMail $mail) use ($ticket): bool {
+            return $mail->hasTo('resend@example.test')
+                && collect($mail->documentAttachments)->contains(
+                    fn (array $attachment): bool => $attachment['mime'] === 'application/pdf'
+                        && $attachment['name'] === ($ticket->formatted_number ?: $ticket->ticket_number).'.pdf',
+                );
+        });
+    }
+
+    public function test_ticket_email_is_not_sent_when_required_pdf_attachment_cannot_be_generated(): void
+    {
+        config([
+            'event-installments.ticket.email.enabled' => false,
+            'event-installments.ticket.email.attach_pdf' => true,
+            'event-installments.ticket.email.attach_ics' => false,
+            'event-installments.ticket.qr_secret' => 'testing-secret',
+        ]);
+        Mail::fake();
+
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $ticket = app(GoshenAdminTicketIssuanceService::class)->issue(
+            $member,
+            $ticketType,
+            $admin,
+            'Front desk registration',
+            'voucher',
+            $this->voucherCode($ticketType, $admin),
+        );
+        $ticket->documents()->delete();
+
+        config(['event-installments.ticket.email.enabled' => true]);
+        $documents = $this->mock(TicketDocumentService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('generateQr')->andThrow(new \RuntimeException('QR renderer unavailable.'));
+            $mock->shouldReceive('generatePdf')->once()->andThrow(new \RuntimeException('PDF renderer unavailable.'));
+        });
+
+        $log = (new TicketNotificationService($documents))->sendTicket($ticket, 'resend@example.test');
+
+        $this->assertSame('failed', $log->status);
+        $this->assertStringContainsString('PDF ticket attachment could not be generated', (string) $log->error);
+        Mail::assertNothingSent();
     }
 
     public function test_any_admin_role_can_be_granted_ticket_issuance_without_delete_access(): void

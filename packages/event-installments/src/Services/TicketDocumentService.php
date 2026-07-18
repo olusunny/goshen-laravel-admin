@@ -48,9 +48,9 @@ class TicketDocumentService
         $disk = config('event-installments.storage.disk');
         $path = trim(config('event-installments.storage.pdf_path'), '/') . '/' . $ticket->public_id . '.pdf';
 
-        $pdf = class_exists(\Dompdf\Dompdf::class)
+        $pdf = extension_loaded('gd') && class_exists(\Dompdf\Dompdf::class)
             ? $this->dompdfTicketPdf($ticket)
-            : (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)
+            : (extension_loaded('gd') && class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)
                 ? \Barryvdh\DomPDF\Facade\Pdf::loadHTML($this->ticketHtml($ticket))->output()
                 : $this->basicTicketPdf($ticket));
 

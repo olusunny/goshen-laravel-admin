@@ -5,7 +5,6 @@ namespace App\Filament\Resources\GoshenTicketResource\Pages;
 use App\Filament\Resources\GoshenTicketResource;
 use Filament\Actions;
 use Filament\Forms;
-use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Personal\EventInstallments\Services\TicketNotificationService;
 
@@ -17,11 +16,11 @@ class ViewGoshenTicket extends ViewRecord
     {
         return [
             Actions\Action::make('sendTicketEmail')
-                ->label('Email ticket')
+                ->label('Send/resend PDF ticket')
                 ->icon('heroicon-o-envelope')
                 ->color('success')
-                ->modalHeading('Send Goshen ticket')
-                ->modalDescription('Send this ticket to the registered attendee email or enter another email address.')
+                ->modalHeading('Send or resend Goshen ticket')
+                ->modalDescription('Send the ticket details with the generated PDF ticket attached to the registered attendee email, or enter another email address.')
                 ->modalSubmitActionLabel('Send ticket')
                 ->form([
                     Forms\Components\TextInput::make('recipient')
@@ -33,23 +32,8 @@ class ViewGoshenTicket extends ViewRecord
                 ])
                 ->action(function (array $data, TicketNotificationService $notifications): void {
                     $recipient = trim((string) ($data['recipient'] ?? ''));
-                    $log = $notifications->sendTicket($this->record, $recipient);
 
-                    if ($log->status === 'sent') {
-                        Notification::make()
-                            ->title('Ticket email sent')
-                            ->body('The ticket was sent to ' . $log->recipient . '.')
-                            ->success()
-                            ->send();
-
-                        return;
-                    }
-
-                    Notification::make()
-                        ->title('Ticket email could not be sent')
-                        ->body($log->error ?: 'The mail service rejected the ticket email. Please check SMTP settings and try again.')
-                        ->danger()
-                        ->send();
+                    GoshenTicketResource::sendTicketEmail($this->record, $recipient, $notifications);
                 }),
         ];
     }

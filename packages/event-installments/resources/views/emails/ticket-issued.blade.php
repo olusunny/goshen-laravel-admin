@@ -6,7 +6,7 @@
 </head>
 <body style="font-family: Arial, sans-serif; color: #111827; line-height: 1.5;">
     <h1 style="margin-bottom: 8px;">{{ $event->name }}</h1>
-    <p>Your Goshen Retreat ticket is ready. Please keep this email and bring the attached QR image for check-in.</p>
+    <p>Your Goshen Retreat ticket is ready. Please keep this email and bring the attached PDF ticket for check-in.</p>
 
     <table cellpadding="8" cellspacing="0" style="border-collapse: collapse; border: 1px solid #d1d5db;">
         <tr>
@@ -32,7 +32,7 @@
     @endif
 
     <p style="color: #6b7280;">
-        The QR image is the scannable ticket for fast entry. PDF and calendar files may also be attached when available.
+        The attached PDF is your official ticket. It includes the ticket details and scannable QR code for fast entry.
     </p>
 </body>
 </html>
