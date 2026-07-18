@@ -13,6 +13,8 @@ class MediaMixChart extends ChartWidget
 
     protected string $color = 'info';
 
+    protected ?string $pollingInterval = null;
+
     protected function getType(): string
     {
         return 'doughnut';

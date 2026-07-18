@@ -13,6 +13,8 @@ class VisitorTrendChart extends ChartWidget
 
     protected string $color = 'primary';
 
+    protected ?string $pollingInterval = null;
+
     protected function getType(): string
     {
         return 'line';

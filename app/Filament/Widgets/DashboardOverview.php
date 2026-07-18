@@ -16,6 +16,8 @@ class DashboardOverview extends StatsOverviewWidget
 
     protected ?string $description = 'Live operational snapshot across content, mobile users, giving, and consumption.';
 
+    protected ?string $pollingInterval = null;
+
     protected function getStats(): array
     {
         $visitsToday = VisitorMetric::realTraffic()->whereDate('visited_at', today())->sum('visits');

@@ -2,8 +2,8 @@
 
 namespace App\Providers\Filament;
 
-use App\Filament\Widgets\AdminSummaryCards;
 use App\Filament\Widgets\ActiveMobileUsersByCountryWidget;
+use App\Filament\Widgets\AdminSummaryCards;
 use App\Filament\Widgets\DashboardOverview;
 use App\Filament\Widgets\GoshenExperienceStatsWidget;
 use App\Filament\Widgets\LocationInsightsWidget;
@@ -29,8 +29,10 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Throwable;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -45,7 +47,8 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogo(fn () => $this->brandLogo())
             ->brandLogoHeight('3rem')
             ->favicon(asset('favicon.png'))
-            ->databaseNotifications()
+            ->databaseNotifications(fn (): bool => $this->canUseDatabaseNotifications(), isLazy: false)
+            ->databaseNotificationsPolling(null)
             ->sidebarCollapsibleOnDesktop()
             ->sidebarWidth('16rem')
             ->collapsibleNavigationGroups()
@@ -151,5 +154,14 @@ class AdminPanelProvider extends PanelProvider
             NavigationGroup::make('Settings')->collapsed(),
             NavigationGroup::make('Legacy Accommodation Archive')->collapsed(),
         ];
+    }
+
+    private function canUseDatabaseNotifications(): bool
+    {
+        try {
+            return Schema::hasTable('notifications');
+        } catch (Throwable) {
+            return false;
+        }
     }
 }
