@@ -135,15 +135,27 @@ class SmtpSettingResource extends Resource
                     ])
                     ->action(function (SmtpSetting $record, array $data): void {
                         try {
+                            $sentAt = now()->format('M j, Y H:i:s T');
+                            $subject = "MFM Triumphant Church SMTP test - {$record->name} - {$sentAt}";
+                            $body = implode("\n", [
+                                "This is a test email from {$record->from_name}.",
+                                '',
+                                "SMTP setting: {$record->name}",
+                                "SMTP host: {$record->host}:{$record->port}",
+                                "Sent at: {$sentAt}",
+                                '',
+                                'If you can read this, this SMTP provider is accepting outbound email from the Goshen portal.',
+                            ]);
+
                             app(DynamicSmtpMailer::class)->sendRaw(
                                 $data['recipient'],
-                                'MFM Triumphant Church SMTP test',
-                                "This is a test email from {$record->from_name}.",
+                                $subject,
+                                $body,
                                 $record,
                             );
                             $record->forceFill([
                                 'last_tested_at' => now(),
-                                'last_test_result' => 'Test email sent successfully to '.$data['recipient'],
+                                'last_test_result' => 'Test email sent successfully to '.$data['recipient'].' with subject: '.$subject,
                             ])->save();
                             Notification::make()->title('Test email sent')->success()->send();
                         } catch (\Throwable $exception) {
