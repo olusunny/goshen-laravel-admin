@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\GoshenTicketResource;
+use App\Services\DynamicSmtpMailer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
@@ -17,6 +18,7 @@ use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\Ticket;
 use Personal\EventInstallments\Models\TicketEmailLog;
 use Personal\EventInstallments\Services\TicketNotificationService;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 class GoshenTicketEmailDeliveryTest extends TestCase
@@ -74,8 +76,9 @@ class GoshenTicketEmailDeliveryTest extends TestCase
 
     private function configureTicketEmailTest(): void
     {
-        Mail::fake();
         Storage::fake('local');
+
+        $this->mockTicketMailer();
 
         Config::set('event-installments.storage.disk', 'local');
         Config::set('event-installments.ticket.qr_secret', 'ticket-email-test-secret');
@@ -139,5 +142,18 @@ class GoshenTicketEmailDeliveryTest extends TestCase
             fn (array $attachment): bool => ($attachment['mime'] ?? null) === 'application/pdf'
                 && str_ends_with((string) ($attachment['name'] ?? ''), '.pdf')
         );
+    }
+
+    private function mockTicketMailer(): void
+    {
+        Mail::fake();
+
+        $this->mock(DynamicSmtpMailer::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('sendMailable')
+                ->once()
+                ->andReturnUsing(function (string $to, TicketIssuedMail $mail): void {
+                    Mail::to($to)->send($mail);
+                });
+        });
     }
 }

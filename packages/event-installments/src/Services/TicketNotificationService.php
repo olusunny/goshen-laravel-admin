@@ -2,8 +2,8 @@
 
 namespace Personal\EventInstallments\Services;
 
+use App\Services\DynamicSmtpMailer;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Personal\EventInstallments\Mail\TicketIssuedMail;
 use Personal\EventInstallments\Models\Ticket;
 use Personal\EventInstallments\Models\TicketDocument;
@@ -13,7 +13,10 @@ use Throwable;
 
 class TicketNotificationService
 {
-    public function __construct(private readonly TicketDocumentService $documents) {}
+    public function __construct(
+        private readonly TicketDocumentService $documents,
+        private readonly DynamicSmtpMailer $mailer,
+    ) {}
 
     public function sendTicket(Ticket $ticket, ?string $recipient = null): TicketEmailLog
     {
@@ -42,7 +45,7 @@ class TicketNotificationService
 
             $attachments = $this->buildAttachments($ticket);
 
-            Mail::to($recipient)->send(new TicketIssuedMail($ticket, $attachments));
+            $this->mailer->sendMailable($recipient, new TicketIssuedMail($ticket, $attachments));
 
             $log->forceFill([
                 'status' => 'sent',

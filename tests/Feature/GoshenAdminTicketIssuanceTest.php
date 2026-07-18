@@ -7,6 +7,7 @@ use App\Filament\Resources\GoshenTicketResource;
 use App\Filament\Resources\GoshenTicketResource\Pages\CreateGoshenTicket;
 use App\Models\GoshenWallet;
 use App\Models\MobileUser;
+use App\Models\SmtpSetting;
 use App\Models\User;
 use App\Models\WebWalletVerificationChallenge;
 use App\Services\DynamicSmtpMailer;
@@ -1053,6 +1054,13 @@ class GoshenAdminTicketIssuanceTest extends TestCase
         ]);
         Storage::fake('local');
         Mail::fake();
+        $this->mock(DynamicSmtpMailer::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('sendMailable')
+                ->once()
+                ->andReturnUsing(function (string $to, TicketIssuedMail $mail): void {
+                    Mail::to($to)->send($mail);
+                });
+        });
 
         [$member, $ticketType, $admin] = $this->issuanceFixture();
         $ticket = app(GoshenAdminTicketIssuanceService::class)->issue(
@@ -1117,6 +1125,17 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             'event-installments.ticket.qr_secret' => 'testing-secret',
         ]);
         Mail::fake();
+        SmtpSetting::query()->create([
+            'name' => 'Test SMTP',
+            'host' => 'smtp.example.test',
+            'port' => 587,
+            'encryption' => 'tls',
+            'username' => 'mailer@example.test',
+            'password' => 'secret',
+            'from_address' => 'tickets@example.test',
+            'from_name' => 'Goshen Tickets',
+            'is_active' => true,
+        ]);
 
         [$member, $ticketType, $admin] = $this->issuanceFixture();
         $ticket = app(GoshenAdminTicketIssuanceService::class)->issue(
@@ -1135,7 +1154,7 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             $mock->shouldReceive('generatePdf')->once()->andThrow(new \RuntimeException('PDF renderer unavailable.'));
         });
 
-        $log = (new TicketNotificationService($documents))->sendTicket($ticket, 'resend@example.test');
+        $log = (new TicketNotificationService($documents, app(DynamicSmtpMailer::class)))->sendTicket($ticket, 'resend@example.test');
 
         $this->assertSame('failed', $log->status);
         $this->assertStringContainsString('PDF ticket attachment could not be generated', (string) $log->error);
