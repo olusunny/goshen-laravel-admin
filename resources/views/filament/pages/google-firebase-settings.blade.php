@@ -38,14 +38,14 @@
             <p class="gfs-eyebrow">Mobile authentication</p>
             <h2 class="gfs-title">Google & Firebase settings</h2>
             <p class="gfs-copy">
-                Configure the Google OAuth client IDs used by the web portal and Flutter Google sign-in. Firebase Admin credentials for backend push notifications are shown below from the server environment.
+                Configure the Google OAuth client IDs used by the web portal and mobile app Google sign-in. Firebase Admin credentials for backend push notifications are shown below from the server environment.
             </p>
         </section>
 
         <form wire:submit.prevent="save" class="gfs-card gfs-pad">
             <div>
                 <h2 class="gfs-h2">Google sign-in</h2>
-                <p class="gfs-muted">These values are used by the web portal and returned to the Flutter app through the backend discover endpoint when either app requests a Google identity token.</p>
+                <p class="gfs-muted">These values are used by the web portal and returned to the mobile app through the backend discover endpoint when either app requests a Google identity token.</p>
             </div>
 
             <div class="gfs-grid" style="margin-top:18px;">
@@ -53,7 +53,7 @@
                     <span class="gfs-label">Enable Google login</span>
                     <span class="gfs-check">
                         <input type="checkbox" wire:model.defer="googleLoginEnabled">
-                        <span>Show Google login/register buttons in the web portal and Flutter app</span>
+                        <span>Show Google login/register buttons in the web portal and mobile app</span>
                     </span>
                 </label>
 
@@ -66,7 +66,7 @@
                 <label class="gfs-field">
                     <span class="gfs-label">Google Web client ID</span>
                     <input class="gfs-input" wire:model.defer="googleWebClientId" placeholder="000000000000-xxxxx.apps.googleusercontent.com">
-                    <span class="gfs-help">Required. The web portal uses this with Google Identity Services. Flutter uses it as serverClientId so Google returns an ID token.</span>
+                    <span class="gfs-help">Required. The web portal uses this with Google Identity Services. The mobile app uses it so Google returns an ID token.</span>
                 </label>
 
                 <label class="gfs-field">
@@ -182,7 +182,7 @@
         </section>
 
         <section class="gfs-note">
-            After saving, clear the app cache if needed, then restart the Flutter app. If Firebase Console generated a new google-services.json after adding SHA fingerprints, replace the Flutter file and rebuild the APK.
+            After saving, clear the app cache if needed, then restart the mobile app. If Firebase Console generated a new google-services.json after adding SHA fingerprints, replace the mobile app configuration file and rebuild the APK.
         </section>
     </div>
 </x-filament-panels::page>

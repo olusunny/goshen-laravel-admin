@@ -3741,7 +3741,7 @@
                     <input type="hidden" name="email" value="${escapeHtml(user.email || '')}">
                     <div class="profile-edit-photo-card">
                         ${profileAvatarMarkup(user, displayProfileValue(user.name || [firstName, user.middle_name, lastName].filter(Boolean).join(' '), 'Member'), firstName, lastName)}
-                        <p class="muted">Your profile image is optional. When uploaded, the same photo will appear in a circular frame on the web app, PWA, and Flutter app.</p>
+                        <p class="muted">Your profile image is optional. When uploaded, the same photo will appear in a circular frame on the web app and mobile app.</p>
                         <div class="field">
                             <label>Profile photo (optional)</label>
                             <input class="input" name="avatar" type="file" accept="image/jpeg,image/png,image/webp">

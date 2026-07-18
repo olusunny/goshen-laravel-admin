@@ -5,7 +5,7 @@
         </x-slot>
 
         <x-slot name="description">
-            Authenticated Flutter app traffic from real mobile users in the last 30 days.
+            Authenticated mobile app traffic from real mobile users in the last 30 days.
         </x-slot>
 
         <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px;">
@@ -48,7 +48,7 @@
                 </div>
             @empty
                 <div style="grid-column: 1 / -1; min-height: 150px; border-radius: 16px; background: #fff; border: 1px dashed rgba(148, 163, 184, .5); box-shadow: 0 10px 22px rgba(15, 23, 42, .05); padding: 28px; color: #6b7280;">
-                    No authenticated Flutter app user traffic has been recorded yet. Once real mobile users open the app and make API requests, this dashboard card will populate automatically.
+                    No authenticated mobile app user traffic has been recorded yet. Once real mobile users open the app and make API requests, this dashboard card will populate automatically.
                 </div>
             @endforelse
         </div>

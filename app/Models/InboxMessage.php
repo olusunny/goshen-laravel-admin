@@ -52,7 +52,7 @@ class InboxMessage extends Model
     {
         return [
             self::SOURCE_ADMIN => 'Admin-created messages',
-            self::SOURCE_CONTROL_HUB => 'Flutter control hub messages',
+            self::SOURCE_CONTROL_HUB => 'Mobile app control hub messages',
             self::SOURCE_AUTOMATIC => 'Automatic messages',
             self::SOURCE_SYSTEM => 'System event messages',
             self::SOURCE_RECURRING_DELIVERY => 'Recurring delivery copies',

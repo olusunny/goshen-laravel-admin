@@ -112,7 +112,7 @@ class DynamicFormResource extends Resource
                         ->default(true),
                 ]),
             Section::make('Fields')
-                ->description('These fields are rendered dynamically in the web and Flutter apps.')
+                ->description('These fields are rendered dynamically in the web and mobile apps.')
                 ->schema([
                     Forms\Components\Repeater::make('fields')
                         ->relationship()

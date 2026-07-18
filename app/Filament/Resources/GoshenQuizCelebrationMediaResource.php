@@ -118,6 +118,6 @@ class GoshenQuizCelebrationMediaResource extends Resource
 
     private static function defaultRemotionPrompt(): string
     {
-        return 'Animate the generated celebration image set into a 7-second portrait MP4 for a Flutter winner reveal. Start with soft gold particles over deep teal, push into the main winner scene, add elegant confetti bursts, trophy glow, smooth parallax on people and lights, then end on a clean loop-safe sparkle hold. Keep motion premium, warm, and church-appropriate. Do not add text; the app overlays winner names and ranks.';
+        return 'Animate the generated celebration image set into a 7-second portrait MP4 for a mobile app winner reveal. Start with soft gold particles over deep teal, push into the main winner scene, add elegant confetti bursts, trophy glow, smooth parallax on people and lights, then end on a clean loop-safe sparkle hold. Keep motion premium, warm, and church-appropriate. Do not add text; the app overlays winner names and ranks.';
     }
 }

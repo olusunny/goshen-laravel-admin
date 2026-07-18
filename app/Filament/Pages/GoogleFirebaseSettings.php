@@ -125,7 +125,7 @@ class GoogleFirebaseSettings extends Page
             'google_client_secret' => ['nullable', 'string', 'max:255'],
         ])->validate();
 
-        $this->saveSetting('google_login_enabled', $validated['google_login_enabled'] ? '1' : '0', false, 'Enable Google sign-in and registration in the web and Flutter apps.');
+        $this->saveSetting('google_login_enabled', $validated['google_login_enabled'] ? '1' : '0', false, 'Enable Google sign-in and registration in the web and mobile apps.');
         $this->saveSetting('google_web_client_id', (string) ($validated['google_web_client_id'] ?? ''), false, 'Google OAuth Web client ID used by the web portal and mobile app to request an ID token.');
         $this->saveSetting('google_android_client_id', (string) ($validated['google_android_client_id'] ?? ''), false, 'Google OAuth Android client ID for the app package and signing certificate.');
         $this->saveSetting('google_ios_client_id', (string) ($validated['google_ios_client_id'] ?? ''), false, 'Optional Google OAuth iOS client ID.');

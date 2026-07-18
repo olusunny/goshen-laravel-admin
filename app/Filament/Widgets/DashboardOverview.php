@@ -41,7 +41,7 @@ class DashboardOverview extends StatsOverviewWidget
                 ->descriptionIcon('heroicon-m-photo')
                 ->color('primary'),
             Stat::make('Mobile users', number_format(MobileUser::count()))
-                ->description('Registered Flutter app accounts')
+                ->description('Registered mobile app accounts')
                 ->descriptionIcon('heroicon-m-device-phone-mobile')
                 ->color('gray'),
             Stat::make('Upcoming events', number_format(ChurchEvent::where('is_published', true)->where('starts_at', '>=', now())->count()))

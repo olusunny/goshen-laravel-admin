@@ -309,7 +309,7 @@ class AppSettingResource extends Resource
         return match ($key) {
             'website_url' => 'Public church website shown in the mobile app.',
             'whatsapp_page' => 'Use a full WhatsApp link such as https://wa.me/234...',
-            'google_login_enabled' => 'Turn on native Google sign-in and registration in the Flutter app.',
+            'google_login_enabled' => 'Turn on native Google sign-in and registration in the mobile app.',
             'testimonies_enabled' => 'Turn the Testimonies & Thanksgiving Wall on or off in the mobile app.',
             'counseling_enabled' => 'Show Private Counseling and allow verified members to submit private counseling requests.',
             'goshen_retreat_enabled' => 'Show or hide the Goshen Retreat module in the mobile app and web experience.',

@@ -125,7 +125,7 @@ class GoshenRetreatConsole extends Page
             ],
             [
                 'title' => 'Registration form fields',
-                'description' => 'Add, remove, and reorder attendee fields shown in the web and Flutter registration forms.',
+                'description' => 'Add, remove, and reorder attendee fields shown in the web and mobile registration forms.',
                 'icon' => 'form',
                 'url' => GoshenRegistrationFieldResource::getUrl('index'),
                 'permission' => AdminPermissions::resourcePermission(GoshenRegistrationFieldResource::class),

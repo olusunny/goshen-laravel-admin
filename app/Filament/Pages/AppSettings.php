@@ -433,7 +433,7 @@ class AppSettings extends Page
             ['social', 'twitter_page', $values['twitter_page'] ?? '', 'Public X/Twitter page URL.'],
             ['payments', 'paypal_link', $values['paypal_link'] ?? '', 'Optional PayPal donation/payment URL.'],
             ['firebase', 'service_account_path', $values['service_account_path'] ?? '', 'Legacy Firebase service account path. Prefer server environment credentials for production.', true],
-            ['features', 'google_login_enabled', $values['google_login_enabled'] ? '1' : '0', 'Turn on Google sign-in and registration in the Flutter app.'],
+            ['features', 'google_login_enabled', $values['google_login_enabled'] ? '1' : '0', 'Turn on Google sign-in and registration in the mobile app.'],
             ['features', 'testimonies_enabled', $values['testimonies_enabled'] ? '1' : '0', 'Turn the Testimonies & Thanksgiving Wall on or off.'],
             ['features', 'counseling_enabled', $values['counseling_enabled'] ? '1' : '0', 'Turn private Counseling requests and pastoral care chat on or off in the app and admin.'],
             ['features', 'goshen_retreat_enabled', $values['goshen_retreat_enabled'] ? '1' : '0', 'Show or hide Goshen Retreat in the app.'],
