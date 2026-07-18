@@ -48,7 +48,7 @@ class GoshenVoucherResource extends Resource
                     ->searchable()
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('code_suffix')
-                    ->label('Code suffix')
+                    ->label('Vouchers')
                     ->badge(),
                 Tables\Columns\TextColumn::make('purpose')
                     ->label('Purpose')
