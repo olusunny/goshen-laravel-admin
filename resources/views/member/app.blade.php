@@ -5,9 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0c2230">
     <meta name="robots" content="noindex,nofollow">
-    <title>Goshen Retreat</title>
-    <link rel="manifest" href="/member-manifest.json">
-    <link rel="icon" href="/favicon.png">
+    <meta name="description" content="Access Goshen Retreat registration, tickets, wallet payments, updates, and member services for MFM Triumphant Church.">
+    <meta name="application-name" content="Goshen Retreat Portal">
+    <meta name="apple-mobile-web-app-title" content="Goshen Retreat">
+    <meta property="og:title" content="Goshen Retreat Portal | MFM Triumphant Church">
+    <meta property="og:description" content="Access Goshen Retreat registration, tickets, wallet payments, updates, and member services for MFM Triumphant Church.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="/icons/goshen-icon-512.png">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Goshen Retreat Portal | MFM Triumphant Church">
+    <meta name="twitter:description" content="Access Goshen Retreat registration, tickets, wallet payments, updates, and member services for MFM Triumphant Church.">
+    <meta name="twitter:image" content="/icons/goshen-icon-512.png">
+    <title>Goshen Retreat Portal | MFM Triumphant Church</title>
+    <link rel="manifest" href="/member-manifest.json?v=20260718">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/goshen-icon-32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/goshen-icon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/goshen-icon-180.png">
     <style>
         :root {
             color-scheme: light;

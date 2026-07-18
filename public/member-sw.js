@@ -1,7 +1,10 @@
-const CACHE_NAME = 'goshen-member-shell-v7';
+const CACHE_NAME = 'goshen-member-shell-v8';
 const APP_SHELL = [
   '/member-manifest.json',
-  '/favicon.png'
+  '/favicon.ico',
+  '/favicon.png',
+  '/icons/goshen-icon-192.png',
+  '/icons/goshen-icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {

@@ -4,9 +4,23 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0c2230">
-    <title>Goshen Retreat Portal</title>
-    <link rel="manifest" href="/member-manifest.json">
-    <link rel="icon" href="/favicon.png">
+    <meta name="description" content="Access Goshen Retreat registration, tickets, wallet payments, updates, and member services for MFM Triumphant Church.">
+    <meta name="application-name" content="Goshen Retreat Portal">
+    <meta name="apple-mobile-web-app-title" content="Goshen Retreat">
+    <meta property="og:title" content="Goshen Retreat Portal | MFM Triumphant Church">
+    <meta property="og:description" content="Access Goshen Retreat registration, tickets, wallet payments, updates, and member services for MFM Triumphant Church.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="/icons/goshen-icon-512.png">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Goshen Retreat Portal | MFM Triumphant Church">
+    <meta name="twitter:description" content="Access Goshen Retreat registration, tickets, wallet payments, updates, and member services for MFM Triumphant Church.">
+    <meta name="twitter:image" content="/icons/goshen-icon-512.png">
+    <title>Goshen Retreat Portal | MFM Triumphant Church</title>
+    <link rel="manifest" href="/member-manifest.json?v=20260718">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/goshen-icon-32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/goshen-icon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/goshen-icon-180.png">
     <script>
         (() => {
             const key = 'goshen_portal_theme';
@@ -121,15 +135,21 @@
         }
 
         .migration-notice-icon {
-            width: 58px;
-            height: 58px;
+            width: 64px;
+            height: 64px;
             display: grid;
             place-items: center;
-            border-radius: 20px;
-            background: linear-gradient(135deg, var(--gold), #ffd977);
-            color: #102532;
-            font-size: 28px;
-            box-shadow: 0 14px 32px rgba(248, 181, 34, .32);
+            border-radius: 999px;
+            overflow: hidden;
+            background: #4d2f65;
+            box-shadow: 0 14px 32px rgba(248, 181, 34, .22);
+        }
+
+        .migration-notice-icon img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
         }
 
         .migration-notice h2 {
@@ -1380,7 +1400,9 @@
     <div id="toast" class="toast" role="status" hidden></div>
     <div id="migrationNotice" class="migration-notice" role="dialog" aria-modal="true" aria-labelledby="migrationNoticeTitle" aria-describedby="migrationNoticeDescription" hidden>
         <div class="migration-notice-card" role="document">
-            <div class="migration-notice-icon" aria-hidden="true">✨</div>
+            <div class="migration-notice-icon" aria-hidden="true">
+                <img src="/icons/goshen-icon-192.png" alt="">
+            </div>
             <h2 id="migrationNoticeTitle">Welcome to the new Goshen Retreat portal</h2>
             <p id="migrationNoticeDescription" class="migration-notice-lead">
                 Existing Goshen users have been moved to this new portal. For your security, all old passwords have been reset.
