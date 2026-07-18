@@ -2,8 +2,8 @@
 
 namespace Personal\EventInstallments\Services;
 
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Personal\EventInstallments\Mail\TicketIssuedMail;
 use Personal\EventInstallments\Models\Ticket;
 use Personal\EventInstallments\Models\TicketDocument;
@@ -13,9 +13,7 @@ use Throwable;
 
 class TicketNotificationService
 {
-    public function __construct(private readonly TicketDocumentService $documents)
-    {
-    }
+    public function __construct(private readonly TicketDocumentService $documents) {}
 
     public function sendTicket(Ticket $ticket, ?string $recipient = null): TicketEmailLog
     {
@@ -187,7 +185,7 @@ class TicketNotificationService
         return [
             'disk' => $document->disk,
             'path' => $document->path,
-            'name' => $number . '.' . $extension,
+            'name' => $number.'.'.$extension,
             'mime' => $document->mime_type,
         ];
     }

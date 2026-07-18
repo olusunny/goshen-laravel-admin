@@ -2,9 +2,12 @@
 
 namespace Personal\EventInstallments\Services;
 
+use Barryvdh\DomPDF\Facade\Pdf;
 use chillerlan\QRCode\Output\QROutputInterface;
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Support\Facades\Storage;
 use Personal\EventInstallments\Models\Ticket;
 use Personal\EventInstallments\Models\TicketDocument;
@@ -12,9 +15,7 @@ use RuntimeException;
 
 class TicketDocumentService
 {
-    public function __construct(private readonly QrPayloadService $qrPayload)
-    {
-    }
+    public function __construct(private readonly QrPayloadService $qrPayload) {}
 
     public function generateQr(Ticket $ticket): TicketDocument
     {
@@ -23,7 +24,7 @@ class TicketDocumentService
         }
 
         $disk = config('event-installments.storage.disk');
-        $path = trim(config('event-installments.storage.qr_path'), '/') . '/' . $ticket->public_id . '.png';
+        $path = trim(config('event-installments.storage.qr_path'), '/').'/'.$ticket->public_id.'.png';
         $png = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('png')
             ->size(512)
             ->margin(1)
@@ -46,12 +47,12 @@ class TicketDocumentService
     {
         $ticket->loadMissing(['event', 'booking', 'attendee', 'ticketType']);
         $disk = config('event-installments.storage.disk');
-        $path = trim(config('event-installments.storage.pdf_path'), '/') . '/' . $ticket->public_id . '.pdf';
+        $path = trim(config('event-installments.storage.pdf_path'), '/').'/'.$ticket->public_id.'.pdf';
 
-        $pdf = extension_loaded('gd') && class_exists(\Dompdf\Dompdf::class)
+        $pdf = extension_loaded('gd') && class_exists(Dompdf::class)
             ? $this->dompdfTicketPdf($ticket)
-            : (extension_loaded('gd') && class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)
-                ? \Barryvdh\DomPDF\Facade\Pdf::loadHTML($this->ticketHtml($ticket))->output()
+            : (extension_loaded('gd') && class_exists(Pdf::class)
+                ? Pdf::loadHTML($this->ticketHtml($ticket))->output()
                 : $this->basicTicketPdf($ticket));
 
         Storage::disk($disk)->put($path, $pdf);
@@ -77,18 +78,18 @@ class TicketDocumentService
         }
 
         $disk = config('event-installments.storage.disk');
-        $path = trim(config('event-installments.storage.ics_path'), '/') . '/' . $ticket->public_id . '.ics';
+        $path = trim(config('event-installments.storage.ics_path'), '/').'/'.$ticket->public_id.'.ics';
         $ics = implode("\r\n", [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
             'PRODID:-//Personal Event Installments//EN',
             'BEGIN:VEVENT',
-            'UID:' . $ticket->public_id,
-            'SUMMARY:' . $this->escapeIcs($ticket->event->name),
-            'DTSTART:' . $schedule->starts_at->utc()->format('Ymd\THis\Z'),
-            'DTEND:' . ($schedule->ends_at ?: $schedule->starts_at)->utc()->format('Ymd\THis\Z'),
-            'LOCATION:' . $this->escapeIcs((string) $ticket->event->venue_name),
-            'DESCRIPTION:' . $this->escapeIcs('Ticket ' . ($ticket->formatted_number ?: $ticket->ticket_number)),
+            'UID:'.$ticket->public_id,
+            'SUMMARY:'.$this->escapeIcs($ticket->event->name),
+            'DTSTART:'.$schedule->starts_at->utc()->format('Ymd\THis\Z'),
+            'DTEND:'.($schedule->ends_at ?: $schedule->starts_at)->utc()->format('Ymd\THis\Z'),
+            'LOCATION:'.$this->escapeIcs((string) $ticket->event->venue_name),
+            'DESCRIPTION:'.$this->escapeIcs('Ticket '.($ticket->formatted_number ?: $ticket->ticket_number)),
             'END:VEVENT',
             'END:VCALENDAR',
             '',
@@ -109,7 +110,7 @@ class TicketDocumentService
 
     private function ticketHtml(Ticket $ticket): string
     {
-        $attendee = trim(($ticket->attendee?->first_name ?? '') . ' ' . ($ticket->attendee?->last_name ?? ''));
+        $attendee = trim(($ticket->attendee?->first_name ?? '').' '.($ticket->attendee?->last_name ?? ''));
         $number = $ticket->formatted_number ?: $ticket->ticket_number;
         $amountPaid = $this->amountPaidLabel($ticket);
         $status = $ticket->status instanceof \BackedEnum
@@ -224,12 +225,12 @@ HTML;
 
     private function dompdfTicketPdf(Ticket $ticket): string
     {
-        $options = new \Dompdf\Options();
+        $options = new Options;
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isRemoteEnabled', false);
         $options->set('defaultFont', 'DejaVu Sans');
 
-        $pdf = new \Dompdf\Dompdf($options);
+        $pdf = new Dompdf($options);
         $pdf->loadHtml($this->ticketHtml($ticket));
         $pdf->setPaper('A4', 'portrait');
         $pdf->render();
@@ -259,7 +260,7 @@ HTML;
 
     private function basicTicketPdf(Ticket $ticket): string
     {
-        $attendee = trim(($ticket->attendee?->first_name ?? '') . ' ' . ($ticket->attendee?->last_name ?? ''));
+        $attendee = trim(($ticket->attendee?->first_name ?? '').' '.($ticket->attendee?->last_name ?? ''));
         $number = $ticket->formatted_number ?: $ticket->ticket_number ?: $ticket->public_id;
         $event = $ticket->event?->name ?: 'Goshen Retreat';
         $type = $ticket->ticketType?->name ?: 'Ticket';
@@ -271,11 +272,11 @@ HTML;
         $lines = [
             'Goshen Retreat Ticket',
             $event,
-            'Ticket: ' . $number,
-            'Attendee: ' . ($attendee ?: 'Guest'),
-            'Type: ' . $type,
-            'Amount paid: ' . $amountPaid,
-            'Status: ' . $status,
+            'Ticket: '.$number,
+            'Attendee: '.($attendee ?: 'Guest'),
+            'Type: '.$type,
+            'Amount paid: '.$amountPaid,
+            'Status: '.$status,
             '',
             'Open the Goshen web app ticket page to scan the live QR code.',
         ];
@@ -288,7 +289,7 @@ HTML;
                 $content .= "/F1 13 Tf\n";
             }
 
-            $content .= '(' . $this->pdfText($line) . ") Tj\n0 -26 Td\n";
+            $content .= '('.$this->pdfText($line).") Tj\n0 -26 Td\n";
         }
         $content .= "ET\n";
 
@@ -297,23 +298,23 @@ HTML;
             '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
             '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
             '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-            '<< /Length ' . strlen($content) . " >>\nstream\n" . $content . "endstream",
+            '<< /Length '.strlen($content)." >>\nstream\n".$content.'endstream',
         ];
 
         $pdf = "%PDF-1.4\n";
         $offsets = [];
         foreach ($objects as $index => $object) {
             $offsets[] = strlen($pdf);
-            $pdf .= ($index + 1) . " 0 obj\n" . $object . "\nendobj\n";
+            $pdf .= ($index + 1)." 0 obj\n".$object."\nendobj\n";
         }
 
         $xref = strlen($pdf);
-        $pdf .= "xref\n0 " . (count($objects) + 1) . "\n0000000000 65535 f \n";
+        $pdf .= "xref\n0 ".(count($objects) + 1)."\n0000000000 65535 f \n";
         foreach ($offsets as $offset) {
-            $pdf .= str_pad((string) $offset, 10, '0', STR_PAD_LEFT) . " 00000 n \n";
+            $pdf .= str_pad((string) $offset, 10, '0', STR_PAD_LEFT)." 00000 n \n";
         }
 
-        return $pdf . "trailer << /Size " . (count($objects) + 1) . " /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF";
+        return $pdf.'trailer << /Size '.(count($objects) + 1)." /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF";
     }
 
     private function pdfText(string $value): string
@@ -338,12 +339,12 @@ HTML;
         $currency = strtoupper((string) ($ticket->booking?->currency ?: $ticket->ticketType?->currency ?: 'GBP'));
 
         return (float) $amount > 0
-            ? trim($currency . ' ' . number_format((float) $amount, 2))
+            ? trim($currency.' '.number_format((float) $amount, 2))
             : 'Not recorded';
     }
 
     private function escapeIcs(string $value): string
     {
-        return str_replace(["\\", "\n", "\r", ",", ";"], ["\\\\", "\\n", '', "\\,", "\\;"], $value);
+        return str_replace(['\\', "\n", "\r", ',', ';'], ['\\\\', '\\n', '', '\\,', '\\;'], $value);
     }
 }

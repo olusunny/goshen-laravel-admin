@@ -25,6 +25,6 @@ class TicketEmailController extends Controller
             ]);
         }
 
-        return back()->with('status', 'Ticket email sent to ' . $log->recipient . '.');
+        return back()->with('status', 'Ticket email sent to '.$log->recipient.'.');
     }
 }
