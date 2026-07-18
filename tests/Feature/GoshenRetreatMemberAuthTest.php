@@ -3,12 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\AppSetting;
+use App\Models\ChurchGroup;
 use App\Models\GoshenAccommodationAllocation;
 use App\Models\GoshenExperienceQuestion;
 use App\Models\GoshenExperienceResponse;
 use App\Models\GoshenExperienceSurvey;
 use App\Models\MobileUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\EventType;
 use Personal\EventInstallments\Enums\InstallmentStatus;
@@ -51,6 +54,57 @@ class GoshenRetreatMemberAuthTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', 'ok')
             ->assertJsonPath('data.user.email', 'member@example.test');
+    }
+
+    public function test_web_profile_update_uploads_avatar_to_shared_mobile_user_profile(): void
+    {
+        Storage::fake('public');
+
+        $group = ChurchGroup::query()->firstOrCreate([
+            'name' => 'Profile Photo Test Group',
+        ], [
+            'functions' => 'Music ministry',
+            'is_active' => true,
+        ]);
+
+        $user = $this->verifiedMember();
+        $token = $user->issueApiToken();
+
+        $response = $this->post('/api/updateProfile', [
+            'api_token' => $token,
+            'email' => $user->email,
+            'fullname' => 'Grace Mercy Member',
+            'title' => 'Mrs.',
+            'first_name' => 'Grace',
+            'middle_name' => 'Mercy',
+            'last_name' => 'Member',
+            'phone' => '+2348011119999',
+            'gender' => 'female',
+            'marital_status' => 'Married',
+            'group_id' => $group->id,
+            'member_type' => 'church_member',
+            'country_of_residence' => 'United Kingdom',
+            'state_county_province' => 'London',
+            'address' => '1 Goshen Way',
+            'about_me' => 'Serving with joy.',
+            'avatar' => UploadedFile::fake()->createWithContent(
+                'profile-photo.png',
+                base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=')
+            ),
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('user.email', $user->email)
+            ->assertJsonPath('user.first_name', 'Grace');
+
+        $user->refresh();
+
+        $this->assertNotNull($user->avatar);
+        $this->assertStringStartsWith('mobile-users/avatars/', $user->avatar);
+        Storage::disk('public')->assertExists($user->avatar);
+        $this->assertStringContainsString('/storage/mobile-users/avatars/', $response->json('user.avatar'));
     }
 
     public function test_published_retreat_events_include_schedule_payload(): void

@@ -648,6 +648,44 @@
             justify-content: space-between;
             gap: 12px;
         }
+        .user-chip-avatar {
+            flex: 0 0 46px;
+            width: 46px;
+            height: 46px;
+            display: grid;
+            place-items: center;
+            border-radius: 999px;
+            overflow: hidden;
+            border: 2px solid rgba(248, 181, 34, .72);
+            background: rgba(255,255,255,.12);
+            box-shadow: 0 10px 24px rgba(0,0,0,.18);
+        }
+        .user-chip-avatar.small {
+            flex-basis: 34px;
+            width: 34px;
+            height: 34px;
+            border-width: 1px;
+        }
+        .user-chip-avatar img,
+        .user-chip-avatar span {
+            width: 100%;
+            height: 100%;
+            border-radius: inherit;
+        }
+        .user-chip-avatar img {
+            object-fit: cover;
+        }
+        .user-chip-avatar span {
+            display: grid;
+            place-items: center;
+            color: #fff;
+            background: linear-gradient(145deg, var(--brand), var(--brand-2));
+            font-size: 16px;
+            font-weight: 950;
+        }
+        .user-chip-avatar.small span {
+            font-size: 12px;
+        }
         .user-chip-main {
             min-width: 0;
         }
@@ -1004,6 +1042,177 @@
             line-height: .95;
             letter-spacing: .08em;
             overflow-wrap: anywhere;
+        }
+        .profile-hero {
+            position: relative;
+            overflow: hidden;
+            display: grid;
+            gap: 18px;
+            justify-items: center;
+            padding: clamp(22px, 5vw, 34px);
+            border: 1px solid color-mix(in srgb, var(--brand) 18%, var(--line));
+            border-radius: 32px;
+            background:
+                radial-gradient(circle at 18% 8%, rgba(248, 181, 34, .24), transparent 15rem),
+                radial-gradient(circle at 82% 0%, rgba(20, 81, 63, .18), transparent 16rem),
+                linear-gradient(145deg, var(--card), var(--field));
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+        .profile-hero .profile-actions {
+            position: relative;
+            z-index: 1;
+            justify-content: center;
+            margin-top: 2px;
+        }
+        .profile-hero::after {
+            content: '';
+            position: absolute;
+            inset: auto -12% -46% auto;
+            width: 260px;
+            height: 260px;
+            border: 1px solid rgba(248, 181, 34, .22);
+            border-radius: 999px;
+            pointer-events: none;
+        }
+        .profile-avatar-frame {
+            position: relative;
+            z-index: 1;
+            width: clamp(118px, 28vw, 158px);
+            height: clamp(118px, 28vw, 158px);
+            display: grid;
+            place-items: center;
+            border-radius: 999px;
+            padding: 7px;
+            background:
+                linear-gradient(var(--card), var(--card)) padding-box,
+                linear-gradient(135deg, var(--gold), #fff2bd 38%, var(--brand-2)) border-box;
+            border: 3px solid transparent;
+            box-shadow: 0 20px 44px rgba(7, 21, 29, .20);
+        }
+        .profile-avatar-image,
+        .profile-avatar-fallback {
+            width: 100%;
+            height: 100%;
+            border-radius: 999px;
+            object-fit: cover;
+            border: 1px solid rgba(255, 255, 255, .72);
+        }
+        .profile-avatar-fallback {
+            display: grid;
+            place-items: center;
+            background: linear-gradient(145deg, var(--brand), var(--brand-2));
+            color: #fff;
+            font-size: clamp(32px, 9vw, 56px);
+            font-weight: 950;
+            letter-spacing: .04em;
+        }
+        .profile-photo-notice {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            width: min(100%, 640px);
+            padding: 13px 15px;
+            border: 1px solid rgba(248, 181, 34, .35);
+            border-radius: 18px;
+            background: color-mix(in srgb, var(--gold-2) 62%, var(--card));
+            color: var(--brand);
+            text-align: left;
+            font-weight: 800;
+            line-height: 1.45;
+        }
+        .profile-photo-notice span {
+            display: grid;
+            place-items: center;
+            flex: 0 0 28px;
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            background: var(--gold);
+            color: var(--brand);
+            font-weight: 950;
+        }
+        .profile-identity {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            gap: 8px;
+            justify-items: center;
+        }
+        .profile-identity h3 {
+            margin: 0;
+            font-size: clamp(28px, 7vw, 46px);
+            line-height: 1;
+        }
+        .profile-identity p {
+            margin: 0;
+            color: var(--muted);
+        }
+        .profile-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 18px;
+        }
+        .profile-detail-card {
+            min-width: 0;
+            padding: 15px;
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            background: var(--field);
+        }
+        .profile-detail-card strong {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 950;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+        .profile-detail-card span {
+            display: block;
+            overflow-wrap: anywhere;
+            color: var(--ink);
+            font-weight: 850;
+            line-height: 1.4;
+        }
+        .profile-detail-card.wide { grid-column: 1 / -1; }
+        .profile-edit-photo-card {
+            display: grid;
+            gap: 14px;
+            justify-items: center;
+            margin-bottom: 18px;
+            padding: 18px;
+            border: 1px dashed color-mix(in srgb, var(--gold) 54%, var(--line));
+            border-radius: 26px;
+            background: linear-gradient(145deg, var(--field), var(--card));
+            text-align: center;
+        }
+        .profile-edit-photo-card .field {
+            width: min(100%, 460px);
+            text-align: left;
+        }
+        .profile-edit-photo-card input[type="file"] {
+            min-height: auto;
+            padding: 12px;
+        }
+        .profile-edit-photo-card p {
+            max-width: 560px;
+            margin: 0;
+        }
+        @media (max-width: 720px) {
+            .profile-card-head {
+                display: grid;
+            }
+            .profile-card-head .button {
+                width: 100%;
+            }
+            .profile-detail-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .attendee-card {
@@ -1638,6 +1847,7 @@
             </div>
             <div class="user-chip">
                 <div class="user-chip-header">
+                    <div id="sidebarUserAvatar" class="user-chip-avatar" aria-hidden="true"><span>M</span></div>
                     <div class="user-chip-main">
                         <strong id="sidebarUserName">Member</strong>
                         <span id="sidebarUserEmail">Signed in</span>
@@ -1669,7 +1879,7 @@
                 <strong id="mobileTitle">Home</strong>
                 <span>Goshen Retreat</span>
             </div>
-            <button class="icon-button" type="button" data-nav-page="profile" aria-label="Open profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg></button>
+            <button class="icon-button" type="button" data-nav-page="profile" aria-label="Open profile"><span id="mobileProfileAvatar" class="user-chip-avatar small" aria-hidden="true"><span>M</span></span></button>
         </header>
 
         <div id="drawerBackdrop" class="drawer-backdrop" hidden>
@@ -1683,6 +1893,7 @@
                 </div>
                 <div class="user-chip">
                     <div class="user-chip-header">
+                        <div id="drawerUserAvatar" class="user-chip-avatar" aria-hidden="true"><span>M</span></div>
                         <div class="user-chip-main">
                             <strong id="drawerUserName">Member</strong>
                             <span id="drawerUserEmail">Signed in</span>
@@ -1860,6 +2071,22 @@
             return Object.fromEntries(new FormData(form).entries());
         }
 
+        function profileUpdateFormData(form) {
+            const formData = new FormData(form);
+            const avatar = formData.get('avatar');
+            if (typeof File !== 'undefined' && avatar instanceof File && !avatar.name) {
+                formData.delete('avatar');
+            }
+            formData.set('email', currentUser?.email || formData.get('email') || '');
+            formData.set('api_token', currentUser?.api_token || '');
+            formData.set('fullname', [
+                formData.get('first_name'),
+                formData.get('middle_name'),
+                formData.get('last_name'),
+            ].filter(Boolean).join(' '));
+            return formData;
+        }
+
         function messageFromErrorPayload(payload, fallback) {
             return payload?.message || payload?.msg || Object.values(payload?.errors || {})?.flat?.()?.[0] || fallback;
         }
@@ -1869,6 +2096,22 @@
                 method: 'POST',
                 headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
                 body: JSON.stringify({ data }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || payload.status === 'error') {
+                const error = new Error(messageFromErrorPayload(payload, 'Request failed. Please try again.'));
+                error.status = response.status;
+                error.payload = payload;
+                throw error;
+            }
+            return payload;
+        }
+
+        async function apiPostFormData(url, formData) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { Accept: 'application/json' },
+                body: formData,
             });
             const payload = await response.json().catch(() => ({}));
             if (!response.ok || payload.status === 'error') {
@@ -2231,8 +2474,16 @@
         function updateUserIdentity() {
             const name = currentUser?.name || [currentUser?.first_name, currentUser?.last_name].filter(Boolean).join(' ') || 'Member';
             const email = currentUser?.email || '';
+            const avatar = profileAvatarUrl(currentUser);
+            const avatarMarkup = avatar
+                ? `<img src="${escapeHtml(avatar)}" alt="${escapeHtml(name)} profile photo" loading="lazy">`
+                : `<span>${escapeHtml(profileInitials(currentUser, currentUser?.first_name, currentUser?.last_name))}</span>`;
             ['sidebarUserName', 'drawerUserName'].forEach((id) => { document.getElementById(id).textContent = name; });
             ['sidebarUserEmail', 'drawerUserEmail'].forEach((id) => { document.getElementById(id).textContent = email; });
+            ['sidebarUserAvatar', 'drawerUserAvatar', 'mobileProfileAvatar'].forEach((id) => {
+                const element = document.getElementById(id);
+                if (element) element.innerHTML = avatarMarkup;
+            });
             document.getElementById('homeGreeting').textContent = `Welcome, ${name.split(' ')[0] || 'Member'}`;
             document.getElementById('homeTriumphantId').textContent = currentUser?.triumphant_id
                 ? `Triumphant ID: ${currentUser.triumphant_id}`
@@ -3341,6 +3592,50 @@
             return `<div class="detail-row"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(displayProfileValue(value, fallback))}</span></div>`;
         }
 
+        function profileDetailCard(label, value, fallback = 'Not provided', wide = false) {
+            return `<div class="profile-detail-card ${wide ? 'wide' : ''}"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(displayProfileValue(value, fallback))}</span></div>`;
+        }
+
+        function profileAvatarUrl(user) {
+            return `${user?.avatar || user?.profile_photo || user?.profile_image || ''}`.trim();
+        }
+
+        function profileInitials(user, firstName = '', lastName = '') {
+            const source = [
+                firstName || user?.first_name,
+                lastName || user?.last_name,
+            ].filter(Boolean);
+            const initials = (source.length ? source : `${user?.name || user?.email || 'Member'}`.split(/\s+/))
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((part) => `${part}`.charAt(0).toUpperCase())
+                .join('');
+            return initials || 'M';
+        }
+
+        function profileAvatarMarkup(user, fullName, firstName = '', lastName = '') {
+            const avatar = profileAvatarUrl(user);
+            return `
+                <div class="profile-avatar-frame" aria-label="Profile photo">
+                    ${avatar
+                        ? `<img class="profile-avatar-image" src="${escapeHtml(avatar)}" alt="${escapeHtml(fullName)} profile photo" loading="lazy">`
+                        : `<div class="profile-avatar-fallback" aria-hidden="true">${escapeHtml(profileInitials(user, firstName, lastName))}</div>`}
+                </div>
+            `;
+        }
+
+        function profilePhotoNotice(user) {
+            if (profileAvatarUrl(user)) return '';
+            return `
+                <div class="profile-photo-notice">
+                    <span aria-hidden="true">i</span>
+                    <div>
+                        Add a profile photo whenever you are ready. It is optional, but it helps the church team identify your profile more easily across the web app and mobile app.
+                    </div>
+                </div>
+            `;
+        }
+
         function referralValue(referral, keys, fallback = '0') {
             for (const key of keys) {
                 const value = referral?.[key];
@@ -3399,31 +3694,35 @@
             const triumphantId = displayProfileValue(user.triumphant_id, 'Not assigned yet');
             const residence = [user.country_of_residence, user.state_county_province].filter(Boolean).join(', ');
             return `
-                <div class="profile-card-head">
-                    <div>
+                <div class="profile-hero">
+                    ${profileAvatarMarkup(user, fullName, firstName, lastName)}
+                    <div class="profile-identity">
                         <h3>${escapeHtml(fullName)}</h3>
-                        <p class="muted">Review the member information currently attached to your Goshen account.</p>
+                        <p>${escapeHtml(user.email || 'Review the member information attached to your Goshen account.')}</p>
                     </div>
-                    <button class="button small outline profile-edit-button" type="button">Edit profile</button>
+                    <div class="profile-triumphant-id" aria-label="Triumphant ID">
+                        <span>Triumphant ID</span>
+                        <strong>${escapeHtml(triumphantId)}</strong>
+                    </div>
+                    ${profilePhotoNotice(user)}
+                    <div class="profile-actions">
+                        <button class="button small profile-edit-button" type="button">Update / edit profile</button>
+                    </div>
                 </div>
-                <div class="profile-triumphant-id" aria-label="Triumphant ID">
-                    <span>Triumphant ID</span>
-                    <strong>${escapeHtml(triumphantId)}</strong>
-                </div>
-                <div class="detail-list">
-                    ${profileDetailRow('Email', user.email)}
-                    ${profileDetailRow('Phone', user.phone)}
-                    ${profileDetailRow('Title', user.title || user.profile_title)}
-                    ${profileDetailRow('First name', firstName)}
-                    ${profileDetailRow('Middle name', user.middle_name)}
-                    ${profileDetailRow('Last name', lastName)}
-                    ${profileDetailRow('Gender', titleCaseLabel(user.gender))}
-                    ${profileDetailRow('Marital status', user.marital_status)}
-                    ${profileDetailRow('Member type', titleCaseLabel(user.member_type || 'church_member'))}
-                    ${profileDetailRow('Church group', user.group_name, 'Not selected')}
-                    ${profileDetailRow('Residence', residence)}
-                    ${profileDetailRow('Address', user.address)}
-                    ${profileDetailRow('About me', user.about_me)}
+                <div class="profile-detail-grid">
+                    ${profileDetailCard('Phone', user.phone)}
+                    ${profileDetailCard('Email', user.email)}
+                    ${profileDetailCard('Title', user.title || user.profile_title)}
+                    ${profileDetailCard('First name', firstName)}
+                    ${profileDetailCard('Middle name', user.middle_name)}
+                    ${profileDetailCard('Last name', lastName)}
+                    ${profileDetailCard('Gender', titleCaseLabel(user.gender))}
+                    ${profileDetailCard('Marital status', user.marital_status)}
+                    ${profileDetailCard('Member type', titleCaseLabel(user.member_type || 'church_member'))}
+                    ${profileDetailCard('Church group', user.group_name, 'Not selected')}
+                    ${profileDetailCard('Residence', residence)}
+                    ${profileDetailCard('Address', user.address, 'Not provided', true)}
+                    ${profileDetailCard('About me', user.about_me, 'Not provided', true)}
                 </div>
                 ${renderProfileReferralCard()}
             `;
@@ -3438,8 +3737,17 @@
                     </div>
                     <button class="button small outline profile-cancel-edit" type="button">Cancel</button>
                 </div>
-                <form class="form profile-update-form">
+                <form class="form profile-update-form" enctype="multipart/form-data">
                     <input type="hidden" name="email" value="${escapeHtml(user.email || '')}">
+                    <div class="profile-edit-photo-card">
+                        ${profileAvatarMarkup(user, displayProfileValue(user.name || [firstName, user.middle_name, lastName].filter(Boolean).join(' '), 'Member'), firstName, lastName)}
+                        <p class="muted">Your profile image is optional. When uploaded, the same photo will appear in a circular frame on the web app, PWA, and Flutter app.</p>
+                        <div class="field">
+                            <label>Profile photo (optional)</label>
+                            <input class="input" name="avatar" type="file" accept="image/jpeg,image/png,image/webp">
+                            <small class="muted">Choose JPG, PNG, or WEBP up to 5MB.</small>
+                        </div>
+                    </div>
                     <div class="form-grid profile-form-grid">
                         <div class="field">
                             <label>Title</label>
@@ -3757,6 +4065,21 @@
         });
 
         document.getElementById('portalMain').addEventListener('input', (event) => {
+            const avatarInput = event.target.closest('.profile-update-form input[name="avatar"]');
+            if (avatarInput) {
+                const file = avatarInput.files?.[0];
+                const frame = avatarInput.closest('.profile-update-form')?.querySelector('.profile-avatar-frame');
+                if (file && frame) {
+                    if (avatarInput.dataset.previewUrl) {
+                        URL.revokeObjectURL(avatarInput.dataset.previewUrl);
+                    }
+                    const previewUrl = URL.createObjectURL(file);
+                    const fullName = currentUser?.name || 'Member';
+                    frame.innerHTML = `<img class="profile-avatar-image" src="${previewUrl}" alt="${escapeHtml(fullName)} profile photo preview">`;
+                    avatarInput.dataset.previewUrl = previewUrl;
+                }
+                return;
+            }
             const quantity = event.target.closest('.attendee-quantity');
             if (quantity) {
                 const form = quantity.closest('.registration-form');
@@ -3872,11 +4195,10 @@
             if (profileUpdate) {
                 event.preventDefault();
                 if (!profileUpdate.reportValidity()) return;
-                const data = payloadFromForm(profileUpdate);
-                data.fullname = [data.first_name, data.middle_name, data.last_name].filter(Boolean).join(' ');
+                const data = profileUpdateFormData(profileUpdate);
                 setBusy(profileUpdate, true);
                 try {
-                    const payload = await apiPost('/api/updateProfile', authPayload(data));
+                    const payload = await apiPostFormData('/api/updateProfile', data);
                     currentUser = { ...currentUser, ...(payload.user || {}), api_token: payload.user?.api_token || currentUser.api_token };
                     localStorage.setItem(storageKey, JSON.stringify(currentUser));
                     updateUserIdentity();
