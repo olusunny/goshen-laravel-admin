@@ -91,6 +91,129 @@
         }
         .toast.error { background: #3a1515; }
 
+        body.migration-notice-open {
+            overflow: hidden;
+        }
+
+        .migration-notice {
+            position: fixed;
+            inset: 0;
+            z-index: 90;
+            display: grid;
+            place-items: center;
+            padding: 22px;
+            background:
+                radial-gradient(circle at 18% 14%, rgba(248, 181, 34, .18), transparent 18rem),
+                rgba(7, 21, 29, .68);
+            backdrop-filter: blur(12px);
+        }
+
+        .migration-notice-card {
+            width: min(100%, 560px);
+            max-height: min(88vh, 720px);
+            overflow: auto;
+            background: var(--card);
+            color: var(--ink);
+            border: 1px solid var(--line);
+            border-radius: 32px;
+            box-shadow: 0 28px 80px rgba(0, 0, 0, .26);
+            padding: clamp(24px, 5vw, 34px);
+        }
+
+        .migration-notice-icon {
+            width: 58px;
+            height: 58px;
+            display: grid;
+            place-items: center;
+            border-radius: 20px;
+            background: linear-gradient(135deg, var(--gold), #ffd977);
+            color: #102532;
+            font-size: 28px;
+            box-shadow: 0 14px 32px rgba(248, 181, 34, .32);
+        }
+
+        .migration-notice h2 {
+            margin: 18px 0 10px;
+            font-size: clamp(28px, 7vw, 42px);
+            line-height: 1;
+            letter-spacing: -.04em;
+        }
+
+        .migration-notice-lead {
+            margin: 0;
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.65;
+        }
+
+        .migration-notice-list {
+            display: grid;
+            gap: 12px;
+            margin: 22px 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .migration-notice-list li {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 12px;
+            align-items: start;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: var(--field);
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .migration-notice-list strong {
+            color: var(--ink);
+        }
+
+        .migration-notice-check {
+            width: 28px;
+            height: 28px;
+            display: grid;
+            place-items: center;
+            border-radius: 999px;
+            background: rgba(248, 181, 34, .2);
+            color: var(--brand-2);
+            font-weight: 1000;
+        }
+
+        .migration-notice-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 22px;
+        }
+
+        .migration-notice-actions .button {
+            width: auto;
+            min-width: 0;
+            flex: 1 1 190px;
+            text-align: center;
+            text-decoration: none;
+        }
+
+        .migration-notice-close {
+            appearance: none;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: transparent;
+            color: var(--ink);
+            cursor: pointer;
+            font-weight: 1000;
+            padding: 14px 18px;
+        }
+
+        .migration-notice-close:focus-visible,
+        .migration-notice-actions .button:focus-visible {
+            outline: 3px solid rgba(248, 181, 34, .38);
+            outline-offset: 3px;
+        }
+
         .auth-shell {
             min-height: 100vh;
             padding: max(18px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom));
@@ -1255,6 +1378,29 @@
 </head>
 <body>
     <div id="toast" class="toast" role="status" hidden></div>
+    <div id="migrationNotice" class="migration-notice" role="dialog" aria-modal="true" aria-labelledby="migrationNoticeTitle" aria-describedby="migrationNoticeDescription" hidden>
+        <div class="migration-notice-card" role="document">
+            <div class="migration-notice-icon" aria-hidden="true">✨</div>
+            <h2 id="migrationNoticeTitle">Welcome to the new Goshen Retreat portal</h2>
+            <p id="migrationNoticeDescription" class="migration-notice-lead">
+                Existing Goshen users have been moved to this new portal. For your security, all old passwords have been reset.
+            </p>
+            <ul class="migration-notice-list">
+                <li>
+                    <span class="migration-notice-check" aria-hidden="true">✓</span>
+                    <span><strong>Use your registered email address</strong> to sign in, then use <strong>Forgot password</strong> to create a new password.</span>
+                </li>
+                <li>
+                    <span class="migration-notice-check" aria-hidden="true">✓</span>
+                    <span><strong>Pending or ongoing installment payments</strong> should now be completed through the new Wallet facility so you can obtain your ticket.</span>
+                </li>
+            </ul>
+            <div class="migration-notice-actions">
+                <a class="button dark" href="/app/forgot-password" data-auth-tab="forgot" data-migration-notice-action="reset">Reset my password</a>
+                <button class="migration-notice-close" type="button" data-migration-notice-action="dismiss">I understand</button>
+            </div>
+        </div>
+    </div>
     <svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden">
         <symbol id="icon-home" viewBox="0 0 24 24">
             <path d="M3 10.6 12 3l9 7.6v9.1a1.3 1.3 0 0 1-1.3 1.3h-5.2v-6.2h-5V21H4.3A1.3 1.3 0 0 1 3 19.7z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1647,6 +1793,7 @@
         const storageKey = 'goshen_member_user';
         const themeKey = 'goshen_portal_theme';
         const walletTabKey = 'goshen_wallet_tab';
+        const migrationNoticeKey = 'goshen_migration_notice_2026_07_v1';
         const googleLoginConfig = @json($googleLogin ?? ['enabled' => false, 'clientId' => '']);
         const pageTitles = {
             home: 'Home',
@@ -1674,6 +1821,7 @@
         const portalShell = document.getElementById('portalShell');
         const authNotice = document.getElementById('authNotice');
         const toast = document.getElementById('toast');
+        const migrationNotice = document.getElementById('migrationNotice');
         const drawerBackdrop = document.getElementById('drawerBackdrop');
         const googleAuthPanel = document.getElementById('googleAuthPanel');
         const googleIdentityButton = document.getElementById('googleIdentityButton');
@@ -1869,6 +2017,48 @@
         function currentPathSegment() {
             const segment = window.location.pathname.replace(/^\/app\/?/, '').split('/')[0];
             return segment || 'home';
+        }
+
+        function markMigrationNoticeSeen() {
+            try {
+                localStorage.setItem(migrationNoticeKey, '1');
+            } catch {}
+        }
+
+        function closeMigrationNotice() {
+            if (!migrationNotice) return;
+            migrationNotice.hidden = true;
+            document.body.classList.remove('migration-notice-open');
+            markMigrationNoticeSeen();
+        }
+
+        function initializeMigrationNotice() {
+            if (!migrationNotice) return;
+
+            let hasSeenNotice = false;
+            try {
+                hasSeenNotice = localStorage.getItem(migrationNoticeKey) === '1';
+            } catch {}
+
+            if (!hasSeenNotice) {
+                migrationNotice.hidden = false;
+                document.body.classList.add('migration-notice-open');
+                window.setTimeout(() => {
+                    migrationNotice.querySelector('[data-migration-notice-action="reset"]')?.focus();
+                }, 40);
+            }
+
+            migrationNotice.querySelectorAll('[data-migration-notice-action]').forEach((element) => {
+                element.addEventListener('click', () => closeMigrationNotice());
+            });
+
+            migrationNotice.addEventListener('click', (event) => {
+                if (event.target === migrationNotice) closeMigrationNotice();
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && !migrationNotice.hidden) closeMigrationNotice();
+            });
         }
 
         function showAuth(tab = 'login', push = true) {
@@ -3836,6 +4026,7 @@
         applyTheme(savedThemeMode());
         loadGroups();
         restoreUser();
+        initializeMigrationNotice();
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
