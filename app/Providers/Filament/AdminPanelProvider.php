@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Widgets\ActiveMobileUsersByCountryWidget;
 use App\Filament\Widgets\AdminSummaryCards;
 use App\Filament\Widgets\DashboardOverview;
+use App\Filament\Widgets\GoshenBookingStatsWidget;
 use App\Filament\Widgets\GoshenExperienceStatsWidget;
 use App\Filament\Widgets\LocationInsightsWidget;
 use App\Filament\Widgets\MediaMixChart;
@@ -102,6 +103,7 @@ class AdminPanelProvider extends PanelProvider
                 AdminSummaryCards::class,
                 DashboardOverview::class,
                 ActiveMobileUsersByCountryWidget::class,
+                GoshenBookingStatsWidget::class,
                 GoshenExperienceStatsWidget::class,
                 VisitorTrendChart::class,
                 MediaMixChart::class,
