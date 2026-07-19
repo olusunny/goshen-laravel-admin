@@ -263,27 +263,27 @@ class GoshenBookingResource extends Resource
 
                 $columns = array_chunk($rows, (int) ceil(count($rows) / 2), true);
                 $details = collect($columns)
-                    ->map(fn (array $column): string => '<dl class="space-y-3">'
+                    ->map(fn (array $column): string => '<dl style="display: grid; gap: 12px; margin: 0;">'
                         .collect($column)
-                            ->map(fn (string $value, string $label): string => '<div class="flex flex-col gap-1 border-b border-gray-100 pb-3 last:border-b-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4 dark:border-gray-800">'
-                                .'<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">'.e($label).'</dt>'
-                                .'<dd class="break-words text-sm font-semibold text-gray-950 sm:max-w-[60%] sm:text-right dark:text-white">'.e($value).'</dd>'
+                            ->map(fn (string $value, string $label): string => '<div style="display: grid; grid-template-columns: minmax(104px, 42%) minmax(0, 58%); gap: 12px; align-items: start; border-bottom: 1px solid rgba(148, 163, 184, 0.22); padding-bottom: 12px;">'
+                                .'<dt style="font-size: 13px; font-weight: 700; line-height: 1.35; opacity: 0.68;">'.e($label).'</dt>'
+                                .'<dd style="font-size: 14px; font-weight: 700; line-height: 1.35; margin: 0; overflow-wrap: anywhere; text-align: right;">'.e($value).'</dd>'
                                 .'</div>')
                             ->implode('')
                         .'</dl>')
                     ->implode('');
 
-                return '<article class="rounded-2xl border border-gray-200 bg-white/80 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/50">'
-                    .'<div class="mb-4 flex flex-wrap items-center gap-2">'
-                    .'<span class="inline-flex size-7 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700 dark:bg-primary-500/20 dark:text-primary-300">'.e((string) ($index + 1)).'</span>'
-                    .'<h4 class="text-base font-semibold text-gray-950 dark:text-white">'.e($name).'</h4>'
+                return '<article style="border: 1px solid rgba(148, 163, 184, 0.26); border-radius: 18px; padding: 18px; background: rgba(255, 255, 255, 0.035); box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);">'
+                    .'<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">'
+                    .'<span style="display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border-radius: 999px; background: #f59e0b; color: #111827; font-size: 13px; font-weight: 900;">'.e((string) ($index + 1)).'</span>'
+                    .'<h4 style="font-size: 16px; font-weight: 800; line-height: 1.3; margin: 0;">'.e($name).'</h4>'
                     .'</div>'
-                    .'<div class="grid grid-cols-1 gap-5 sm:grid-cols-2">'.$details.'</div>'
+                    .'<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px;">'.$details.'</div>'
                     .'</article>';
             })
             ->implode('');
 
-        return new HtmlString('<div class="space-y-4">'.$cards.'</div>');
+        return new HtmlString('<div style="display: grid; gap: 16px;">'.$cards.'</div>');
     }
 
     public static function getPages(): array

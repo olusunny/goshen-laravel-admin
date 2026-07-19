@@ -203,7 +203,8 @@ class GoshenPaymentEntryPointSafetyTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(ViewGoshenBooking::class, ['record' => $booking->getRouteKey()])
-            ->assertSeeHtml('sm:grid-cols-2')
+            ->assertSeeHtml('grid-template-columns: repeat(2, minmax(0, 1fr))')
+            ->assertSeeHtml('grid-template-columns: minmax(104px, 42%) minmax(0, 58%)')
             ->assertSee('Esther Edun')
             ->assertSee('Ticket type')
             ->assertSee('GOSHEN FAMILY')
