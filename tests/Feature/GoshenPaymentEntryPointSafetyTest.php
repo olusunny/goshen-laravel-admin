@@ -19,7 +19,9 @@ use Personal\EventInstallments\Data\VerifiedWebhook;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\EventType;
 use Personal\EventInstallments\Enums\InstallmentStatus;
+use Personal\EventInstallments\Models\Attendee;
 use Personal\EventInstallments\Models\Booking;
+use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentTransaction;
@@ -165,6 +167,57 @@ class GoshenPaymentEntryPointSafetyTest extends TestCase
             'booking_id' => $booking->id,
             'gateway' => 'offline',
         ]);
+    }
+
+    public function test_admin_booking_view_lists_attendee_details_line_by_line(): void
+    {
+        [, $booking] = $this->memberBooking();
+        $ticketType = EventTicketType::query()->create([
+            'event_id' => $booking->event_id,
+            'name' => 'GOSHEN FAMILY',
+            'currency' => 'NGN',
+            'price' => 300,
+            'is_active' => true,
+            'min_per_booking' => 1,
+            'max_per_booking' => 6,
+        ]);
+        Attendee::query()->create([
+            'booking_id' => $booking->id,
+            'ticket_type_id' => $ticketType->id,
+            'first_name' => 'Esther',
+            'last_name' => 'Edun',
+            'email' => 'estheredun2@example.test',
+            'phone' => '+447312268138',
+            'custom_fields' => [
+                'gender' => 'female',
+                'age_group' => 'child',
+                'free_church_bus_interest' => 'no_thanks',
+                'volunteer_department' => 'no_chance_at_the_moment',
+            ],
+        ]);
+        $permission = Permission::findOrCreate('manage_goshen_booking', 'web');
+        $role = Role::findOrCreate('booking_viewer', 'web');
+        $role->givePermissionTo($permission);
+        $admin = User::factory()->create();
+        $admin->assignRole($role);
+
+        Livewire::actingAs($admin)
+            ->test(ViewGoshenBooking::class, ['record' => $booking->getRouteKey()])
+            ->assertSee('Esther Edun')
+            ->assertSee('Ticket type')
+            ->assertSee('GOSHEN FAMILY')
+            ->assertSee('Gender')
+            ->assertSee('Female')
+            ->assertSee('Age group')
+            ->assertSee('Child')
+            ->assertSee('Free church bus')
+            ->assertSee('No thanks')
+            ->assertSee('Volunteer')
+            ->assertSee('No Chance at the moment')
+            ->assertSee('Email')
+            ->assertSee('estheredun2@example.test')
+            ->assertSee('Phone')
+            ->assertSee('+447312268138');
     }
 
     /** @return array{0: MobileUser, 1: Booking, 2: PaymentInstallment, 3: string} */

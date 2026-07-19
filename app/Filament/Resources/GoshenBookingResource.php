@@ -16,6 +16,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Models\Booking;
 
@@ -88,56 +89,8 @@ class GoshenBookingResource extends Resource
                 ->schema([
                     TextEntry::make('attendees_summary')
                         ->label('Attendees')
-                        ->state(function (Booking $record): string {
-                            $attendees = $record->attendees()
-                                ->with('ticketType')
-                                ->orderBy('id')
-                                ->get();
-
-                            if ($attendees->isEmpty()) {
-                                return 'No attendees have been attached to this booking yet.';
-                            }
-
-                            return $attendees
-                                ->map(function ($attendee, int $index): string {
-                                    $name = trim(($attendee->first_name ?? '') . ' ' . ($attendee->last_name ?? ''));
-                                    $type = $attendee->ticketType?->name ?: 'Ticket type not set';
-                                    $email = $attendee->email ? " · {$attendee->email}" : '';
-                                    $phone = $attendee->phone ? " · {$attendee->phone}" : '';
-                                    $customFields = is_array($attendee->custom_fields) ? $attendee->custom_fields : [];
-                                    $gender = self::attendeeSnapshotLabel($customFields['gender'] ?? null, [
-                                        'male' => 'Male',
-                                        'female' => 'Female',
-                                        'not_specified' => 'Gender not specified',
-                                    ]);
-                                    $ageGroup = self::attendeeSnapshotLabel($customFields['age_group'] ?? null, [
-                                        'child' => 'Child',
-                                        'teen' => 'Teen',
-                                        'young_adult' => 'Young adult',
-                                        'adult' => 'Adult',
-                                        'senior' => 'Senior',
-                                        'not_specified' => 'Age group not specified',
-                                    ]);
-                                    $busInterest = self::attendeeSnapshotLabel($customFields['free_church_bus_interest'] ?? null, [
-                                        'yes' => 'Interested in FREE church bus: Yes',
-                                        'no_thanks' => 'Interested in FREE church bus: No thanks',
-                                        'not_specified' => 'Interested in FREE church bus: No thanks',
-                                    ]);
-                                    $volunteerDepartment = self::attendeeSnapshotLabel($customFields['volunteer_department'] ?? null, [
-                                        'children_department' => 'Volunteer: Children department',
-                                        'intercessory' => 'Volunteer: Intercessory',
-                                        'media' => 'Volunteer: Media',
-                                        'protocol' => 'Volunteer: Protocol',
-                                        'sanctuary' => 'Volunteer: Sanctuary',
-                                        'no_chance_at_the_moment' => 'Volunteer: No Chance at the moment',
-                                        'not_specified' => 'Volunteer: No Chance at the moment',
-                                    ]);
-
-                                    return ($index + 1) . ". " . ($name ?: 'Unnamed attendee') . " · {$type} · {$gender} · {$ageGroup} · {$busInterest} · {$volunteerDepartment}{$email}{$phone}";
-                                })
-                                ->implode("\n");
-                        })
-                        ->listWithLineBreaks()
+                        ->state(fn (Booking $record): HtmlString => self::attendeesSummaryHtml($record))
+                        ->html()
                         ->columnSpanFull(),
                 ]),
             Section::make('Payment records')
@@ -258,6 +211,74 @@ class GoshenBookingResource extends Resource
         $key = strtolower(trim((string) $value));
 
         return $labels[$key] ?? $labels['not_specified'] ?? 'Not specified';
+    }
+
+    private static function attendeesSummaryHtml(Booking $record): HtmlString
+    {
+        $attendees = $record->attendees()
+            ->with('ticketType')
+            ->orderBy('id')
+            ->get();
+
+        if ($attendees->isEmpty()) {
+            return new HtmlString('<p class="text-sm text-gray-500 dark:text-gray-400">No attendees have been attached to this booking yet.</p>');
+        }
+
+        $cards = $attendees
+            ->map(function ($attendee, int $index): string {
+                $name = trim(($attendee->first_name ?? '') . ' ' . ($attendee->last_name ?? '')) ?: 'Unnamed attendee';
+                $customFields = is_array($attendee->custom_fields) ? $attendee->custom_fields : [];
+                $rows = [
+                    'Ticket type' => $attendee->ticketType?->name ?: 'Ticket type not set',
+                    'Gender' => self::attendeeSnapshotLabel($customFields['gender'] ?? null, [
+                        'male' => 'Male',
+                        'female' => 'Female',
+                        'not_specified' => 'Gender not specified',
+                    ]),
+                    'Age group' => self::attendeeSnapshotLabel($customFields['age_group'] ?? null, [
+                        'child' => 'Child',
+                        'teen' => 'Teen',
+                        'young_adult' => 'Young adult',
+                        'adult' => 'Adult',
+                        'senior' => 'Senior',
+                        'not_specified' => 'Age group not specified',
+                    ]),
+                    'Free church bus' => self::attendeeSnapshotLabel($customFields['free_church_bus_interest'] ?? null, [
+                        'yes' => 'Yes',
+                        'no_thanks' => 'No thanks',
+                        'not_specified' => 'No thanks',
+                    ]),
+                    'Volunteer' => self::attendeeSnapshotLabel($customFields['volunteer_department'] ?? null, [
+                        'children_department' => 'Children department',
+                        'intercessory' => 'Intercessory',
+                        'media' => 'Media',
+                        'protocol' => 'Protocol',
+                        'sanctuary' => 'Sanctuary',
+                        'no_chance_at_the_moment' => 'No Chance at the moment',
+                        'not_specified' => 'No Chance at the moment',
+                    ]),
+                    'Email' => $attendee->email ?: 'No email provided',
+                    'Phone' => $attendee->phone ?: 'No phone provided',
+                ];
+
+                $details = collect($rows)
+                    ->map(fn (string $value, string $label): string => '<div class="grid gap-1 sm:grid-cols-[9rem_1fr]">'
+                        .'<dt class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">'.e($label).'</dt>'
+                        .'<dd class="text-sm font-medium text-gray-950 dark:text-white">'.e($value).'</dd>'
+                        .'</div>')
+                    ->implode('');
+
+                return '<article class="rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/40">'
+                    .'<div class="mb-3 flex flex-wrap items-center gap-2">'
+                    .'<span class="inline-flex size-7 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700 dark:bg-primary-500/20 dark:text-primary-300">'.e((string) ($index + 1)).'</span>'
+                    .'<h4 class="text-base font-semibold text-gray-950 dark:text-white">'.e($name).'</h4>'
+                    .'</div>'
+                    .'<dl class="space-y-2">'.$details.'</dl>'
+                    .'</article>';
+            })
+            ->implode('');
+
+        return new HtmlString('<div class="space-y-4">'.$cards.'</div>');
     }
 
     public static function getPages(): array
