@@ -261,19 +261,24 @@ class GoshenBookingResource extends Resource
                     'Phone' => $attendee->phone ?: 'No phone provided',
                 ];
 
-                $details = collect($rows)
-                    ->map(fn (string $value, string $label): string => '<div class="grid gap-1 sm:grid-cols-[9rem_1fr]">'
-                        .'<dt class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">'.e($label).'</dt>'
-                        .'<dd class="text-sm font-medium text-gray-950 dark:text-white">'.e($value).'</dd>'
-                        .'</div>')
+                $columns = array_chunk($rows, (int) ceil(count($rows) / 2), true);
+                $details = collect($columns)
+                    ->map(fn (array $column): string => '<dl class="space-y-3">'
+                        .collect($column)
+                            ->map(fn (string $value, string $label): string => '<div class="flex items-start justify-between gap-4 border-b border-gray-100 pb-3 last:border-b-0 last:pb-0 dark:border-gray-800">'
+                                .'<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">'.e($label).'</dt>'
+                                .'<dd class="max-w-[60%] break-words text-right text-sm font-semibold text-gray-950 dark:text-white">'.e($value).'</dd>'
+                                .'</div>')
+                            ->implode('')
+                        .'</dl>')
                     ->implode('');
 
-                return '<article class="rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/40">'
-                    .'<div class="mb-3 flex flex-wrap items-center gap-2">'
+                return '<article class="rounded-2xl border border-gray-200 bg-white/80 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900/50">'
+                    .'<div class="mb-4 flex flex-wrap items-center gap-2">'
                     .'<span class="inline-flex size-7 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700 dark:bg-primary-500/20 dark:text-primary-300">'.e((string) ($index + 1)).'</span>'
                     .'<h4 class="text-base font-semibold text-gray-950 dark:text-white">'.e($name).'</h4>'
                     .'</div>'
-                    .'<dl class="space-y-2">'.$details.'</dl>'
+                    .'<div class="grid grid-cols-1 gap-5 sm:grid-cols-2">'.$details.'</div>'
                     .'</article>';
             })
             ->implode('');

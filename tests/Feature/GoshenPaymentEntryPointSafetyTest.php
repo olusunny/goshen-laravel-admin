@@ -169,7 +169,7 @@ class GoshenPaymentEntryPointSafetyTest extends TestCase
         ]);
     }
 
-    public function test_admin_booking_view_lists_attendee_details_line_by_line(): void
+    public function test_admin_booking_view_lists_attendee_details_in_two_column_cards(): void
     {
         [, $booking] = $this->memberBooking();
         $ticketType = EventTicketType::query()->create([
@@ -203,6 +203,7 @@ class GoshenPaymentEntryPointSafetyTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(ViewGoshenBooking::class, ['record' => $booking->getRouteKey()])
+            ->assertSeeHtml('sm:grid-cols-2')
             ->assertSee('Esther Edun')
             ->assertSee('Ticket type')
             ->assertSee('GOSHEN FAMILY')
