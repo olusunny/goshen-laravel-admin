@@ -55,6 +55,7 @@ use Personal\EventInstallments\Services\CheckInService;
 use Personal\EventInstallments\Services\QrPayloadService;
 use Personal\EventInstallments\Services\TicketDocumentService;
 use Personal\EventInstallments\Services\TicketIssuer;
+use Personal\EventInstallments\Services\TicketNotificationService;
 use RuntimeException;
 use Sunny\Fundraising\Contracts\PermissionResolverContract;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -1024,6 +1025,7 @@ class GoshenRetreatController extends Controller
         GoshenReferralService $referrals,
         GoshenVoucherService $vouchers,
         GoshenRegistrationAvailabilityService $availability,
+        TicketNotificationService $ticketEmails,
     ): JsonResponse {
         abort_unless($this->enabled(), 404, 'Goshen Retreat is not currently available.');
 
@@ -1106,7 +1108,7 @@ class GoshenRetreatController extends Controller
         }
 
         try {
-            return DB::transaction(function () use ($validated, $actor, $user, $ticketIssuer, $wallets, $walletSecurityResets, $referrals, $vouchers, $availability, $request): JsonResponse {
+            return DB::transaction(function () use ($validated, $actor, $user, $ticketIssuer, $wallets, $walletSecurityResets, $referrals, $vouchers, $availability, $ticketEmails, $request): JsonResponse {
                 $event = $this->goshenEventsQuery()
                     ->where('public_id', $validated['event_id'])
                     ->where('status', 'published')
@@ -1436,7 +1438,8 @@ class GoshenRetreatController extends Controller
                         'metadata' => array_merge($booking->metadata ?? [], ['paid_from_wallet' => true]),
                     ])->save();
 
-                    $ticketIssuer->issueForBooking($booking->refresh());
+                    $createdTickets = $ticketIssuer->issueForBooking($booking->refresh());
+                    $this->emailCreatedTicketsAfterCommit($createdTickets, $ticketEmails);
                     $referrals->createPendingAwardForPaidBooking($booking->refresh());
                 } elseif (! $isFreeRegistration && $paymentMode === 'voucher') {
                     $vouchers->redeemForBooking(
@@ -1732,6 +1735,7 @@ class GoshenRetreatController extends Controller
         GoshenRetreatNotificationService $notifications,
         WalletSecurityResetService $walletSecurityResets,
         GoshenReferralService $referrals,
+        TicketNotificationService $ticketEmails,
     ): JsonResponse {
         if (! $this->enabled()) {
             return response()->json([
@@ -1774,7 +1778,7 @@ class GoshenRetreatController extends Controller
         }
 
         try {
-            $paidBooking = DB::transaction(function () use ($bookingModel, $user, $wallets, $ticketIssuer, $referrals, $request) {
+            $paidBooking = DB::transaction(function () use ($bookingModel, $user, $wallets, $ticketIssuer, $referrals, $ticketEmails, $request) {
                 $booking = Booking::query()
                     ->whereKey($bookingModel->id)
                     ->with(['event', 'lines.ticketType', 'attendees', 'installments', 'tickets'])
@@ -1874,7 +1878,8 @@ class GoshenRetreatController extends Controller
                     'metadata' => array_merge($booking->metadata ?? [], ['paid_from_wallet' => true]),
                 ])->save();
 
-                $ticketIssuer->issueForBooking($booking->refresh());
+                $createdTickets = $ticketIssuer->issueForBooking($booking->refresh());
+                $this->emailCreatedTicketsAfterCommit($createdTickets, $ticketEmails);
                 $referrals->createPendingAwardForPaidBooking($booking->refresh());
 
                 return $booking->fresh(['event', 'lines.ticketType', 'attendees', 'installments', 'tickets.event', 'tickets.booking', 'tickets.attendee', 'tickets.ticketType']);
@@ -4738,6 +4743,34 @@ class GoshenRetreatController extends Controller
             'profile_missing_fields' => $missing,
             'profile_needs_update' => $missing !== [],
         ];
+    }
+
+    /**
+     * @param  array<int, Ticket>  $tickets
+     */
+    private function emailCreatedTicketsAfterCommit(array $tickets, TicketNotificationService $ticketEmails): void
+    {
+        if (! config('event-installments.ticket.email.enabled', true)) {
+            return;
+        }
+
+        $ticketIds = collect($tickets)
+            ->pluck('id')
+            ->filter()
+            ->values()
+            ->all();
+
+        if ($ticketIds === []) {
+            return;
+        }
+
+        DB::afterCommit(function () use ($ticketIds, $ticketEmails): void {
+            Ticket::query()
+                ->whereKey($ticketIds)
+                ->with(['event', 'booking', 'attendee', 'ticketType'])
+                ->get()
+                ->each(fn (Ticket $ticket): mixed => $ticketEmails->sendTicket($ticket));
+        });
     }
 
     private function validationError(\Illuminate\Contracts\Validation\Validator $validator): JsonResponse
