@@ -137,6 +137,82 @@ class GoshenAdminTicketIssuanceTest extends TestCase
         ], JSON_THROW_ON_ERROR));
     }
 
+    public function test_filament_voucher_submission_can_issue_a_special_approved_amount_ticket(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $this->grantTicketIssuePermission($admin);
+        $voucher = app(GoshenVoucherService::class)->createVoucher([
+            'event_id' => $ticketType->event_id,
+            'currency' => 'GBP',
+            'amount' => 120,
+            'max_uses' => 1,
+        ], adminActor: $admin);
+
+        Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->assertSchemaComponentExists('use_special_approved_amount')
+            ->assertSchemaComponentExists('special_approved_amount')
+            ->assertSchemaComponentExists('special_approval_note')
+            ->fillForm([
+                'customer_id' => $member->id,
+                'event_id' => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'issuance_reason' => 'Leadership approved support case',
+                'payment_method' => 'voucher',
+                'voucher_code' => $voucher['code'],
+                'use_special_approved_amount' => true,
+                'special_approved_amount' => 120,
+                'special_approval_note' => 'Pastoral care approved £30 support for this attendee.',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $ticket = Ticket::query()->with('booking.lines', 'booking.installments.transactions')->sole();
+        $booking = $ticket->booking;
+
+        $this->assertSame(BookingStatus::Paid, $booking->status);
+        $this->assertSame('120.00', $booking->total);
+        $this->assertSame('120.00', $booking->paid_total);
+        $this->assertSame('120.00', $booking->lines->sole()->unit_price);
+        $this->assertSame('120.00', $booking->lines->sole()->line_total);
+        $this->assertSame('150', (string) $booking->metadata['listed_ticket_price']);
+        $this->assertSame('150', (string) $booking->metadata['listed_ticket_total']);
+        $this->assertSame('120', (string) $booking->metadata['amount_paid']);
+        $this->assertSame('120', (string) $booking->metadata['historical_paid_amount']);
+        $this->assertSame('30', (string) $booking->metadata['historical_discount_amount']);
+        $this->assertTrue((bool) $booking->metadata['special_approved_amount']);
+        $this->assertSame('Pastoral care approved £30 support for this attendee.', $booking->metadata['special_approval_note']);
+        $this->assertSame($admin->id, $booking->metadata['special_approved_by_admin_id']);
+        $this->assertSame('voucher', $booking->installments->sole()->transactions->sole()->gateway);
+        $this->assertSame('120.00', $booking->installments->sole()->transactions->sole()->amount);
+    }
+
+    public function test_special_approved_amount_must_be_less_than_the_listed_ticket_amount(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $this->grantTicketIssuePermission($admin);
+        $code = $this->voucherCode($ticketType, $admin);
+
+        Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->fillForm([
+                'customer_id' => $member->id,
+                'event_id' => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'issuance_reason' => 'Invalid support case',
+                'payment_method' => 'voucher',
+                'voucher_code' => $code,
+                'use_special_approved_amount' => true,
+                'special_approved_amount' => 150,
+                'special_approval_note' => 'This is not actually below the listed amount.',
+            ])
+            ->call('create')
+            ->assertHasFormErrors();
+
+        $this->assertDatabaseCount('ei_bookings', 0);
+        $this->assertDatabaseCount('ei_tickets', 0);
+    }
+
     public function test_filament_wallet_action_sends_code_wrong_code_fails_then_correct_code_pays(): void
     {
         [$member, $ticketType, $admin] = $this->issuanceFixture();
@@ -203,6 +279,59 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             $ticket->booking->metadata,
             $ticket->booking->installments->sole()->transactions->sole()->payload,
         ], JSON_THROW_ON_ERROR));
+    }
+
+    public function test_filament_wallet_submission_can_issue_a_special_approved_amount_ticket(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $this->grantTicketIssuePermission($admin);
+        $payer = app(LinkedMobileAccountService::class)->forAdmin($admin);
+        $wallet = $payer?->wallet()->firstOrFail();
+        $wallet?->forceFill(['currency' => 'GBP', 'balance' => 130])->save();
+        $sentBody = null;
+        $this->mock(DynamicSmtpMailer::class, function (MockInterface $mock) use (&$sentBody): void {
+            $mock->shouldReceive('sendRaw')->once()->andReturnUsing(
+                function (string $to, string $subject, string $body) use (&$sentBody): void {
+                    $sentBody = $body;
+                },
+            );
+        });
+
+        $page = Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->fillForm([
+                'customer_id' => $member->id,
+                'event_id' => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'issuance_reason' => 'Leadership approved wallet support case',
+                'payment_method' => 'wallet',
+                'use_special_approved_amount' => true,
+                'special_approved_amount' => 120,
+                'special_approval_note' => 'Admin-approved support amount for this attendee.',
+            ])
+            ->callAction(TestAction::make('sendWalletVerificationCode')->schemaComponent('form-actions', 'content'))
+            ->assertHasNoActionErrors();
+
+        preg_match('/\b(\d{6})\b/', (string) $sentBody, $matches);
+        $code = (string) ($matches[1] ?? '');
+        $this->assertNotSame('', $code);
+        $challengeId = $page->get('data.wallet_challenge_id');
+        $challenge = WebWalletVerificationChallenge::query()->findOrFail($challengeId);
+        $challenge->forceFill(['code_hash' => Hash::make($code)])->save();
+
+        $page->fillForm(['wallet_otp' => $code])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $ticket = Ticket::query()->with('booking.installments.transactions')->sole();
+        $this->assertSame(BookingStatus::Paid, $ticket->booking->status);
+        $this->assertSame('120.00', $ticket->booking->total);
+        $this->assertSame('120.00', $ticket->booking->paid_total);
+        $this->assertSame('10.00', $wallet?->fresh()->balance);
+        $this->assertSame('wallet', $ticket->booking->installments->sole()->transactions->sole()->gateway);
+        $this->assertSame('120.00', $ticket->booking->installments->sole()->transactions->sole()->amount);
+        $this->assertTrue((bool) data_get($ticket->metadata, 'special_approved_amount'));
+        $this->assertSame('30', (string) data_get($ticket->metadata, 'historical_discount_amount'));
     }
 
     public function test_changing_wallet_payment_context_clears_challenge_and_otp(): void

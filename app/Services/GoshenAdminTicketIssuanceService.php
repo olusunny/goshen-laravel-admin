@@ -36,9 +36,13 @@ class GoshenAdminTicketIssuanceService
         EventTicketType $ticketType,
         string $reason,
         int $attendeeQuantity = 1,
+        ?float $paymentAmount = null,
     ): array {
         $attendeeQuantity = $this->normalizedAttendeeQuantity($ticketType, $attendeeQuantity);
-        $total = round((float) $ticketType->price * $attendeeQuantity, 2);
+        $listedTotal = round((float) $ticketType->price * $attendeeQuantity, 2);
+        $total = $paymentAmount === null
+            ? $listedTotal
+            : round((float) $paymentAmount, 2);
 
         return [
             'recipient_id' => (int) $member->getKey(),
@@ -56,6 +60,7 @@ class GoshenAdminTicketIssuanceService
             ], JSON_THROW_ON_ERROR)),
             'ticket_type_id' => (int) $ticketType->getKey(),
             'attendee_quantity' => $attendeeQuantity,
+            'listed_amount' => number_format($listedTotal, 2, '.', ''),
             'amount' => number_format($total, 2, '.', ''),
             'currency' => strtoupper((string) $ticketType->currency),
             'payment_method' => 'wallet',
@@ -108,11 +113,18 @@ class GoshenAdminTicketIssuanceService
             [$preflightMember, $preflightTicketType] = $this->availability
                 ->lockAndAssertAvailable($member, $ticketType, $attendeeQuantity);
             $this->assertPositiveListPrice($preflightTicketType);
+            $preflightPaymentTotal = $this->paymentTotal($preflightTicketType, $attendeeQuantity, $paymentAmount);
+            if ($preflightPaymentTotal <= 0) {
+                throw ValidationException::withMessages([
+                    'payment_amount' => 'The payment amount must be greater than zero.',
+                ]);
+            }
             $authorizedWalletContext = $this->verificationContext(
                 $preflightMember,
                 $preflightTicketType,
                 $reason,
                 $attendeeQuantity,
+                $preflightPaymentTotal,
             );
             $payer = $this->linkedAccounts->forAdmin($admin);
             $this->assertWalletRequestCanProceed($admin, $payer, $challenge, $walletCode);
@@ -153,7 +165,7 @@ class GoshenAdminTicketIssuanceService
                 $this->assertPositiveListPrice($ticketType);
 
                 if ($paymentMethod === 'wallet') {
-                    $currentContext = $this->verificationContext($member, $ticketType, $reason, $attendeeQuantity);
+                    $currentContext = $this->verificationContext($member, $ticketType, $reason, $attendeeQuantity, $paymentAmount);
                     if (! hash_equals(
                         $this->walletVerification->fingerprint($authorizedWalletContext ?? []),
                         $this->walletVerification->fingerprint($currentContext),
@@ -166,9 +178,7 @@ class GoshenAdminTicketIssuanceService
 
                 $listPrice = round((float) $ticketType->price, 2);
                 $listedTotal = round($listPrice * $attendeeQuantity, 2);
-                $paymentTotal = $paymentAmount === null
-                    ? $listedTotal
-                    : round((float) $paymentAmount, 2);
+                $paymentTotal = $this->paymentTotal($ticketType, $attendeeQuantity, $paymentAmount);
                 if ($paymentTotal <= 0) {
                     throw ValidationException::withMessages([
                         'payment_amount' => 'The payment amount must be greater than zero.',
@@ -373,6 +383,16 @@ class GoshenAdminTicketIssuanceService
         $quantity = max($quantity, $min);
 
         return $max > 0 ? min($quantity, $max) : $quantity;
+    }
+
+    private function paymentTotal(EventTicketType $ticketType, int $attendeeQuantity, ?float $paymentAmount = null): float
+    {
+        $listPrice = round((float) $ticketType->price, 2);
+        $listedTotal = round($listPrice * $attendeeQuantity, 2);
+
+        return $paymentAmount === null
+            ? $listedTotal
+            : round((float) $paymentAmount, 2);
     }
 
     private function assertWalletRequestCanProceed(

@@ -73,6 +73,9 @@ class CreateGoshenTicket extends CreateRecord
             'attendee_quantity' => ['nullable', 'integer', 'min:1', 'max:100'],
             'issuance_reason' => ['required', 'string', 'max:500'],
             'payment_method' => ['required', 'in:wallet'],
+            'use_special_approved_amount' => ['nullable', 'boolean'],
+            'special_approved_amount' => ['nullable', 'numeric', 'min:0.01'],
+            'special_approval_note' => ['nullable', 'string', 'max:500'],
         ])->validate();
 
         $member = MobileUser::query()->find($data['customer_id']);
@@ -84,6 +87,7 @@ class CreateGoshenTicket extends CreateRecord
 
         $ticketType = $this->selectedTicketType($data);
         $attendeeQuantity = $this->validatedAttendeeQuantity($ticketType, $data);
+        $paymentAmount = $this->approvedPaymentAmount($ticketType, $data, $attendeeQuantity);
         $admin = User::query()->find(auth()->id());
         abort_unless($admin instanceof User, 403);
         $payer = app(LinkedMobileAccountService::class)->forAdmin($admin);
@@ -107,7 +111,7 @@ class CreateGoshenTicket extends CreateRecord
             throw ValidationException::withMessages(['payment_method' => $exception->getMessage()]);
         }
 
-        $amount = round((float) $ticketType->price * $attendeeQuantity, 2);
+        $amount = $paymentAmount ?? round((float) $ticketType->price * $attendeeQuantity, 2);
         if ($amount <= 0) {
             throw ValidationException::withMessages([
                 'ticket_type_id' => 'This ticket type does not have a payable full amount.',
@@ -131,7 +135,13 @@ class CreateGoshenTicket extends CreateRecord
             $admin,
             $payer->fresh(),
             'admin_ticket_issue',
-            $issuer->verificationContext($member->fresh(), $ticketType->fresh(['event']), trim((string) $data['issuance_reason']), $attendeeQuantity),
+            $issuer->verificationContext(
+                $member->fresh(),
+                $ticketType->fresh(['event']),
+                trim((string) $data['issuance_reason']),
+                $attendeeQuantity,
+                $paymentAmount,
+            ),
             request()->ip(),
             request()->userAgent(),
         );
@@ -149,6 +159,8 @@ class CreateGoshenTicket extends CreateRecord
     protected function handleRecordCreation(array $data): Model
     {
         $ticketType = $this->selectedTicketType($data);
+        $attendeeQuantity = $this->validatedAttendeeQuantity($ticketType, $data);
+        $paymentAmount = $this->approvedPaymentAmount($ticketType, $data, $attendeeQuantity);
         $admin = User::query()->find(auth()->id());
         abort_unless($admin instanceof User, 403);
 
@@ -166,7 +178,9 @@ class CreateGoshenTicket extends CreateRecord
                 filled($data['wallet_otp'] ?? null) ? trim((string) $data['wallet_otp']) : null,
                 request()->ip(),
                 request()->userAgent(),
-                attendeeQuantity: $this->validatedAttendeeQuantity($ticketType, $data),
+                paymentAmount: $paymentAmount,
+                extraMetadata: $this->specialApprovalMetadata($ticketType, $data, $attendeeQuantity, $paymentAmount),
+                attendeeQuantity: $attendeeQuantity,
             );
         } catch (ValidationException $exception) {
             $this->throwFormValidation($exception);
@@ -212,6 +226,61 @@ class CreateGoshenTicket extends CreateRecord
         }
 
         return $quantity;
+    }
+
+    private function approvedPaymentAmount(EventTicketType $ticketType, array $data, int $attendeeQuantity): ?float
+    {
+        if (! (bool) ($data['use_special_approved_amount'] ?? false)) {
+            return null;
+        }
+
+        $listedTotal = round((float) $ticketType->price * $attendeeQuantity, 2);
+        $paymentAmount = round((float) ($data['special_approved_amount'] ?? 0), 2);
+        $note = trim((string) ($data['special_approval_note'] ?? ''));
+
+        if ($paymentAmount <= 0) {
+            throw ValidationException::withMessages([
+                'special_approved_amount' => 'Enter the special approved amount.',
+            ]);
+        }
+
+        if ($paymentAmount + 0.01 >= $listedTotal) {
+            throw ValidationException::withMessages([
+                'special_approved_amount' => 'The special approved amount must be less than the full listed ticket amount.',
+            ]);
+        }
+
+        if ($note === '') {
+            throw ValidationException::withMessages([
+                'special_approval_note' => 'Enter the approval note for this special amount.',
+            ]);
+        }
+
+        return $paymentAmount;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function specialApprovalMetadata(
+        EventTicketType $ticketType,
+        array $data,
+        int $attendeeQuantity,
+        ?float $paymentAmount,
+    ): array {
+        if ($paymentAmount === null) {
+            return [];
+        }
+
+        $listedTotal = round((float) $ticketType->price * $attendeeQuantity, 2);
+
+        return [
+            'special_approved_amount' => true,
+            'special_approval_note' => trim((string) ($data['special_approval_note'] ?? '')),
+            'special_approved_by_admin_id' => auth()->id(),
+            'special_approved_listed_total' => $listedTotal,
+            'special_approved_discount_amount' => max(0, round($listedTotal - $paymentAmount, 2)),
+        ];
     }
 
     private function maskedEmail(string $email): string

@@ -134,7 +134,7 @@ class GoshenTicketResource extends Resource
                         ->helperText(fn (Get $get): string => static::attendeeQuantityHelperText($get('ticket_type_id'))),
                 ]),
             Section::make('Payment and authorization')
-                ->description('The full listed ticket amount must be settled by voucher or from your own linked Goshen wallet before the ticket is issued.')
+                ->description('Settle the listed ticket amount by voucher or from your linked Goshen wallet. Use a special approved amount only for authorised exception cases.')
                 ->columns(2)
                 ->schema([
                     Forms\Components\Textarea::make('issuance_reason')
@@ -159,9 +159,56 @@ class GoshenTicketResource extends Resource
                     Forms\Components\Placeholder::make('ticket_amount')
                         ->label('Full ticket amount')
                         ->content(fn (Get $get): string => static::ticketAmountLabel($get('ticket_type_id'), $get('attendee_quantity'))),
+                    Forms\Components\Toggle::make('use_special_approved_amount')
+                        ->label('Use special approved amount')
+                        ->default(false)
+                        ->live()
+                        ->afterStateUpdated(function (Set $set, mixed $state): void {
+                            if (! (bool) $state) {
+                                $set('special_approved_amount', null);
+                                $set('special_approval_note', null);
+                            }
+
+                            static::clearWalletAuthorization($set);
+                        })
+                        ->helperText('Enable only when leadership/admin has approved issuing this ticket below the listed amount.'),
+                    Forms\Components\TextInput::make('special_approved_amount')
+                        ->label('Special approved amount')
+                        ->numeric()
+                        ->inputMode('decimal')
+                        ->minValue(0.01)
+                        ->step(0.01)
+                        ->prefix(fn (Get $get): string => strtoupper((string) (EventTicketType::query()->find($get('ticket_type_id'))?->currency ?: 'GBP')))
+                        ->visible(fn (Get $get): bool => (bool) $get('use_special_approved_amount'))
+                        ->required(fn (Get $get): bool => (bool) $get('use_special_approved_amount'))
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
+                        ->helperText('Enter the actual amount approved for this ticket. It must be less than the listed amount.'),
+                    Forms\Components\Textarea::make('special_approval_note')
+                        ->label('Special approval note')
+                        ->rows(3)
+                        ->maxLength(500)
+                        ->visible(fn (Get $get): bool => (bool) $get('use_special_approved_amount'))
+                        ->required(fn (Get $get): bool => (bool) $get('use_special_approved_amount'))
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
+                        ->helperText('Record who/what approved this exception and why. This is saved in the ticket audit history.'),
+                    Forms\Components\Placeholder::make('payable_amount')
+                        ->label('Amount to settle now')
+                        ->content(fn (Get $get): string => static::payableAmountLabel(
+                            $get('ticket_type_id'),
+                            $get('attendee_quantity'),
+                            (bool) $get('use_special_approved_amount'),
+                            $get('special_approved_amount'),
+                        )),
                     Forms\Components\Placeholder::make('wallet_payer_summary')
                         ->label('Wallet payer and availability')
-                        ->content(fn (Get $get): string => static::walletPayerSummary($get('ticket_type_id'), $get('attendee_quantity')))
+                        ->content(fn (Get $get): string => static::walletPayerSummary(
+                            $get('ticket_type_id'),
+                            $get('attendee_quantity'),
+                            (bool) $get('use_special_approved_amount'),
+                            $get('special_approved_amount'),
+                        ))
                         ->visible(fn (Get $get): bool => $get('payment_method') === 'wallet'),
                     Forms\Components\TextInput::make('voucher_code')
                         ->label('Goshen voucher code')
@@ -520,8 +567,40 @@ class GoshenTicketResource extends Resource
         return "This ticket type requires at least {$min} attendee(s).";
     }
 
-    private static function walletPayerSummary(mixed $ticketTypeId, mixed $attendeeQuantity = 1): string
-    {
+    private static function payableAmountLabel(
+        mixed $ticketTypeId,
+        mixed $attendeeQuantity = 1,
+        bool $useSpecialApprovedAmount = false,
+        mixed $specialApprovedAmount = null,
+    ): string {
+        $ticketType = EventTicketType::query()->find($ticketTypeId);
+        $quantity = static::resolvedAttendeeQuantity($ticketType, $attendeeQuantity);
+
+        if (! $ticketType) {
+            return 'Select a ticket type to see the amount to settle.';
+        }
+
+        $listedTotal = round((float) $ticketType->price * $quantity, 2);
+        $currency = strtoupper((string) $ticketType->currency);
+        $specialAmount = is_numeric($specialApprovedAmount) ? round((float) $specialApprovedAmount, 2) : null;
+
+        if (! $useSpecialApprovedAmount || $specialAmount === null || $specialAmount <= 0) {
+            return $currency.' '.number_format($listedTotal, 2);
+        }
+
+        $discount = max(0, round($listedTotal - $specialAmount, 2));
+
+        return $currency.' '.number_format($specialAmount, 2)
+            .' approved · listed '.$currency.' '.number_format($listedTotal, 2)
+            .' · exception '.$currency.' '.number_format($discount, 2);
+    }
+
+    private static function walletPayerSummary(
+        mixed $ticketTypeId,
+        mixed $attendeeQuantity = 1,
+        bool $useSpecialApprovedAmount = false,
+        mixed $specialApprovedAmount = null,
+    ): string {
         $admin = Auth::user();
         if (! $admin) {
             return 'Sign in again to verify your linked wallet.';
@@ -556,7 +635,11 @@ class GoshenTicketResource extends Resource
             return $summary.' · Select a ticket type to check availability.';
         }
         $quantity = static::resolvedAttendeeQuantity($ticketType, $attendeeQuantity);
-        $amount = round((float) $ticketType->price * $quantity, 2);
+        $listedTotal = round((float) $ticketType->price * $quantity, 2);
+        $specialAmount = is_numeric($specialApprovedAmount) ? round((float) $specialApprovedAmount, 2) : null;
+        $amount = $useSpecialApprovedAmount && $specialAmount !== null && $specialAmount > 0
+            ? $specialAmount
+            : $listedTotal;
 
         if ((bool) $payer->wallet_security_reset_required) {
             return $summary.' · Wallet actions are temporarily restricted.';
@@ -570,7 +653,7 @@ class GoshenTicketResource extends Resource
             return $summary.' · Balance is not enough for this ticket.';
         }
 
-        return $summary.' · Available for this full ticket payment'
+        return $summary.' · Available for this ticket payment'
             .($quantity > 1 ? " ({$quantity} attendees)." : '.');
     }
 
