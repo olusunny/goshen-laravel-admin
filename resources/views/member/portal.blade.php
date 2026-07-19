@@ -3301,6 +3301,19 @@
                     </article>
 
                     <article class="card">
+                        <h3>Top up with voucher</h3>
+                        <p class="muted">Redeem a wallet funding voucher issued by Goshen admin.</p>
+                        <form class="form wallet-voucher-topup-form">
+                            <div class="field">
+                                <label>Voucher code</label>
+                                <input class="input" name="code" autocomplete="one-time-code" minlength="6" maxlength="80" placeholder="Enter voucher code" required>
+                            </div>
+                            <p class="muted">Wallet funding vouchers add their value to your wallet balance immediately after successful redemption.</p>
+                            <button class="button outline" type="submit">Redeem voucher to wallet</button>
+                        </form>
+                    </article>
+
+                    <article class="card">
                         <h3>Savings goal</h3>
                         <p class="muted">Edit a saved goal or add another target.</p>
                         <form class="form wallet-goal-form">
@@ -4121,6 +4134,26 @@
                 } catch (error) {
                     notify(error.message, 'error');
                     setBusy(walletTopUp, false);
+                }
+                return;
+            }
+            const walletVoucherTopUp = event.target.closest('.wallet-voucher-topup-form');
+            if (walletVoucherTopUp) {
+                event.preventDefault();
+                const data = walletFormPayload(walletVoucherTopUp);
+                if (!data.code) {
+                    notify('Enter a voucher code first.', 'error');
+                    return;
+                }
+                setBusy(walletVoucherTopUp, true);
+                try {
+                    const payload = await apiPost('/api/goshen-wallet/top-up/voucher', authPayload({ code: data.code }));
+                    applyWalletPayload(payload, 'Voucher added to your Goshen wallet.');
+                    walletVoucherTopUp.reset();
+                } catch (error) {
+                    notify(error.message, 'error');
+                } finally {
+                    setBusy(walletVoucherTopUp, false);
                 }
                 return;
             }
