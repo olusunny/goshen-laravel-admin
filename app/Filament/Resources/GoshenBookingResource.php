@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\GoshenBookingResource\Pages;
+use App\Services\GoshenBookingExportService;
 use App\Services\GoshenBookingLifecycleService;
 use BackedEnum;
 use Filament\Actions;
@@ -15,10 +16,14 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 use Personal\EventInstallments\Enums\BookingStatus;
+use Personal\EventInstallments\Models\Attendee;
 use Personal\EventInstallments\Models\Booking;
+use Personal\EventInstallments\Models\EventAttendeeField;
 
 class GoshenBookingResource extends Resource
 {
@@ -33,6 +38,14 @@ class GoshenBookingResource extends Resource
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Goshen Retreat';
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->whereHas('event', function (Builder $query): void {
+                GoshenBookingExportService::applyGoshenEventScope($query);
+            });
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -157,16 +170,94 @@ class GoshenBookingResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->columns([
-                Tables\Columns\TextColumn::make('public_id')->label('Reference')->searchable()->copyable(),
-                Tables\Columns\TextColumn::make('event.name')->searchable(),
-                Tables\Columns\TextColumn::make('customer_name')->searchable(),
-                Tables\Columns\TextColumn::make('customer_email')->searchable(),
-                Tables\Columns\TextColumn::make('status')->badge()->sortable(),
-                Tables\Columns\TextColumn::make('total')->money(fn ($record) => $record->currency ?: 'NGN')->sortable(),
-                Tables\Columns\TextColumn::make('paid_total')->money(fn ($record) => $record->currency ?: 'NGN')->sortable(),
-                Tables\Columns\TextColumn::make('created_at')->dateTime()->sortable(),
-            ])
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
+                'event.attendeeFields',
+                'attendees.ticket',
+                'attendees.ticketType',
+            ])->withCount(['attendees', 'tickets']))
+            ->columns(array_merge([
+                Tables\Columns\TextColumn::make('public_id')
+                    ->label('Reference')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('event.name')
+                    ->label('Retreat edition')
+                    ->searchable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('customer_name')
+                    ->label('Customer')
+                    ->searchable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('customer_email')
+                    ->label('Customer email')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('customer_phone')
+                    ->label('Customer phone')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('status')
+                    ->badge()
+                    ->sortable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('attendees_count')
+                    ->label('Attendees')
+                    ->numeric()
+                    ->sortable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('tickets_count')
+                    ->label('Tickets')
+                    ->numeric()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('attendee_names')
+                    ->label('Attendee names')
+                    ->state(fn (Booking $record): array => self::attendeeSummary($record, 'name'))
+                    ->listWithLineBreaks()
+                    ->limitList(3)
+                    ->expandableLimitedList()
+                    ->wrap()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('attendee_emails')
+                    ->label('Attendee emails')
+                    ->state(fn (Booking $record): array => self::attendeeSummary($record, 'email'))
+                    ->listWithLineBreaks()
+                    ->limitList(3)
+                    ->expandableLimitedList()
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('attendee_phones')
+                    ->label('Attendee phones')
+                    ->state(fn (Booking $record): array => self::attendeeSummary($record, 'phone'))
+                    ->listWithLineBreaks()
+                    ->limitList(3)
+                    ->expandableLimitedList()
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('attendee_ticket_types')
+                    ->label('Ticket types')
+                    ->state(fn (Booking $record): array => self::attendeeSummary($record, 'ticket_type'))
+                    ->listWithLineBreaks()
+                    ->limitList(3)
+                    ->expandableLimitedList()
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('total')
+                    ->money(fn ($record) => $record->currency ?: 'NGN')
+                    ->sortable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('paid_total')
+                    ->money(fn ($record) => $record->currency ?: 'NGN')
+                    ->sortable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(),
+            ], self::registrationFieldColumns()))
             ->recordUrl(fn (Model $record): string => static::getUrl('view', ['record' => $record]))
             ->recordActions([
                 Actions\ViewAction::make()->label('View details'),
@@ -204,6 +295,77 @@ class GoshenBookingResource extends Resource
                     }),
             ])
             ->toolbarActions([Actions\BulkActionGroup::make([Actions\DeleteBulkAction::make()])]);
+    }
+
+    /**
+     * @return array<int, Tables\Columns\TextColumn>
+     */
+    private static function registrationFieldColumns(): array
+    {
+        return app(GoshenBookingExportService::class)
+            ->registrationFields()
+            ->map(function (EventAttendeeField $field): Tables\Columns\TextColumn {
+                $key = (string) $field->key;
+
+                return Tables\Columns\TextColumn::make('registration_field_'.Str::slug($key, '_'))
+                    ->label((string) $field->label)
+                    ->state(fn (Booking $record): array => self::attendeeRegistrationFieldSummary($record, $key, $field))
+                    ->listWithLineBreaks()
+                    ->limitList(3)
+                    ->expandableLimitedList()
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true);
+            })
+            ->all();
+    }
+
+    private static function attendeeSummary(Booking $record, string $field): array
+    {
+        $record->loadMissing(['attendees.ticketType']);
+
+        return $record->attendees
+            ->values()
+            ->map(function (Attendee $attendee, int $index) use ($field): string {
+                $value = match ($field) {
+                    'name' => trim((string) $attendee->first_name.' '.(string) $attendee->last_name),
+                    'email' => (string) $attendee->email,
+                    'phone' => (string) $attendee->phone,
+                    'ticket_type' => (string) $attendee->ticketType?->name,
+                    default => '',
+                };
+
+                return trim($value) === '' ? '' : ($index + 1).'. '.trim($value);
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private static function attendeeRegistrationFieldSummary(Booking $record, string $key, EventAttendeeField $field): array
+    {
+        $record->loadMissing(['event.attendeeFields', 'attendees']);
+
+        $eventField = $record->event?->attendeeFields?->firstWhere('key', $key);
+        $fieldForLabels = $eventField instanceof EventAttendeeField ? $eventField : $field;
+        $exporter = app(GoshenBookingExportService::class);
+
+        return $record->attendees
+            ->values()
+            ->map(function (Attendee $attendee, int $index) use ($exporter, $key, $fieldForLabels): ?string {
+                $value = $exporter->attendeeFieldValue($attendee, $key, $fieldForLabels);
+
+                if ($value === '') {
+                    return null;
+                }
+
+                $name = trim((string) $attendee->first_name.' '.(string) $attendee->last_name) ?: 'Attendee '.($index + 1);
+
+                return ($index + 1).'. '.$name.': '.$value;
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     private static function attendeeSnapshotLabel(?string $value, array $labels): string
