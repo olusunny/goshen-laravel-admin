@@ -167,6 +167,26 @@ class GoshenVoucherApiTest extends TestCase
         $this->assertSame($created['voucher']->code_suffix, GoshenVoucherUsage::query()->firstOrFail()->code_suffix);
     }
 
+    public function test_generated_voucher_keeps_copyable_full_code_encrypted_for_admin_display(): void
+    {
+        [$event] = $this->publishedRetreatEvent(price: 100);
+
+        $created = app(GoshenVoucherService::class)->createVoucher([
+            'event_id' => $event->id,
+            'label' => 'Copyable admin code',
+            'amount' => 300,
+            'currency' => 'NGN',
+            'max_uses' => 10,
+            'redemption_type' => GoshenVoucher::REDEMPTION_POOL,
+        ]);
+
+        $voucher = $created['voucher']->fresh();
+
+        $this->assertSame($created['code'], $voucher->redemption_code);
+        $this->assertNotSame($created['code'], $voucher->getRawOriginal('encrypted_code'));
+        $this->assertStringEndsWith($voucher->code_suffix, app(GoshenVoucherService::class)->normalizeCode($voucher->redemption_code));
+    }
+
     public function test_display_suffix_must_be_unique_before_it_can_be_used_as_voucher_code(): void
     {
         [$event] = $this->publishedRetreatEvent(price: 100);

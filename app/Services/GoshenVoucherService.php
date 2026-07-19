@@ -80,6 +80,7 @@ class GoshenVoucherService
         if (strlen($normalized) < 8) {
             throw new RuntimeException('Voucher code must contain at least 8 letters or numbers.');
         }
+        $formattedCode = $this->formatCode($normalized);
 
         $voucher = GoshenVoucher::query()->create([
             'event_id' => $data['event_id'] ?? null,
@@ -91,6 +92,7 @@ class GoshenVoucherService
             'batch_reference' => $data['batch_reference'] ?? null,
             'code_hash' => $this->hashCode($normalized),
             'code_suffix' => substr($normalized, -6),
+            'redemption_code' => $formattedCode,
             'currency' => strtoupper((string) ($data['currency'] ?? 'GBP')),
             'amount' => $amount,
             'remaining_amount' => $redemptionType === GoshenVoucher::REDEMPTION_POOL ? $amount : null,
@@ -107,7 +109,7 @@ class GoshenVoucherService
             throw new RuntimeException('Voucher amount must be greater than zero.');
         }
 
-        return ['voucher' => $voucher, 'code' => $this->formatCode($normalized)];
+        return ['voucher' => $voucher, 'code' => $formattedCode];
     }
 
     /**
@@ -388,6 +390,7 @@ class GoshenVoucherService
             'label' => $voucher->label,
             'batch_reference' => $voucher->batch_reference,
             'code_suffix' => $voucher->code_suffix,
+            'redemption_code' => $includeInternal ? $voucher->redemption_code : null,
             'currency' => $voucher->currency,
             'amount' => (float) $voucher->amount,
             'remaining_amount' => $voucher->isPoolVoucher() ? (float) $voucher->remaining_amount : null,

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Crypt;
 use Personal\EventInstallments\Models\Event;
 
 class GoshenVoucher extends Model
@@ -39,6 +40,27 @@ class GoshenVoucher extends Model
         'expires_at' => 'datetime',
         'metadata' => 'array',
     ];
+
+    public function getRedemptionCodeAttribute(): ?string
+    {
+        $encrypted = $this->attributes['encrypted_code'] ?? null;
+        if (! filled($encrypted)) {
+            return null;
+        }
+
+        try {
+            return Crypt::decryptString($encrypted);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    public function setRedemptionCodeAttribute(?string $value): void
+    {
+        if (filled($value)) {
+            $this->attributes['encrypted_code'] = Crypt::encryptString((string) $value);
+        }
+    }
 
     public static function purposeOptions(): array
     {

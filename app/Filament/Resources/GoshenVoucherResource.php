@@ -47,10 +47,17 @@ class GoshenVoucherResource extends Resource
                 Tables\Columns\TextColumn::make('batch_reference')
                     ->searchable()
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('code_suffix')
-                    ->label('Vouchers')
+                Tables\Columns\TextColumn::make('redemption_code')
+                    ->label('Voucher code')
+                    ->state(fn (GoshenVoucher $record): string => $record->redemption_code ?: $record->code_suffix)
+                    ->copyable()
                     ->badge()
+                    ->description(fn (GoshenVoucher $record): ?string => $record->redemption_code ? null : 'Legacy code: suffix accepted')
                     ->color(fn (GoshenVoucher $record): string => (int) $record->used_count > 0 ? 'danger' : 'success'),
+                Tables\Columns\TextColumn::make('code_suffix')
+                    ->label('Suffix')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('purpose')
                     ->label('Purpose')
                     ->badge()
