@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\GoshenBookingResource;
 use App\Services\GoshenBookingExportService;
+use App\Services\GoshenTicketExportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\TicketStatus;
@@ -13,6 +14,9 @@ use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\EventAttendeeField;
 use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\Ticket;
+use Personal\EventInstallments\Models\TicketCheckIn;
+use Personal\EventInstallments\Models\TicketDocument;
+use Personal\EventInstallments\Models\TicketEmailLog;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -198,5 +202,181 @@ class GoshenBookingExportServiceTest extends TestCase
         $this->assertSame(['Female'], $state);
         $this->assertStringNotContainsString('Grace', implode("\n", $state));
         $this->assertStringNotContainsString('Buyer', implode("\n", $state));
+    }
+
+    public function test_it_exports_one_row_per_goshen_ticket_with_ticket_and_attendee_fields(): void
+    {
+        $event = Event::query()->create([
+            'name' => 'Goshen Retreat 2026',
+            'slug' => 'goshen-retreat-2026-ticket-export',
+            'timezone' => 'Europe/London',
+            'status' => 'published',
+            'venue_name' => 'High Leigh Conference Centre',
+            'venue_address' => 'Lord Street, Hoddesdon, Hertfordshire EN11 8SG',
+            'settings' => ['module' => 'goshen_retreat'],
+        ]);
+
+        EventAttendeeField::query()->create([
+            'event_id' => $event->id,
+            'key' => 'gender',
+            'label' => 'Gender',
+            'type' => 'select',
+            'is_required' => true,
+            'sort_order' => 10,
+            'options' => [
+                ['label' => 'Male', 'value' => 'male'],
+                ['label' => 'Female', 'value' => 'female'],
+            ],
+        ]);
+
+        $ticketType = EventTicketType::query()->create([
+            'event_id' => $event->id,
+            'name' => 'Goshen Individual',
+            'sku' => 'GOSHEN-IND',
+            'currency' => 'GBP',
+            'price' => 300,
+            'is_active' => true,
+        ]);
+
+        $booking = Booking::query()->create([
+            'event_id' => $event->id,
+            'customer_name' => 'Grace Buyer',
+            'customer_email' => 'buyer@example.test',
+            'customer_phone' => '+447700900000',
+            'currency' => 'GBP',
+            'subtotal' => 300,
+            'total' => 300,
+            'paid_total' => 300,
+            'status' => BookingStatus::Paid,
+        ]);
+
+        $attendee = Attendee::query()->create([
+            'booking_id' => $booking->id,
+            'ticket_type_id' => $ticketType->id,
+            'first_name' => 'Grace',
+            'last_name' => 'Buyer',
+            'email' => 'grace@example.test',
+            'phone' => '+447700900001',
+            'custom_fields' => [
+                'gender' => 'female',
+                'seat_note' => 'Near aisle',
+            ],
+        ]);
+
+        $ticket = Ticket::query()->create([
+            'event_id' => $event->id,
+            'booking_id' => $booking->id,
+            'attendee_id' => $attendee->id,
+            'ticket_type_id' => $ticketType->id,
+            'ticket_number' => '000456',
+            'formatted_number' => 'GOSHEN-2-000456',
+            'qr_hash' => hash('sha256', 'goshen-ticket-export'),
+            'status' => TicketStatus::NotCheckedIn,
+            'metadata' => ['source' => 'test'],
+            'issued_at' => now(),
+        ]);
+
+        TicketCheckIn::query()->create([
+            'ticket_id' => $ticket->id,
+            'event_id' => $event->id,
+            'day_number' => 1,
+            'status' => TicketStatus::CheckedIn,
+            'checked_in_at' => now(),
+            'source' => 'admin',
+        ]);
+
+        TicketEmailLog::query()->create([
+            'ticket_id' => $ticket->id,
+            'booking_id' => $booking->id,
+            'recipient' => 'grace@example.test',
+            'subject' => 'Your ticket',
+            'status' => 'sent',
+            'attachments' => [],
+            'sent_at' => now(),
+        ]);
+
+        TicketDocument::query()->create([
+            'ticket_id' => $ticket->id,
+            'type' => 'pdf',
+            'disk' => 'local',
+            'path' => 'event-installments/tickets/pdf/'.$ticket->public_id.'.pdf',
+            'mime_type' => 'application/pdf',
+            'generated_at' => now(),
+        ]);
+
+        $exporter = app(GoshenTicketExportService::class);
+        $registrationFields = app(GoshenBookingExportService::class)->registrationFields();
+        $headings = $exporter->headings($registrationFields);
+        $row = $exporter->rowForTicket($ticket, $registrationFields);
+        $combined = array_combine($headings, $row);
+
+        $this->assertContains('Registration: Gender', $headings);
+        $this->assertSame('GOSHEN-2-000456', $combined['Formatted ticket number']);
+        $this->assertSame('Grace Buyer', $combined['Attendee full name']);
+        $this->assertSame('Female', $combined['Registration: Gender']);
+        $this->assertSame('sent', $combined['Last ticket email status']);
+        $this->assertSame('checked_in', $combined['Last check-in status']);
+        $this->assertStringContainsString('seat_note', $combined['Additional attendee custom fields']);
+        $this->assertStringEndsWith($ticket->public_id.'.pdf', $combined['PDF document path']);
+    }
+
+    public function test_goshen_booking_registration_field_filter_matches_attendee_answers(): void
+    {
+        $event = Event::query()->create([
+            'name' => 'Goshen Retreat 2026',
+            'slug' => 'goshen-retreat-2026-filter',
+            'timezone' => 'Europe/London',
+            'status' => 'published',
+            'settings' => ['module' => 'goshen_retreat'],
+        ]);
+
+        $ticketType = EventTicketType::query()->create([
+            'event_id' => $event->id,
+            'name' => 'Goshen Individual',
+            'currency' => 'GBP',
+            'price' => 300,
+            'is_active' => true,
+        ]);
+
+        $femaleBooking = Booking::query()->create([
+            'event_id' => $event->id,
+            'customer_name' => 'Female Buyer',
+            'customer_email' => 'female@example.test',
+            'currency' => 'GBP',
+            'subtotal' => 300,
+            'total' => 300,
+            'paid_total' => 300,
+            'status' => BookingStatus::Paid,
+        ]);
+
+        $maleBooking = Booking::query()->create([
+            'event_id' => $event->id,
+            'customer_name' => 'Male Buyer',
+            'customer_email' => 'male@example.test',
+            'currency' => 'GBP',
+            'subtotal' => 300,
+            'total' => 300,
+            'paid_total' => 300,
+            'status' => BookingStatus::Paid,
+        ]);
+
+        Attendee::query()->create([
+            'booking_id' => $femaleBooking->id,
+            'ticket_type_id' => $ticketType->id,
+            'first_name' => 'Female',
+            'custom_fields' => ['gender' => 'female'],
+        ]);
+
+        Attendee::query()->create([
+            'booking_id' => $maleBooking->id,
+            'ticket_type_id' => $ticketType->id,
+            'first_name' => 'Male',
+            'custom_fields' => ['gender' => 'male'],
+        ]);
+
+        $query = GoshenBookingResource::getEloquentQuery();
+        GoshenBookingResource::applyAttendeeFieldFilter($query, 'gender', ['female']);
+
+        $this->assertSame([$femaleBooking->id], $query->pluck('id')->all());
     }
 }

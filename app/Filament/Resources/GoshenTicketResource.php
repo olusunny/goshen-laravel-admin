@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\GoshenTicketResource\Pages;
 use App\Models\MobileUser;
+use App\Services\GoshenBookingExportService;
 use App\Support\AdminPermissions;
 use BackedEnum;
 use chillerlan\QRCode\Output\QROutputInterface;
@@ -21,11 +22,14 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
 use Livewire\Component;
+use Personal\EventInstallments\Enums\BookingStatus;
+use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\EventAttendeeField;
 use Personal\EventInstallments\Models\EventTicketType;
@@ -352,13 +356,63 @@ class GoshenTicketResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
+                'event',
+                'booking',
+                'attendee',
+                'ticketType',
+            ]))
             ->columns([
-                Tables\Columns\TextColumn::make('formatted_number')->label('Ticket')->searchable()->copyable(),
-                Tables\Columns\TextColumn::make('event.name')->searchable(),
-                Tables\Columns\TextColumn::make('attendee.first_name')->label('First name')->searchable(),
-                Tables\Columns\TextColumn::make('attendee.last_name')->label('Last name')->searchable(),
-                Tables\Columns\TextColumn::make('ticketType.name')->label('Type')->searchable(),
-                Tables\Columns\TextColumn::make('status')->badge()->sortable(),
+                Tables\Columns\TextColumn::make('formatted_number')
+                    ->label('Ticket')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('ticket_number')
+                    ->label('Raw number')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('public_id')
+                    ->label('Public ID')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('event.name')
+                    ->label('Retreat edition')
+                    ->searchable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('booking.public_id')
+                    ->label('Booking reference')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('attendee.first_name')
+                    ->label('First name')
+                    ->searchable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('attendee.last_name')
+                    ->label('Last name')
+                    ->searchable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('attendee.email')
+                    ->label('Attendee email')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('attendee.phone')
+                    ->label('Attendee phone')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('ticketType.name')
+                    ->label('Type')
+                    ->searchable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('status')
+                    ->badge()
+                    ->sortable()
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('last_ticket_email_status')
                     ->label('Last email')
                     ->badge()
@@ -374,8 +428,75 @@ class GoshenTicketResource extends Resource
                         'failed' => 'danger',
                         'pending' => 'warning',
                         default => 'gray',
-                    }),
-                Tables\Columns\TextColumn::make('issued_at')->dateTime()->sortable(),
+                    })
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('issued_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('status')
+                    ->label('Ticket status')
+                    ->options(static::ticketStatusOptions())
+                    ->native(false),
+                Tables\Filters\SelectFilter::make('event_id')
+                    ->label('Retreat edition')
+                    ->options(fn (): array => Event::query()
+                        ->where(fn (Builder $query): Builder => GoshenBookingExportService::applyGoshenEventScope($query))
+                        ->orderByDesc('id')
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->searchable()
+                    ->native(false),
+                Tables\Filters\SelectFilter::make('ticket_type_id')
+                    ->label('Ticket type')
+                    ->options(fn (): array => EventTicketType::query()
+                        ->whereHas('event', fn (Builder $query): Builder => GoshenBookingExportService::applyGoshenEventScope($query))
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->searchable()
+                    ->native(false),
+                Tables\Filters\SelectFilter::make('booking_status')
+                    ->label('Booking status')
+                    ->options(static::bookingStatusOptions())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if (blank($value)) {
+                            return $query;
+                        }
+
+                        return $query->whereHas('booking', fn (Builder $bookingQuery): Builder => $bookingQuery->where('status', $value));
+                    })
+                    ->native(false),
+                Tables\Filters\SelectFilter::make('email_status')
+                    ->label('Last email status')
+                    ->options([
+                        'sent' => 'Sent',
+                        'failed' => 'Failed',
+                        'pending' => 'Pending',
+                        'not_sent' => 'Not sent',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if (blank($value)) {
+                            return $query;
+                        }
+
+                        if ($value === 'not_sent') {
+                            return $query->whereDoesntHave('emailLogs');
+                        }
+
+                        return $query->whereHas('emailLogs', fn (Builder $emailQuery): Builder => $emailQuery->where('status', $value));
+                    })
+                    ->native(false),
             ])
             ->recordUrl(fn (Model $record): string => static::getUrl('view', ['record' => $record]))
             ->recordActions([
@@ -421,6 +542,26 @@ class GoshenTicketResource extends Resource
                         }),
                 ]),
             ]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function ticketStatusOptions(): array
+    {
+        return collect(TicketStatus::cases())
+            ->mapWithKeys(fn (TicketStatus $status): array => [$status->value => str($status->value)->replace('_', ' ')->headline()->toString()])
+            ->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function bookingStatusOptions(): array
+    {
+        return collect(BookingStatus::cases())
+            ->mapWithKeys(fn (BookingStatus $status): array => [$status->value => str($status->value)->replace('_', ' ')->headline()->toString()])
+            ->all();
     }
 
     public static function getPages(): array

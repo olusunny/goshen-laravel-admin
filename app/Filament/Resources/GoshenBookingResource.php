@@ -23,6 +23,7 @@ use Illuminate\Support\Str;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Models\Attendee;
 use Personal\EventInstallments\Models\Booking;
+use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\EventAttendeeField;
 
 class GoshenBookingResource extends Resource
@@ -258,6 +259,21 @@ class GoshenBookingResource extends Resource
                     ->sortable()
                     ->toggleable(),
             ], self::registrationFieldColumns()))
+            ->filters(array_merge([
+                Tables\Filters\SelectFilter::make('status')
+                    ->label('Booking status')
+                    ->options(self::bookingStatusOptions())
+                    ->native(false),
+                Tables\Filters\SelectFilter::make('event_id')
+                    ->label('Retreat edition')
+                    ->options(fn (): array => Event::query()
+                        ->where(fn (Builder $query): Builder => GoshenBookingExportService::applyGoshenEventScope($query))
+                        ->orderByDesc('id')
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->searchable()
+                    ->native(false),
+            ], self::registrationFieldFilters()))
             ->recordUrl(fn (Model $record): string => static::getUrl('view', ['record' => $record]))
             ->recordActions([
                 Actions\ViewAction::make()->label('View details'),
@@ -315,6 +331,112 @@ class GoshenBookingResource extends Resource
                     ->expandableLimitedList()
                     ->wrap()
                     ->toggleable(isToggledHiddenByDefault: true);
+            })
+            ->all();
+    }
+
+    /**
+     * @return array<int, Tables\Filters\BaseFilter>
+     */
+    private static function registrationFieldFilters(): array
+    {
+        return app(GoshenBookingExportService::class)
+            ->registrationFields()
+            ->map(function (EventAttendeeField $field): Tables\Filters\BaseFilter {
+                $key = (string) $field->key;
+                $name = 'registration_field_'.Str::slug($key, '_');
+                $options = self::registrationFieldFilterOptions($field);
+
+                if ($options !== []) {
+                    return Tables\Filters\SelectFilter::make($name)
+                        ->label((string) $field->label)
+                        ->options($options)
+                        ->multiple()
+                        ->searchable()
+                        ->native(false)
+                        ->query(function (Builder $query, array $data) use ($key): Builder {
+                            $values = collect($data['values'] ?? [])
+                                ->filter(fn (mixed $value): bool => filled($value))
+                                ->values()
+                                ->all();
+
+                            if ($values === []) {
+                                return $query;
+                            }
+
+                            return self::applyAttendeeFieldFilter($query, $key, $values);
+                        });
+                }
+
+                return Tables\Filters\Filter::make($name)
+                    ->label((string) $field->label)
+                    ->schema([
+                        Forms\Components\TextInput::make('value')
+                            ->label((string) $field->label)
+                            ->placeholder('Type a value to search'),
+                    ])
+                    ->query(function (Builder $query, array $data) use ($key): Builder {
+                        $value = trim((string) ($data['value'] ?? ''));
+
+                        if ($value === '') {
+                            return $query;
+                        }
+
+                        return self::applyAttendeeFieldFilter($query, $key, $value);
+                    });
+            })
+            ->all();
+    }
+
+    /**
+     * @param  string|array<int, string>  $value
+     */
+    public static function applyAttendeeFieldFilter(Builder $query, string $key, string|array $value): Builder
+    {
+        return $query->whereHas('attendees', function (Builder $attendeeQuery) use ($key, $value): void {
+            $column = match ($key) {
+                'first_name', 'last_name', 'email', 'phone', 'company', 'designation' => $key,
+                default => 'custom_fields->'.$key,
+            };
+
+            if (is_array($value)) {
+                $attendeeQuery->whereIn($column, $value);
+
+                return;
+            }
+
+            $attendeeQuery->where($column, 'like', '%'.$value.'%');
+        });
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function bookingStatusOptions(): array
+    {
+        return collect(BookingStatus::cases())
+            ->mapWithKeys(fn (BookingStatus $status): array => [$status->value => str($status->value)->replace('_', ' ')->headline()->toString()])
+            ->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function registrationFieldFilterOptions(EventAttendeeField $field): array
+    {
+        return collect(is_array($field->options) ? $field->options : [])
+            ->filter(fn (mixed $option): bool => is_array($option))
+            ->mapWithKeys(function (array $option, int $index): array {
+                $label = trim((string) ($option['label'] ?? $option['name'] ?? ''));
+                $value = array_key_exists('value', $option)
+                    ? trim((string) $option['value'])
+                    : Str::slug($label !== '' ? $label : 'option-'.$index, '_');
+
+                if ($value === '') {
+                    return [];
+                }
+
+                return [$value => $label !== '' ? $label : Str::of($value)->replace('_', ' ')->headline()->toString()];
             })
             ->all();
     }
