@@ -265,9 +265,9 @@ class GoshenBookingResource extends Resource
                 $details = collect($columns)
                     ->map(fn (array $column): string => '<dl class="space-y-3">'
                         .collect($column)
-                            ->map(fn (string $value, string $label): string => '<div class="flex items-start justify-between gap-4 border-b border-gray-100 pb-3 last:border-b-0 last:pb-0 dark:border-gray-800">'
+                            ->map(fn (string $value, string $label): string => '<div class="flex flex-col gap-1 border-b border-gray-100 pb-3 last:border-b-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4 dark:border-gray-800">'
                                 .'<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">'.e($label).'</dt>'
-                                .'<dd class="max-w-[60%] break-words text-right text-sm font-semibold text-gray-950 dark:text-white">'.e($value).'</dd>'
+                                .'<dd class="break-words text-sm font-semibold text-gray-950 sm:max-w-[60%] sm:text-right dark:text-white">'.e($value).'</dd>'
                                 .'</div>')
                             ->implode('')
                         .'</dl>')
