@@ -82,10 +82,12 @@ class GoshenAdminTicketIssuanceService
         ?float $paymentAmount = null,
         array $extraMetadata = [],
         int $attendeeQuantity = 1,
+        array $attendeeDetails = [],
     ): Ticket {
         $reason = trim($reason);
         $paymentMethod = strtolower(trim($paymentMethod));
         $attendeeQuantity = $this->validatedAttendeeQuantity($ticketType, $attendeeQuantity);
+        $attendeeDetails = $this->normalizedAttendeeDetails($member, $attendeeQuantity, $attendeeDetails);
 
         if ($reason === '') {
             throw ValidationException::withMessages([
@@ -155,6 +157,7 @@ class GoshenAdminTicketIssuanceService
                 $paymentAmount,
                 $extraMetadata,
                 $attendeeQuantity,
+                $attendeeDetails,
             ): Ticket {
                 if ($paymentMethod === 'wallet') {
                     $admin = User::query()->whereKey($admin->id)->lockForUpdate()->firstOrFail();
@@ -235,17 +238,23 @@ class GoshenAdminTicketIssuanceService
 
                 $firstAttendee = null;
                 for ($index = 0; $index < $attendeeQuantity; $index++) {
+                    $attendeeDetail = $attendeeDetails[$index] ?? $this->defaultAttendeeDetails($member);
+                    $customFields = is_array($attendeeDetail['custom_fields'] ?? null) ? $attendeeDetail['custom_fields'] : [];
+
                     $attendee = Attendee::query()->create([
                         'booking_id' => $booking->id,
                         'ticket_type_id' => $ticketType->id,
-                        'first_name' => $member->first_name ?: $member->name,
-                        'last_name' => $member->last_name,
-                        'email' => $member->email,
-                        'phone' => $member->phone,
+                        'first_name' => $attendeeDetail['first_name'] ?? ($member->first_name ?: $member->name),
+                        'last_name' => $attendeeDetail['last_name'] ?? $member->last_name,
+                        'email' => $attendeeDetail['email'] ?? $member->email,
+                        'phone' => $attendeeDetail['phone'] ?? $member->phone,
+                        'company' => $attendeeDetail['company'] ?? ($customFields['company'] ?? null),
+                        'designation' => $attendeeDetail['designation'] ?? ($customFields['designation'] ?? null),
                         'custom_fields' => array_filter([
                             'title' => $member->title,
-                            'gender' => $member->gender,
+                            'gender' => $customFields['gender'] ?? $member->gender,
                             'marital_status' => $member->marital_status,
+                            ...$customFields,
                             'source' => 'filament_admin_ticket_issue',
                             'attendee_index' => $index + 1,
                             'admin_issued_family_quantity' => $attendeeQuantity > 1 ? $attendeeQuantity : null,
@@ -383,6 +392,99 @@ class GoshenAdminTicketIssuanceService
         $quantity = max($quantity, $min);
 
         return $max > 0 ? min($quantity, $max) : $quantity;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $attendeeDetails
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizedAttendeeDetails(MobileUser $member, int $attendeeQuantity, array $attendeeDetails): array
+    {
+        if ($attendeeDetails === []) {
+            return [];
+        }
+
+        $attendeeDetails = collect($attendeeDetails)->values()->all();
+
+        if (count($attendeeDetails) !== $attendeeQuantity) {
+            throw ValidationException::withMessages([
+                'attendees' => "Enter details for exactly {$attendeeQuantity} attendee(s).",
+            ]);
+        }
+
+        $defaults = $this->defaultAttendeeDetails($member);
+        $normalized = [];
+
+        foreach ($attendeeDetails as $index => $detail) {
+            $detail = is_array($detail) ? $detail : [];
+            $detail = array_merge($index === 0 ? $defaults : [], $detail);
+            $firstName = trim((string) ($detail['first_name'] ?? ''));
+
+            if ($firstName === '') {
+                throw ValidationException::withMessages([
+                    "attendees.{$index}.first_name" => 'Enter the attendee first name.',
+                ]);
+            }
+
+            $customInput = is_array($detail['custom_fields'] ?? null) ? $detail['custom_fields'] : [];
+
+            foreach ($detail as $key => $value) {
+                if (! is_string($key) || ! str_starts_with($key, 'custom_fields.')) {
+                    continue;
+                }
+
+                data_set($customInput, substr($key, strlen('custom_fields.')), $value);
+            }
+
+            $customFields = collect($customInput)
+                ->filter(fn (mixed $value): bool => is_scalar($value) && trim((string) $value) !== '')
+                ->map(fn (mixed $value): string => trim((string) $value))
+                ->all();
+
+            foreach (['company', 'designation'] as $legacyKey) {
+                if (filled($customFields[$legacyKey] ?? null)) {
+                    $detail[$legacyKey] = $customFields[$legacyKey];
+                }
+            }
+
+            $normalized[] = [
+                'first_name' => $firstName,
+                'last_name' => trim((string) ($detail['last_name'] ?? '')),
+                'email' => trim((string) ($detail['email'] ?? '')),
+                'phone' => trim((string) ($detail['phone'] ?? '')),
+                'company' => trim((string) ($detail['company'] ?? '')),
+                'designation' => trim((string) ($detail['designation'] ?? '')),
+                'custom_fields' => $customFields,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function defaultAttendeeDetails(MobileUser $member): array
+    {
+        $nameParts = str($member->name ?: '')
+            ->squish()
+            ->explode(' ')
+            ->filter()
+            ->values();
+
+        return [
+            'first_name' => $member->first_name ?: ($nameParts->first() ?: $member->name),
+            'last_name' => $member->last_name ?: $nameParts->slice(1)->implode(' '),
+            'email' => $member->email,
+            'phone' => $member->phone,
+            'company' => $member->company ?? null,
+            'designation' => $member->designation,
+            'custom_fields' => array_filter([
+                'company' => $member->company ?? null,
+                'designation' => $member->designation,
+                'gender' => $member->gender,
+            ], fn ($value): bool => filled($value)),
+        ];
     }
 
     private function paymentTotal(EventTicketType $ticketType, int $attendeeQuantity, ?float $paymentAmount = null): float

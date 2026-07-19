@@ -108,6 +108,106 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             ->assertSet('data.attendee_quantity', 2);
     }
 
+    public function test_family_ticket_quantity_syncs_visible_attendee_detail_rows_on_admin_issue_form(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $ticketType->forceFill([
+            'name' => 'Goshen Family',
+            'min_per_booking' => 1,
+            'max_per_booking' => 6,
+        ])->save();
+        $this->grantTicketIssuePermission($admin);
+
+        Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->assertSchemaComponentHidden('attendees')
+            ->fillForm([
+                'customer_id' => $member->id,
+                'event_id' => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'issuance_reason' => 'Family desk registration',
+                'payment_method' => 'voucher',
+            ])
+            ->assertSchemaComponentVisible('attendee_quantity')
+            ->assertSchemaComponentVisible('attendees')
+            ->assertSet('data.attendee_quantity', 1)
+            ->assertSet('data.attendees', fn (array $attendees): bool => count($attendees) === 1
+                && ($attendees[0]['email'] ?? null) === $member->email)
+            ->set('data.attendee_quantity', 4)
+            ->assertSet('data.attendees', fn (array $attendees): bool => count($attendees) === 4)
+            ->assertSee('Family attendees')
+            ->assertSee('First name')
+            ->assertSee('Phone');
+    }
+
+    public function test_admin_family_ticket_quantity_reveals_and_saves_each_attendee_detail(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture();
+        $ticketType->forceFill([
+            'name' => 'Goshen Family',
+            'min_per_booking' => 1,
+            'max_per_booking' => 6,
+        ])->save();
+        $this->grantTicketIssuePermission($admin);
+        $voucher = app(GoshenVoucherService::class)->createVoucher([
+            'event_id' => $ticketType->event_id,
+            'currency' => $ticketType->currency,
+            'amount' => 450,
+            'max_uses' => 1,
+        ], adminActor: $admin);
+
+        Livewire::actingAs($admin)
+            ->test(CreateGoshenTicket::class)
+            ->fillForm([
+                'customer_id' => $member->id,
+                'event_id' => $ticketType->event_id,
+                'ticket_type_id' => $ticketType->id,
+                'attendee_quantity' => 3,
+                'attendees' => [
+                    [
+                        'first_name' => 'Ada',
+                        'last_name' => 'Lovelace',
+                        'email' => 'ada-family@example.test',
+                        'phone' => '+447700900001',
+                    ],
+                    [
+                        'first_name' => 'Grace',
+                        'last_name' => 'Lovelace',
+                        'email' => 'grace-family@example.test',
+                        'phone' => '+447700900002',
+                    ],
+                    [
+                        'first_name' => 'Faith',
+                        'last_name' => 'Lovelace',
+                        'email' => 'faith-family@example.test',
+                        'phone' => '+447700900003',
+                    ],
+                ],
+                'issuance_reason' => 'Family desk registration',
+                'payment_method' => 'voucher',
+                'voucher_code' => $voucher['code'],
+            ])
+            ->assertSchemaComponentVisible('attendee_quantity')
+            ->assertSchemaComponentVisible('attendees')
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $booking = Booking::query()->with('attendees', 'tickets')->sole();
+        $attendees = $booking->attendees()->orderBy('id')->get();
+
+        $this->assertCount(3, $attendees);
+        $this->assertCount(3, $booking->tickets);
+        $this->assertSame(['Ada', 'Grace', 'Faith'], $attendees->pluck('first_name')->all());
+        $this->assertSame([
+            'ada-family@example.test',
+            'grace-family@example.test',
+            'faith-family@example.test',
+        ], $attendees->pluck('email')->all());
+        $this->assertSame(['+447700900001', '+447700900002', '+447700900003'], $attendees->pluck('phone')->all());
+        $this->assertSame('3', (string) $booking->metadata['attendee_quantity']);
+        $this->assertSame('450.00', $booking->total);
+    }
+
     public function test_filament_voucher_submission_creates_a_normal_paid_ticket(): void
     {
         [$member, $ticketType, $admin] = $this->issuanceFixture();

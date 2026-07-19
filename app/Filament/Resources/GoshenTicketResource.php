@@ -27,6 +27,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
 use Livewire\Component;
 use Personal\EventInstallments\Models\Event;
+use Personal\EventInstallments\Models\EventAttendeeField;
 use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\Ticket;
 use Personal\EventInstallments\Services\QrPayloadService;
@@ -74,7 +75,10 @@ class GoshenTicketResource extends Resource
                             return $user ? static::memberOptionLabel($user) : null;
                         })
                         ->live()
-                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
+                        ->afterStateUpdated(function (Set $set, Get $get): void {
+                            static::syncAttendeeDetails($set, $get);
+                            static::clearWalletAuthorization($set);
+                        })
                         ->required()
                         ->helperText('Search by member name, Triumphant ID, email address, or phone number.'),
                 ]),
@@ -93,6 +97,7 @@ class GoshenTicketResource extends Resource
                         ->afterStateUpdated(function (Set $set): void {
                             $set('ticket_type_id', null);
                             $set('attendee_quantity', 1);
+                            $set('attendees', []);
                             static::clearWalletAuthorization($set);
                         })
                         ->required(),
@@ -114,8 +119,9 @@ class GoshenTicketResource extends Resource
                             ->all())
                         ->searchable()
                         ->live()
-                        ->afterStateUpdated(function (Set $set, mixed $state): void {
+                        ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
                             $set('attendee_quantity', static::defaultAttendeeQuantity($state));
+                            static::syncAttendeeDetails($set, $get, static::defaultAttendeeQuantity($state));
                             static::clearWalletAuthorization($set);
                         })
                         ->required()
@@ -127,12 +133,45 @@ class GoshenTicketResource extends Resource
                         ->minValue(fn (Get $get): int => static::ticketTypeMinQuantity($get('ticket_type_id')))
                         ->maxValue(fn (Get $get): ?int => static::ticketTypeMaxQuantity($get('ticket_type_id')))
                         ->step(1)
-                        ->live(onBlur: true)
-                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
+                        ->live()
+                        ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
+                            static::syncAttendeeDetails($set, $get, $state);
+                            static::clearWalletAuthorization($set);
+                        })
                         ->required(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
                         ->visible(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
                         ->helperText(fn (Get $get): string => static::attendeeQuantityHelperText($get('ticket_type_id'))),
                 ]),
+            Section::make('Attendee details')
+                ->description('Enter the details for each person covered by this family ticket. The first attendee is pre-filled from the selected app member and can be edited before issuing.')
+                ->schema([
+                    Forms\Components\Repeater::make('attendees')
+                        ->label('Family attendees')
+                        ->schema(fn (Get $get): array => static::attendeeDetailForm($get('event_id')))
+                        ->columns(2)
+                        ->minItems(fn (Get $get): int => static::resolvedAttendeeQuantity(
+                            EventTicketType::query()->find($get('ticket_type_id')),
+                            $get('attendee_quantity'),
+                        ))
+                        ->maxItems(fn (Get $get): int => static::resolvedAttendeeQuantity(
+                            EventTicketType::query()->find($get('ticket_type_id')),
+                            $get('attendee_quantity'),
+                        ))
+                        ->defaultItems(0)
+                        ->addable(false)
+                        ->deletable(false)
+                        ->reorderable(false)
+                        ->collapsible()
+                        ->itemLabel(fn (array $state): string => filled($state['first_name'] ?? null)
+                            ? trim(($state['first_name'] ?? '').' '.($state['last_name'] ?? ''))
+                            : 'Attendee details')
+                        ->visible(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
+                        ->required(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
+                        ->helperText('Change the attendee quantity above to automatically show the matching number of attendee detail cards.')
+                        ->columnSpanFull(),
+                ])
+                ->visible(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
+                ->columnSpanFull(),
             Section::make('Payment and authorization')
                 ->description('Settle the listed ticket amount by voucher or from your linked Goshen wallet. Use a special approved amount only for authorised exception cases.')
                 ->columns(2)
@@ -506,6 +545,145 @@ class GoshenTicketResource extends Resource
     {
         $set('wallet_challenge_id', null);
         $set('wallet_otp', null);
+    }
+
+    private static function syncAttendeeDetails(Set $set, Get $get, mixed $quantity = null): void
+    {
+        $ticketType = EventTicketType::query()->find($get('ticket_type_id'));
+
+        if (! $ticketType || ! static::ticketTypeUsesAttendeeQuantity($ticketType->getKey())) {
+            $set('attendees', []);
+
+            return;
+        }
+
+        $count = static::resolvedAttendeeQuantity($ticketType, $quantity ?? $get('attendee_quantity'));
+        $existing = collect(is_array($get('attendees')) ? $get('attendees') : [])->values();
+        $member = MobileUser::query()->find($get('customer_id'));
+        $defaults = $member ? static::memberAttendeeSnapshot($member) : [];
+        $attendees = [];
+
+        for ($index = 0; $index < $count; $index++) {
+            $current = is_array($existing->get($index)) ? $existing->get($index) : [];
+            $attendees[] = array_filter(array_merge($index === 0 ? $defaults : [], $current), fn ($value): bool => $value !== null);
+        }
+
+        $set('attendees', $attendees);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function memberAttendeeSnapshot(MobileUser $member): array
+    {
+        $nameParts = str($member->name ?: '')
+            ->squish()
+            ->explode(' ')
+            ->filter()
+            ->values();
+
+        return [
+            'first_name' => $member->first_name ?: ($nameParts->first() ?: ''),
+            'last_name' => $member->last_name ?: $nameParts->slice(1)->implode(' '),
+            'email' => $member->email,
+            'phone' => $member->phone,
+            'custom_fields' => array_filter([
+                'company' => $member->company ?? null,
+                'designation' => $member->designation,
+                'gender' => $member->gender,
+            ], fn ($value): bool => filled($value)),
+        ];
+    }
+
+    /**
+     * @return array<int, Forms\Components\Field>
+     */
+    private static function attendeeDetailForm(mixed $eventId): array
+    {
+        $coreFields = [
+            Forms\Components\TextInput::make('first_name')
+                ->label('First name')
+                ->required()
+                ->maxLength(120),
+            Forms\Components\TextInput::make('last_name')
+                ->label('Last name')
+                ->maxLength(120),
+            Forms\Components\TextInput::make('email')
+                ->label('Email')
+                ->email()
+                ->maxLength(255),
+            Forms\Components\TextInput::make('phone')
+                ->label('Phone')
+                ->tel()
+                ->maxLength(80),
+        ];
+
+        $registrationFields = EventAttendeeField::query()
+            ->where('event_id', $eventId)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (EventAttendeeField $field): Forms\Components\Field => static::attendeeRegistrationField($field))
+            ->all();
+
+        return [...$coreFields, ...$registrationFields];
+    }
+
+    private static function attendeeRegistrationField(EventAttendeeField $field): Forms\Components\Field
+    {
+        $key = 'custom_fields.'.((string) $field->key);
+        $type = static::normalizedRegistrationFieldType((string) $field->type);
+
+        $component = match ($type) {
+            'textarea' => Forms\Components\Textarea::make($key)->rows(3),
+            'select', 'image_select', 'color_select' => Forms\Components\Select::make($key)
+                ->options(static::registrationFieldOptions($field))
+                ->native(false),
+            default => Forms\Components\TextInput::make($key),
+        };
+
+        $component
+            ->label((string) $field->label)
+            ->required((bool) $field->is_required);
+
+        if ($type === 'textarea') {
+            $component->maxLength(1000);
+        } elseif ($type === 'text') {
+            $component->maxLength(255);
+        }
+
+        return $component;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function registrationFieldOptions(EventAttendeeField $field): array
+    {
+        return collect(is_array($field->options) ? $field->options : [])
+            ->filter(fn (mixed $option): bool => is_array($option))
+            ->mapWithKeys(function (array $option, int $index): array {
+                $label = trim((string) ($option['label'] ?? $option['name'] ?? ''));
+                $value = array_key_exists('value', $option)
+                    ? trim((string) $option['value'])
+                    : str($label !== '' ? $label : 'option-'.$index)->slug('_')->toString();
+
+                return [$value => $label !== '' ? $label : str($value)->replace('_', ' ')->headline()->toString()];
+            })
+            ->all();
+    }
+
+    private static function normalizedRegistrationFieldType(string $type): string
+    {
+        $type = strtolower(trim($type));
+
+        return match ($type) {
+            'single_select' => 'select',
+            'image_option', 'image' => 'image_select',
+            'color', 'colour', 'colour_select' => 'color_select',
+            'textarea' => 'textarea',
+            default => in_array($type, ['text', 'select', 'image_select', 'color_select'], true) ? $type : 'text',
+        };
     }
 
     private static function ticketAmountLabel(mixed $ticketTypeId, mixed $attendeeQuantity = 1): string

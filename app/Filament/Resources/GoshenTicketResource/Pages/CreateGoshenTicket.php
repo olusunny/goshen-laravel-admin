@@ -181,6 +181,7 @@ class CreateGoshenTicket extends CreateRecord
                 paymentAmount: $paymentAmount,
                 extraMetadata: $this->specialApprovalMetadata($ticketType, $data, $attendeeQuantity, $paymentAmount),
                 attendeeQuantity: $attendeeQuantity,
+                attendeeDetails: is_array($data['attendees'] ?? null) ? $data['attendees'] : [],
             );
         } catch (ValidationException $exception) {
             $this->throwFormValidation($exception);
