@@ -349,14 +349,19 @@ class GoshenBookingResource extends Resource
         $eventField = $record->event?->attendeeFields?->firstWhere('key', $key);
         $fieldForLabels = $eventField instanceof EventAttendeeField ? $eventField : $field;
         $exporter = app(GoshenBookingExportService::class);
+        $showAnswersOnly = $key === 'gender';
 
         return $record->attendees
             ->values()
-            ->map(function (Attendee $attendee, int $index) use ($exporter, $key, $fieldForLabels): ?string {
+            ->map(function (Attendee $attendee, int $index) use ($exporter, $key, $fieldForLabels, $showAnswersOnly): ?string {
                 $value = $exporter->attendeeFieldValue($attendee, $key, $fieldForLabels);
 
                 if ($value === '') {
                     return null;
+                }
+
+                if ($showAnswersOnly) {
+                    return $value;
                 }
 
                 $name = trim((string) $attendee->first_name.' '.(string) $attendee->last_name) ?: 'Attendee '.($index + 1);

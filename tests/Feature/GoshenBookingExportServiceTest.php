@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\GoshenBookingResource;
 use App\Services\GoshenBookingExportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Personal\EventInstallments\Enums\BookingStatus;
@@ -12,6 +13,7 @@ use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\EventAttendeeField;
 use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\Ticket;
+use ReflectionMethod;
 use Tests\TestCase;
 
 class GoshenBookingExportServiceTest extends TestCase
@@ -135,5 +137,66 @@ class GoshenBookingExportServiceTest extends TestCase
         $this->assertSame('Female', $combined['Registration: Gender']);
         $this->assertSame('Morning', $combined['Registration: Arrival window']);
         $this->assertStringContainsString('room_note', $combined['Additional custom fields']);
+    }
+
+    public function test_goshen_booking_gender_table_column_shows_answer_without_attendee_name(): void
+    {
+        $event = Event::query()->create([
+            'name' => 'Goshen Retreat 2026',
+            'slug' => 'goshen-retreat-2026-gender-column',
+            'timezone' => 'Europe/London',
+            'status' => 'published',
+            'settings' => ['module' => 'goshen_retreat'],
+        ]);
+
+        $genderField = EventAttendeeField::query()->create([
+            'event_id' => $event->id,
+            'key' => 'gender',
+            'label' => 'Gender',
+            'type' => 'select',
+            'is_required' => true,
+            'sort_order' => 10,
+            'options' => [
+                ['label' => 'Male', 'value' => 'male'],
+                ['label' => 'Female', 'value' => 'female'],
+            ],
+        ]);
+
+        $ticketType = EventTicketType::query()->create([
+            'event_id' => $event->id,
+            'name' => 'Goshen Individual',
+            'currency' => 'GBP',
+            'price' => 300,
+            'is_active' => true,
+        ]);
+
+        $booking = Booking::query()->create([
+            'event_id' => $event->id,
+            'customer_name' => 'Parent Buyer',
+            'customer_email' => 'parent@example.test',
+            'currency' => 'GBP',
+            'subtotal' => 300,
+            'total' => 300,
+            'paid_total' => 300,
+            'status' => BookingStatus::Paid,
+        ]);
+
+        Attendee::query()->create([
+            'booking_id' => $booking->id,
+            'ticket_type_id' => $ticketType->id,
+            'first_name' => 'Grace',
+            'last_name' => 'Buyer',
+            'email' => 'grace@example.test',
+            'custom_fields' => ['gender' => 'female'],
+        ]);
+
+        $method = new ReflectionMethod(GoshenBookingResource::class, 'attendeeRegistrationFieldSummary');
+        $method->setAccessible(true);
+
+        $state = $method->invoke(null, $booking, 'gender', $genderField);
+
+        $this->assertSame(['Female'], $state);
+        $this->assertStringNotContainsString('Grace', implode("\n", $state));
+        $this->assertStringNotContainsString('Buyer', implode("\n", $state));
     }
 }
