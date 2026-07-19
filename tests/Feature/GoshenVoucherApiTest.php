@@ -137,6 +137,66 @@ class GoshenVoucherApiTest extends TestCase
         $this->assertSame(2, GoshenVoucherUsage::query()->count());
     }
 
+    public function test_pool_voucher_can_be_redeemed_with_unique_display_suffix(): void
+    {
+        $member = $this->verifiedMember('pool-suffix@example.test', 'Pool Suffix', '+2348011190004');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 100);
+
+        $created = app(GoshenVoucherService::class)->createVoucher([
+            'event_id' => $event->id,
+            'label' => 'Shared pool redeemable by displayed suffix',
+            'amount' => 300,
+            'currency' => 'NGN',
+            'max_uses' => 10,
+            'redemption_type' => GoshenVoucher::REDEMPTION_POOL,
+        ]);
+
+        $this->postJson('/api/goshen-retreat/bookings', [
+            'data' => $this->bookingPayload($member->issueApiToken(), $event, $ticketType, [
+                'payment_mode' => 'voucher',
+                'voucher_code' => $created['voucher']->code_suffix,
+            ]),
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('booking.status', BookingStatus::Paid->value);
+
+        $voucher = $created['voucher']->fresh();
+        $this->assertSame(1, $voucher->used_count);
+        $this->assertSame('200.00', $voucher->remaining_amount);
+        $this->assertSame($created['voucher']->code_suffix, GoshenVoucherUsage::query()->firstOrFail()->code_suffix);
+    }
+
+    public function test_display_suffix_must_be_unique_before_it_can_be_used_as_voucher_code(): void
+    {
+        [$event] = $this->publishedRetreatEvent(price: 100);
+
+        app(GoshenVoucherService::class)->createVoucher([
+            'event_id' => $event->id,
+            'label' => 'First duplicate suffix',
+            'code' => 'GSH-AAAA-BBBB-CCCC-LYXU2S',
+            'amount' => 300,
+            'currency' => 'NGN',
+            'max_uses' => 10,
+            'redemption_type' => GoshenVoucher::REDEMPTION_POOL,
+        ]);
+
+        app(GoshenVoucherService::class)->createVoucher([
+            'event_id' => $event->id,
+            'label' => 'Second duplicate suffix',
+            'code' => 'GSH-DDDD-EEEE-FFFF-LYXU2S',
+            'amount' => 300,
+            'currency' => 'NGN',
+            'max_uses' => 10,
+            'redemption_type' => GoshenVoucher::REDEMPTION_POOL,
+        ]);
+
+        $verification = app(GoshenVoucherService::class)->verify('LYXU2S', $event, 100, 'NGN');
+
+        $this->assertFalse($verification['valid']);
+        $this->assertSame('This voucher suffix matches more than one voucher. Enter the full voucher code.', $verification['message']);
+    }
+
     public function test_pool_voucher_covers_one_family_ticket_and_multiple_individual_tickets(): void
     {
         $familyMember = $this->verifiedMember('pool-family@example.test', 'Pool Family', '+2348011190010');

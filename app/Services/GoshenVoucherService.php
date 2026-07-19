@@ -137,12 +137,16 @@ class GoshenVoucherService
 
     public function verify(string $code, ?Event $event = null, ?float $amount = null, ?string $currency = null): array
     {
-        $voucher = GoshenVoucher::query()
-            ->where('code_hash', $this->hashCode($code))
-            ->first();
+        $ambiguousSuffix = false;
+        $voucher = $this->findVoucherByCode($code, ambiguousSuffix: $ambiguousSuffix);
 
         if (! $voucher) {
-            return $this->verificationPayload(false, 'This voucher code is not valid.');
+            return $this->verificationPayload(
+                false,
+                $ambiguousSuffix
+                    ? 'This voucher suffix matches more than one voucher. Enter the full voucher code.'
+                    : 'This voucher code is not valid.',
+            );
         }
 
         try {
@@ -196,13 +200,13 @@ class GoshenVoucherService
                 throw new RuntimeException('This payment has no outstanding balance.');
             }
 
-            $voucher = GoshenVoucher::query()
-                ->where('code_hash', $this->hashCode($code))
-                ->lockForUpdate()
-                ->first();
+            $ambiguousSuffix = false;
+            $voucher = $this->findVoucherByCode($code, lockForUpdate: true, ambiguousSuffix: $ambiguousSuffix);
 
             if (! $voucher) {
-                throw new RuntimeException('This voucher code is not valid.');
+                throw new RuntimeException($ambiguousSuffix
+                    ? 'This voucher suffix matches more than one voucher. Enter the full voucher code.'
+                    : 'This voucher code is not valid.');
             }
 
             $this->assertVoucherPurpose($voucher, GoshenVoucher::PURPOSE_PAYMENTS);
@@ -304,13 +308,13 @@ class GoshenVoucherService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $voucher = GoshenVoucher::query()
-                ->where('code_hash', $this->hashCode($code))
-                ->lockForUpdate()
-                ->first();
+            $ambiguousSuffix = false;
+            $voucher = $this->findVoucherByCode($code, lockForUpdate: true, ambiguousSuffix: $ambiguousSuffix);
 
             if (! $voucher) {
-                throw new RuntimeException('This voucher code is not valid.');
+                throw new RuntimeException($ambiguousSuffix
+                    ? 'This voucher suffix matches more than one voucher. Enter the full voucher code.'
+                    : 'This voucher code is not valid.');
             }
 
             $this->assertVoucherPurpose($voucher, GoshenVoucher::PURPOSE_WALLET_FUNDING);
@@ -483,6 +487,47 @@ class GoshenVoucherService
         if ((float) $voucher->amount + 0.01 < (float) $amount) {
             throw new RuntimeException('This voucher amount is lower than the payment due.');
         }
+    }
+
+    private function findVoucherByCode(string $code, bool $lockForUpdate = false, bool &$ambiguousSuffix = false): ?GoshenVoucher
+    {
+        $ambiguousSuffix = false;
+        $normalized = $this->normalizeCode($code);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        $exactQuery = GoshenVoucher::query()->where('code_hash', $this->hashCode($normalized));
+        if ($lockForUpdate) {
+            $exactQuery->lockForUpdate();
+        }
+
+        $voucher = $exactQuery->first();
+        if ($voucher) {
+            return $voucher;
+        }
+
+        if (strlen($normalized) !== 6) {
+            return null;
+        }
+
+        $suffixQuery = GoshenVoucher::query()
+            ->where('code_suffix', $normalized)
+            ->orderBy('id');
+
+        if ($lockForUpdate) {
+            $suffixQuery->lockForUpdate();
+        }
+
+        $matches = $suffixQuery->limit(2)->get();
+        if ($matches->count() === 1) {
+            return $matches->first();
+        }
+
+        $ambiguousSuffix = $matches->count() > 1;
+
+        return null;
     }
 
     private function markVoucherRedeemed(GoshenVoucher $voucher, float $amount): void
