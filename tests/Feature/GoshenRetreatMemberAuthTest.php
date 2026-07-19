@@ -8,14 +8,19 @@ use App\Models\GoshenAccommodationAllocation;
 use App\Models\GoshenExperienceQuestion;
 use App\Models\GoshenExperienceResponse;
 use App\Models\GoshenExperienceSurvey;
+use App\Models\GoshenWallet;
 use App\Models\MobileUser;
+use App\Services\DynamicSmtpMailer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\EventType;
 use Personal\EventInstallments\Enums\InstallmentStatus;
 use Personal\EventInstallments\Enums\TicketStatus;
+use Personal\EventInstallments\Mail\TicketIssuedMail;
 use Personal\EventInstallments\Models\Attendee;
 use Personal\EventInstallments\Models\Booking;
 use Personal\EventInstallments\Models\BookingLine;
@@ -25,6 +30,8 @@ use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentTransaction;
 use Personal\EventInstallments\Models\Ticket;
+use Personal\EventInstallments\Models\TicketEmailLog;
+use Mockery\MockInterface;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -699,6 +706,106 @@ class GoshenRetreatMemberAuthTest extends TestCase
         $this->assertSame('media', $firstAttendee->custom_fields['volunteer_department'] ?? null);
     }
 
+    public function test_wallet_registration_sends_generated_pdf_ticket_email(): void
+    {
+        $this->configureTicketEmailTest(expectedTicketEmails: 1);
+
+        $user = $this->verifiedMember('wallet-register@example.test');
+        $token = $user->issueApiToken();
+        GoshenWallet::query()->updateOrCreate(['mobile_user_id' => $user->id], [
+            'currency' => 'NGN',
+            'balance' => 1500,
+        ]);
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 1000);
+
+        $this->postJson('/api/goshen-retreat/bookings', [
+            'data' => [
+                'api_token' => $token,
+                'event_id' => $event->public_id,
+                'ticket_type_id' => $ticketType->public_id,
+                'quantity' => 1,
+                'payment_mode' => 'wallet',
+                'uk_privacy_consent' => true,
+                'privacy_policy_version' => 'uk-gdpr-2026-06',
+                'attendees' => [
+                    [
+                        'title' => 'Mr.',
+                        'first_name' => 'Wallet',
+                        'last_name' => 'Register',
+                        'designation' => 'member',
+                        'gender' => 'male',
+                        'marital_status' => 'Married',
+                        'age_group' => 'adult',
+                        'free_church_bus_interest' => 'no_thanks',
+                        'volunteer_department' => 'no_chance_at_the_moment',
+                    ],
+                ],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('booking.status', BookingStatus::Paid->value)
+            ->assertJsonCount(1, 'booking.tickets');
+
+        $ticket = Ticket::query()->whereHas('booking', fn ($query) => $query->where('customer_id', $user->id))->firstOrFail();
+        $log = TicketEmailLog::query()->where('ticket_id', $ticket->id)->latest('id')->firstOrFail();
+
+        $this->assertSame('sent', $log->status);
+        $this->assertSame('wallet-register@example.test', $log->recipient);
+        $this->assertNotNull($log->sent_at);
+        $this->assertTrue($this->logHasPdfAttachment($log));
+        Mail::assertSent(TicketIssuedMail::class);
+    }
+
+    public function test_existing_booking_wallet_payment_sends_generated_pdf_ticket_email(): void
+    {
+        $this->configureTicketEmailTest(expectedTicketEmails: 1, allowRawNotifications: true);
+
+        $user = $this->verifiedMember('wallet-existing@example.test');
+        $token = $user->issueApiToken();
+        GoshenWallet::query()->updateOrCreate(['mobile_user_id' => $user->id], [
+            'currency' => 'NGN',
+            'balance' => 1500,
+        ]);
+        [$booking] = $this->bookingWithInstallment($user);
+        $ticketType = EventTicketType::query()->where('event_id', $booking->event_id)->firstOrFail();
+
+        BookingLine::query()->create([
+            'booking_id' => $booking->id,
+            'ticket_type_id' => $ticketType->id,
+            'quantity' => 1,
+            'currency' => 'NGN',
+            'unit_price' => 1000,
+            'line_total' => 1000,
+        ]);
+
+        Attendee::query()->create([
+            'booking_id' => $booking->id,
+            'ticket_type_id' => $ticketType->id,
+            'first_name' => 'Wallet',
+            'last_name' => 'Existing',
+            'email' => $user->email,
+            'phone' => $user->phone,
+        ]);
+
+        $this->postJson("/api/goshen-retreat/bookings/{$booking->public_id}/wallet-pay", [
+            'data' => ['api_token' => $token],
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('booking.status', BookingStatus::Paid->value)
+            ->assertJsonCount(1, 'booking.tickets');
+
+        $ticket = Ticket::query()->where('booking_id', $booking->id)->firstOrFail();
+        $log = TicketEmailLog::query()->where('ticket_id', $ticket->id)->latest('id')->firstOrFail();
+
+        $this->assertSame('sent', $log->status);
+        $this->assertSame('wallet-existing@example.test', $log->recipient);
+        $this->assertNotNull($log->sent_at);
+        $this->assertTrue($this->logHasPdfAttachment($log));
+        Mail::assertSent(TicketIssuedMail::class);
+    }
+
     private function verifiedMember(
         string $email = 'member@example.test',
         string $name = 'Member Test',
@@ -796,5 +903,36 @@ class GoshenRetreatMemberAuthTest extends TestCase
         ]);
 
         return [$booking->refresh(), $installment->refresh()];
+    }
+
+    private function configureTicketEmailTest(int $expectedTicketEmails, bool $allowRawNotifications = false): void
+    {
+        Storage::fake('local');
+        Mail::fake();
+
+        Config::set('event-installments.storage.disk', 'local');
+        Config::set('event-installments.ticket.qr_secret', 'ticket-email-test-secret');
+        Config::set('event-installments.ticket.email.attach_pdf', true);
+        Config::set('event-installments.ticket.email.attach_ics', false);
+
+        $this->mock(DynamicSmtpMailer::class, function (MockInterface $mock) use ($expectedTicketEmails, $allowRawNotifications): void {
+            $mock->shouldReceive('sendMailable')
+                ->times($expectedTicketEmails)
+                ->andReturnUsing(function (string $to, TicketIssuedMail $mail): void {
+                    Mail::to($to)->send($mail);
+                });
+
+            if ($allowRawNotifications) {
+                $mock->shouldReceive('sendRaw')->zeroOrMoreTimes()->andReturnNull();
+            }
+        });
+    }
+
+    private function logHasPdfAttachment(TicketEmailLog $log): bool
+    {
+        return collect($log->attachments)->contains(
+            fn (array $attachment): bool => ($attachment['mime'] ?? null) === 'application/pdf'
+                && str_ends_with((string) ($attachment['name'] ?? ''), '.pdf')
+        );
     }
 }
