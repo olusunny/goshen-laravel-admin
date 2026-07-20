@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\AppSetting;
 use App\Models\MobileUser;
+use App\Services\GoshenVoucherService;
+use App\Services\GoshenWalletService;
 use App\Support\MediaUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -157,6 +160,80 @@ class ControlHubMobileUserController extends Controller
             'status' => 'ok',
             'message' => 'Mobile user deleted.',
             'data' => ['user' => $this->userPayload($mobileUser->fresh(['churchGroup', 'roles']))],
+        ]);
+    }
+
+    public function redeemWalletVoucher(
+        Request $request,
+        MobileUser $mobileUser,
+        GoshenVoucherService $vouchers,
+        GoshenWalletService $wallets,
+    ): JsonResponse {
+        $manager = $this->mobileUserFromToken($request);
+        if (! $manager) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Please sign in before redeeming a wallet voucher.',
+            ], 401);
+        }
+
+        if (! $this->canManageWalletVoucherTopUps($manager)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Your account is not authorized to redeem wallet vouchers for members.',
+            ], 403);
+        }
+
+        if (! $this->walletAdminTopUpEnabled()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Admin wallet top-ups are currently disabled.',
+            ], 403);
+        }
+
+        if (! $mobileUser->canUseCommunity()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'This mobile user is not available for wallet funding.',
+            ], 422);
+        }
+
+        $validator = Validator::make($this->payload($request), [
+            'code' => ['required', 'string', 'min:6', 'max:80'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationError($validator);
+        }
+
+        $validated = $validator->validated();
+
+        try {
+            $wallet = $wallets->walletFor($mobileUser);
+            $usage = $vouchers->redeemForWalletTopUp(
+                $wallet,
+                (string) $validated['code'],
+                $mobileUser,
+                $manager,
+                [
+                    'request_ip' => $request->ip(),
+                    'request_user_agent' => $request->userAgent(),
+                    'redemption_channel' => 'control_hub',
+                    'source' => 'control_hub_wallet_voucher_top_up',
+                ],
+            );
+        } catch (\Throwable $exception) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $exception->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'status' => 'ok',
+            'message' => "Voucher added to {$mobileUser->name}'s Goshen wallet.",
+            'usage' => $vouchers->usagePayload($usage),
+            'data' => $wallets->payload($wallet->fresh()),
         ]);
     }
 
@@ -328,6 +405,18 @@ class ControlHubMobileUserController extends Controller
                 ['admin', 'superadmin', 'eventmanager', 'goshenmanager', 'retreatmanager', 'triumphantitmanager'],
                 true,
             ));
+    }
+
+    private function canManageWalletVoucherTopUps(MobileUser $user): bool
+    {
+        return $user->canUseCommunity()
+            && $user->can('redeem_wallet_funding_vouchers_for_members');
+    }
+
+    private function walletAdminTopUpEnabled(): bool
+    {
+        return filter_var(AppSetting::value('goshen_wallet_enabled', '1'), FILTER_VALIDATE_BOOLEAN)
+            && filter_var(AppSetting::value('goshen_wallet_admin_topup_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
     }
 
     private function mobileUserFromToken(Request $request): ?MobileUser

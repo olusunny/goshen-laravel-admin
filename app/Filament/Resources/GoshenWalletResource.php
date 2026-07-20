@@ -7,6 +7,7 @@ use App\Filament\Resources\GoshenWalletResource\Pages;
 use App\Models\AppSetting;
 use App\Models\GoshenWallet;
 use App\Models\User;
+use App\Services\GoshenVoucherService;
 use App\Services\GoshenWalletService;
 use App\Services\WalletSecurityResetService;
 use App\Support\AdminPermissions;
@@ -106,6 +107,7 @@ class GoshenWalletResource extends Resource
             ->recordActions([
                 Actions\ViewAction::make()->label('View wallet'),
                 static::walletAdminTopUpAction(),
+                static::walletVoucherTopUpAction(),
                 static::walletSecurityResetAction(),
             ]);
     }
@@ -175,6 +177,39 @@ class GoshenWalletResource extends Resource
         ];
     }
 
+    public static function walletVoucherTopUpAction(): Actions\Action
+    {
+        return Actions\Action::make('redeemWalletVoucher')
+            ->label('Redeem voucher')
+            ->icon('heroicon-o-ticket')
+            ->color('warning')
+            ->visible(fn (GoshenWallet $record): bool => static::canAdminTopUpWallet($record))
+            ->form(static::walletVoucherTopUpForm())
+            ->modalHeading('Redeem voucher to member wallet')
+            ->modalDescription('Only an active Wallet Funding voucher in the wallet currency can be redeemed. Its value is set by the voucher and cannot be changed here.')
+            ->modalSubmitActionLabel('Redeem voucher')
+            ->action(function (GoshenWallet $record, array $data, GoshenVoucherService $vouchers): void {
+                static::redeemVoucherToWallet($record, $data, $vouchers);
+            });
+    }
+
+    public static function walletVoucherTopUpForm(): array
+    {
+        return [
+            Forms\Components\TextInput::make('code')
+                ->label('Voucher code')
+                ->required()
+                ->minLength(6)
+                ->maxLength(80)
+                ->autocomplete(false)
+                ->helperText('Enter the full voucher code whenever possible.'),
+            Forms\Components\TextInput::make('confirmation')
+                ->label('Type REDEEM VOUCHER')
+                ->helperText('This credits the member wallet immediately using the voucher value.')
+                ->required(),
+        ];
+    }
+
     public static function topUpWallet(
         GoshenWallet $record,
         array $data,
@@ -233,6 +268,81 @@ class GoshenWalletResource extends Resource
                 '%s %s was credited. New balance: %s %s.',
                 $entry->currency,
                 number_format((float) $entry->amount, 2),
+                $record->currency,
+                number_format((float) $record->balance, 2),
+            ))
+            ->success()
+            ->send();
+    }
+
+    public static function redeemVoucherToWallet(
+        GoshenWallet $record,
+        array $data,
+        GoshenVoucherService $vouchers,
+    ): void {
+        if (trim((string) ($data['confirmation'] ?? '')) !== 'REDEEM VOUCHER') {
+            Notification::make()
+                ->title('Confirmation phrase did not match')
+                ->body('Type REDEEM VOUCHER to confirm this voucher redemption.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $record->loadMissing('user');
+        if (! static::canAdminTopUpWallet($record) || ! $record->user) {
+            Notification::make()
+                ->title('Voucher redemption not allowed')
+                ->body('The feature is disabled, the wallet is not linked to a member, or you do not have permission.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $admin = Auth::user();
+        if (! $admin instanceof User) {
+            Notification::make()
+                ->title('Admin account could not be verified')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        try {
+            $usage = $vouchers->redeemForWalletTopUp(
+                $record,
+                (string) $data['code'],
+                $record->user,
+                null,
+                [
+                    'source' => 'admin_wallet_voucher_top_up',
+                    'redemption_channel' => 'admin_panel',
+                    'request_ip' => request()->ip(),
+                    'request_user_agent' => request()->userAgent(),
+                ],
+                $admin,
+            );
+        } catch (RuntimeException $exception) {
+            Notification::make()
+                ->title('Voucher was not redeemed')
+                ->body($exception->getMessage())
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $record->refresh();
+
+        Notification::make()
+            ->title('Voucher redeemed to wallet')
+            ->body(sprintf(
+                '%s %s was credited. New balance: %s %s.',
+                $usage->currency,
+                number_format((float) $usage->amount, 2),
                 $record->currency,
                 number_format((float) $record->balance, 2),
             ))

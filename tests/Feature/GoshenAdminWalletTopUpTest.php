@@ -7,6 +7,7 @@ use App\Models\AppSetting;
 use App\Models\GoshenWallet;
 use App\Models\MobileUser;
 use App\Models\User;
+use App\Services\GoshenVoucherService;
 use App\Services\GoshenWalletService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
@@ -77,6 +78,41 @@ class GoshenAdminWalletTopUpTest extends TestCase
             'status' => 'paid',
             'gateway' => 'admin',
             'amount' => 20,
+        ]);
+    }
+
+    public function test_admin_can_redeem_wallet_funding_voucher_with_admin_audit(): void
+    {
+        $admin = $this->admin();
+        $member = $this->member();
+        $wallet = $this->wallet($member, 5);
+        $voucher = app(GoshenVoucherService::class)->createVoucher([
+            'label' => 'Admin Wallet Funding Voucher',
+            'amount' => 15,
+            'currency' => 'GBP',
+            'max_uses' => 1,
+            'purpose' => 'wallet_funding',
+        ]);
+
+        $this->actingAs($admin);
+
+        GoshenWalletResource::redeemVoucherToWallet($wallet, [
+            'code' => $voucher['code'],
+            'confirmation' => 'REDEEM VOUCHER',
+        ], app(GoshenVoucherService::class));
+
+        $this->assertSame('20.00', $wallet->fresh()->balance);
+        $this->assertDatabaseHas('goshen_voucher_usages', [
+            'voucher_id' => $voucher['voucher']->id,
+            'mobile_user_id' => $member->id,
+            'redeemed_by_id' => $admin->id,
+            'source' => 'admin_wallet_voucher_top_up',
+        ]);
+        $this->assertDatabaseHas('goshen_wallet_ledger_entries', [
+            'wallet_id' => $wallet->id,
+            'type' => 'voucher_top_up',
+            'gateway' => 'voucher',
+            'amount' => 15,
         ]);
     }
 

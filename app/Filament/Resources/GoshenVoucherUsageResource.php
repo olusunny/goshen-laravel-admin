@@ -51,7 +51,11 @@ class GoshenVoucherUsageResource extends Resource
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('redeemedByMobileUser.name')
                     ->label('Redeemed by')
-                    ->placeholder('Self / web admin')
+                    ->placeholder('Self')
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('redeemedBy.name')
+                    ->label('Admin')
+                    ->placeholder('Not applicable')
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('code_suffix')
                     ->label('Code suffix')
@@ -75,6 +79,9 @@ class GoshenVoucherUsageResource extends Resource
                         'mobile_existing_booking' => 'Existing booking',
                         'control_hub' => 'Control hub',
                         'admin_panel' => 'Admin panel',
+                        'wallet_top_up' => 'Wallet voucher top-up',
+                        'control_hub_wallet_voucher_top_up' => 'Control Hub wallet voucher',
+                        'admin_wallet_voucher_top_up' => 'Admin wallet voucher',
                     ]),
             ]);
     }

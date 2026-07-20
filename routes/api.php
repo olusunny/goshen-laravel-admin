@@ -228,6 +228,7 @@ Route::controller(ControlHubMobileUserController::class)
         Route::get('/', 'index');
         Route::post('search', 'index');
         Route::post('/', 'store')->middleware('throttle:10,1');
+        Route::post('{mobileUser}/wallet/voucher', 'redeemWalletVoucher')->whereNumber('mobileUser')->middleware('throttle:8,1');
         Route::post('{mobileUser}', 'update')->whereNumber('mobileUser')->middleware('throttle:20,1');
         Route::delete('{mobileUser}', 'destroy')->whereNumber('mobileUser')->middleware('throttle:10,1');
         Route::post('{mobileUser}/delete', 'destroy')->whereNumber('mobileUser')->middleware('throttle:10,1');

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\GoshenWalletResource\Pages;
 
 use App\Filament\Resources\GoshenWalletResource;
+use App\Services\GoshenVoucherService;
 use App\Services\GoshenWalletService;
 use App\Services\WalletSecurityResetService;
 use Filament\Actions;
@@ -26,6 +27,19 @@ class ViewGoshenWallet extends ViewRecord
                 ->modalSubmitActionLabel('Top up wallet')
                 ->action(function (array $data, GoshenWalletService $wallets): void {
                     GoshenWalletResource::topUpWallet($this->record, $data, $wallets);
+                    $this->record->refresh();
+                }),
+            Actions\Action::make('redeemWalletVoucher')
+                ->label('Redeem voucher')
+                ->icon('heroicon-o-ticket')
+                ->color('warning')
+                ->visible(fn (): bool => GoshenWalletResource::canAdminTopUpWallet($this->record))
+                ->form(GoshenWalletResource::walletVoucherTopUpForm())
+                ->modalHeading('Redeem voucher to member wallet')
+                ->modalDescription('Only an active Wallet Funding voucher in the wallet currency can be redeemed. Its value is set by the voucher and cannot be changed here.')
+                ->modalSubmitActionLabel('Redeem voucher')
+                ->action(function (array $data, GoshenVoucherService $vouchers): void {
+                    GoshenWalletResource::redeemVoucherToWallet($this->record, $data, $vouchers);
                     $this->record->refresh();
                 }),
             Actions\Action::make('resetWalletSecurity')

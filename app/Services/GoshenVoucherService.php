@@ -302,8 +302,9 @@ class GoshenVoucherService
         MobileUser $beneficiary,
         ?MobileUser $redeemedBy = null,
         array $context = [],
+        ?User $adminActor = null,
     ): GoshenVoucherUsage {
-        return DB::transaction(function () use ($wallet, $code, $beneficiary, $redeemedBy, $context): GoshenVoucherUsage {
+        return DB::transaction(function () use ($wallet, $code, $beneficiary, $redeemedBy, $context, $adminActor): GoshenVoucherUsage {
             $lockedWallet = GoshenWallet::query()
                 ->whereKey($wallet->id)
                 ->where('mobile_user_id', $beneficiary->id)
@@ -331,6 +332,7 @@ class GoshenVoucherService
                 throw new RuntimeException('This voucher cannot be used for wallet funding.');
             }
 
+            $source = (string) ($context['source'] ?? 'wallet_top_up');
             $reference = 'gw_voucher_'.Str::ulid();
             $lockedWallet->forceFill([
                 'balance' => round(((float) $lockedWallet->balance) + $amount, 2),
@@ -344,10 +346,15 @@ class GoshenVoucherService
                 'gateway' => 'voucher',
                 'provider_reference' => $reference,
                 'metadata' => [
-                    'source' => 'wallet_voucher_top_up',
+                    'source' => $source,
                     'voucher_id' => $voucher->id,
                     'voucher_code_suffix' => $voucher->code_suffix,
                     'voucher_redemption_type' => $voucher->redemption_type ?: GoshenVoucher::REDEMPTION_FIXED,
+                    'redemption_channel' => $context['redemption_channel'] ?? 'mobile_app',
+                    'redeemed_by_mobile_user_id' => $redeemedBy?->id,
+                    'redeemed_by_id' => $adminActor?->id,
+                    'admin_name' => $adminActor?->name,
+                    'admin_email' => $adminActor?->email,
                     'request_ip' => $context['request_ip'] ?? null,
                     'request_user_agent' => $context['request_user_agent'] ?? null,
                 ],
@@ -358,16 +365,22 @@ class GoshenVoucherService
                 'voucher_id' => $voucher->id,
                 'mobile_user_id' => $beneficiary->id,
                 'redeemed_by_mobile_user_id' => $redeemedBy?->id,
+                'redeemed_by_id' => $adminActor?->id,
                 'code_suffix' => $voucher->code_suffix,
                 'currency' => strtoupper((string) $voucher->currency),
                 'amount' => $amount,
-                'source' => 'wallet_top_up',
+                'source' => $source,
                 'status' => GoshenVoucherUsage::STATUS_APPLIED,
                 'metadata' => [
                     'wallet_id' => $lockedWallet->id,
                     'wallet_ledger_entry_id' => $entry->id,
                     'wallet_balance_after' => (float) $lockedWallet->balance,
                     'voucher_redemption_type' => $voucher->redemption_type ?: GoshenVoucher::REDEMPTION_FIXED,
+                    'redemption_channel' => $context['redemption_channel'] ?? 'mobile_app',
+                    'redeemed_by_mobile_user_id' => $redeemedBy?->id,
+                    'redeemed_by_id' => $adminActor?->id,
+                    'admin_name' => $adminActor?->name,
+                    'admin_email' => $adminActor?->email,
                     'request_ip' => $context['request_ip'] ?? null,
                     'request_user_agent' => $context['request_user_agent'] ?? null,
                 ],
@@ -375,7 +388,7 @@ class GoshenVoucherService
 
             $this->markVoucherRedeemed($voucher, $amount);
 
-            return $usage->fresh(['voucher', 'mobileUser', 'redeemedByMobileUser']) ?? $usage;
+            return $usage->fresh(['voucher', 'mobileUser', 'redeemedByMobileUser', 'redeemedBy']) ?? $usage;
         });
     }
 
@@ -408,7 +421,7 @@ class GoshenVoucherService
 
     public function usagePayload(GoshenVoucherUsage $usage): array
     {
-        $usage->loadMissing(['voucher', 'event', 'booking', 'mobileUser', 'redeemedByMobileUser']);
+        $usage->loadMissing(['voucher', 'event', 'booking', 'mobileUser', 'redeemedByMobileUser', 'redeemedBy']);
 
         return [
             'id' => $usage->id,
@@ -434,6 +447,11 @@ class GoshenVoucherService
                 'id' => $usage->redeemedByMobileUser->id,
                 'name' => $usage->redeemedByMobileUser->name,
                 'email' => $usage->redeemedByMobileUser->email,
+            ] : null,
+            'redeemed_by_admin' => $usage->redeemedBy ? [
+                'id' => $usage->redeemedBy->id,
+                'name' => $usage->redeemedBy->name,
+                'email' => $usage->redeemedBy->email,
             ] : null,
             'currency' => $usage->currency,
             'amount' => (float) $usage->amount,
