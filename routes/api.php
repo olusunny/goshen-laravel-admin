@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AccommodationController;
+use App\Http\Controllers\Api\AppSplashMediaController;
 use App\Http\Controllers\Api\CompatibilityController;
 use App\Http\Controllers\Api\ControlHubChurchEventController;
 use App\Http\Controllers\Api\ControlHubMessagingController;
@@ -311,6 +312,8 @@ Route::controller(PrayerPointController::class)
 
 Route::prefix('v1')->group(function () {
     Route::get('health', [CompatibilityController::class, 'health']);
+    Route::get('app/splash-media', [AppSplashMediaController::class, 'show'])
+        ->middleware('throttle:60,1');
 
     Route::middleware('auth:mobile')->prefix('prayer-community')->group(function () {
         Route::get('requests', [CommunityPrayerRequestController::class, 'index']);
