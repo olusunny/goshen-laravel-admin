@@ -50,51 +50,102 @@ use Sunny\Fundraising\Contracts\PermissionResolverContract;
 
 class CompatibilityController extends Controller
 {
+    private const DISCOVER_SETTING_KEYS = [
+        'facebook_page',
+        'youtube_page',
+        'tiktok_page',
+        'instagram_page',
+        'telegram_page',
+        'mixlr_page',
+        'whatsapp_page',
+        'twitter_page',
+        'website_url',
+        'ads_interval',
+        'app_logo',
+        'google_login_enabled',
+        'mobile_phone_otp_login_enabled',
+        'testimonies_enabled',
+        'counseling_enabled',
+        'fundraising_enabled',
+        'prayer_points_enabled',
+        'interactive_prayer_wall_enabled',
+        'hymns_enabled',
+        'devotionals_enabled',
+        'verse_of_day_enabled',
+        'transportation_arrangements_enabled',
+        'church_groups_enabled',
+        'dynamic_forms_enabled',
+        'goshen_quiz_enabled',
+        'goshen_wallet_withdrawals_enabled',
+        'goshen_wallet_auto_topup_enabled',
+        'branches_enabled',
+        'google_web_client_id',
+        'google_android_client_id',
+        'google_ios_client_id',
+    ];
+
     public function discover(Request $request)
     {
         $user = $this->mobileUserFromRequest($request);
         $inboxQuery = $this->visibleInboxQuery($user);
         $livestream = Stream::where('type', 'livestream')->where('is_active', true)->first();
         $radio = Stream::where('type', 'radio')->where('is_active', true)->first();
+        $settings = AppSetting::query()
+            ->whereIn('key', self::DISCOVER_SETTING_KEYS)
+            ->pluck('value', 'key');
+        $setting = static fn (string $key, mixed $default = null): mixed => $settings->get($key, $default);
+        $settingEnabled = static fn (string $key, bool $default = false): bool => filter_var(
+            $setting($key, $default ? '1' : '0'),
+            FILTER_VALIDATE_BOOLEAN,
+        );
+        $publishedEvents = $this->publishedChurchEventsForExpansion()->get();
+        $verseOfDayEnabled = $settingEnabled('verse_of_day_enabled');
+        $testimoniesEnabled = $settingEnabled('testimonies_enabled');
 
         return response()->json([
             'status' => 'ok',
-            'slider_media' => $this->homeSliderPayload(),
-            'update_banners' => $this->orderedMediaQuery(MediaItem::with(['category', 'subCategory'])->where('type', 'banner')->where('is_published', true))->limit(10)->get()->map(fn (MediaItem $media) => $this->mediaPayload($media)),
+            'slider_media' => $this->homeSliderPayload($publishedEvents),
+            'update_banners' => $this->orderedMediaQuery(MediaItem::with(['category', 'subCategory'])
+                ->withCount(['comments as comments_count' => fn ($query) => $query->where('is_published', true)])
+                ->where('type', 'banner')
+                ->where('is_published', true))
+                ->limit(10)
+                ->get()
+                ->map(fn (MediaItem $media) => $this->mediaPayload($media)),
             'livestream' => $livestream ? $this->streamPayload($livestream) : null,
             'radios' => $radio ? $this->streamPayload($radio) : null,
-            'facebook_page' => AppSetting::value('facebook_page', ''),
-            'youtube_page' => AppSetting::value('youtube_page', ''),
-            'tiktok_page' => AppSetting::value('tiktok_page', ''),
-            'instagram_page' => AppSetting::value('instagram_page', ''),
-            'telegram_page' => AppSetting::value('telegram_page', ''),
-            'mixlr_page' => AppSetting::value('mixlr_page', ''),
-            'whatsapp_page' => AppSetting::value('whatsapp_page', ''),
-            'twitter_page' => AppSetting::value('twitter_page', ''),
-            'website_url' => AppSetting::value('website_url', ''),
-            'ads_interval' => AppSetting::value('ads_interval', '0'),
-            'app_logo' => MediaUrl::resolve(AppSetting::value('app_logo')),
-            'google_login_enabled' => $this->settingEnabled('google_login_enabled'),
-            'mobile_phone_otp_login_enabled' => $this->settingEnabled('mobile_phone_otp_login_enabled'),
-            'testimonies_enabled' => $this->settingEnabled('testimonies_enabled'),
-            'counseling_enabled' => $this->settingEnabled('counseling_enabled', true),
-            'fundraising_enabled' => $this->settingEnabled('fundraising_enabled'),
-            'prayer_points_enabled' => $this->settingEnabled('prayer_points_enabled'),
-            'interactive_prayer_wall_enabled' => $this->settingEnabled('interactive_prayer_wall_enabled'),
-            'hymns_enabled' => $this->settingEnabled('hymns_enabled'),
-            'devotionals_enabled' => $this->settingEnabled('devotionals_enabled'),
-            'verse_of_day_enabled' => $this->settingEnabled('verse_of_day_enabled'),
-            'transportation_arrangements_enabled' => $this->settingEnabled('transportation_arrangements_enabled'),
-            'church_groups_enabled' => $this->settingEnabled('church_groups_enabled'),
-            'dynamic_forms_enabled' => $this->settingEnabled('dynamic_forms_enabled'),
-            'goshen_quiz_enabled' => $this->settingEnabled('goshen_quiz_enabled'),
-            'goshen_wallet_withdrawals_enabled' => $this->settingEnabled('goshen_wallet_withdrawals_enabled'),
-            'goshen_wallet_auto_topup_enabled' => $this->settingEnabled('goshen_wallet_auto_topup_enabled'),
-            'branches_enabled' => $this->settingEnabled('branches_enabled'),
-            'google_web_client_id' => AppSetting::value('google_web_client_id', ''),
-            'google_android_client_id' => AppSetting::value('google_android_client_id', ''),
-            'google_ios_client_id' => AppSetting::value('google_ios_client_id', ''),
-            'verse_of_day' => $this->settingEnabled('verse_of_day_enabled') && ($verse = VerseOfDay::current()) ? new VerseOfDayResource($verse) : null,
+            'facebook_page' => $setting('facebook_page', ''),
+            'youtube_page' => $setting('youtube_page', ''),
+            'tiktok_page' => $setting('tiktok_page', ''),
+            'instagram_page' => $setting('instagram_page', ''),
+            'telegram_page' => $setting('telegram_page', ''),
+            'mixlr_page' => $setting('mixlr_page', ''),
+            'whatsapp_page' => $setting('whatsapp_page', ''),
+            'twitter_page' => $setting('twitter_page', ''),
+            'website_url' => $setting('website_url', ''),
+            'ads_interval' => $setting('ads_interval', '0'),
+            'app_logo' => MediaUrl::resolve($setting('app_logo')),
+            'google_login_enabled' => $settingEnabled('google_login_enabled'),
+            'mobile_phone_otp_login_enabled' => $settingEnabled('mobile_phone_otp_login_enabled'),
+            'testimonies_enabled' => $testimoniesEnabled,
+            'counseling_enabled' => $settingEnabled('counseling_enabled', true),
+            'fundraising_enabled' => $settingEnabled('fundraising_enabled'),
+            'prayer_points_enabled' => $settingEnabled('prayer_points_enabled'),
+            'interactive_prayer_wall_enabled' => $settingEnabled('interactive_prayer_wall_enabled'),
+            'hymns_enabled' => $settingEnabled('hymns_enabled'),
+            'devotionals_enabled' => $settingEnabled('devotionals_enabled'),
+            'verse_of_day_enabled' => $verseOfDayEnabled,
+            'transportation_arrangements_enabled' => $settingEnabled('transportation_arrangements_enabled'),
+            'church_groups_enabled' => $settingEnabled('church_groups_enabled'),
+            'dynamic_forms_enabled' => $settingEnabled('dynamic_forms_enabled'),
+            'goshen_quiz_enabled' => $settingEnabled('goshen_quiz_enabled'),
+            'goshen_wallet_withdrawals_enabled' => $settingEnabled('goshen_wallet_withdrawals_enabled'),
+            'goshen_wallet_auto_topup_enabled' => $settingEnabled('goshen_wallet_auto_topup_enabled'),
+            'branches_enabled' => $settingEnabled('branches_enabled'),
+            'google_web_client_id' => $setting('google_web_client_id', ''),
+            'google_android_client_id' => $setting('google_android_client_id', ''),
+            'google_ios_client_id' => $setting('google_ios_client_id', ''),
+            'verse_of_day' => $verseOfDayEnabled && ($verse = VerseOfDay::current()) ? new VerseOfDayResource($verse) : null,
             'prayer_requests_count' => CommunityPrayerRequest::visible()->count(),
             'prayer_request_avatars' => CommunityPrayerRequest::visible()
                 ->where('is_anonymous', false)
@@ -105,12 +156,12 @@ class CompatibilityController extends Controller
                 ->map(fn (CommunityPrayerRequest $request) => MediaUrl::resolve($request->mobileUser?->avatar))
                 ->filter()
                 ->values(),
-            'testimonies_count' => $this->settingEnabled('testimonies_enabled')
+            'testimonies_count' => $testimoniesEnabled
                 ? Testimony::approved()->count()
                 : 0,
             'donation_accounts' => [],
             'events' => app(RecurringChurchEventService::class)
-                ->upcomingOccurrences($this->publishedChurchEventsForExpansion()->get(), 50)
+                ->upcomingOccurrences($publishedEvents, 50)
                 ->count(),
             'inbox' => (clone $inboxQuery)->count(),
             'inbox_latest_ids' => (clone $inboxQuery)
@@ -1623,13 +1674,14 @@ class CompatibilityController extends Controller
             ]);
     }
 
-    private function homeSliderPayload()
+    private function homeSliderPayload($publishedEvents)
     {
         $events = app(RecurringChurchEventService::class)
-            ->upcomingDistinctEvents($this->publishedChurchEventsForExpansion()->get(), 5)
+            ->upcomingDistinctEvents($publishedEvents, 5)
             ->map(fn (ChurchEvent $event) => $this->eventAsMediaPayload($event));
 
         $media = $this->orderedMediaQuery(MediaItem::with(['category', 'subCategory'])
+            ->withCount(['comments as comments_count' => fn ($query) => $query->where('is_published', true)])
             ->where('is_published', true)
             ->where('is_featured', true)
             ->whereIn('type', ['video', 'audio', 'music']))
@@ -1730,7 +1782,9 @@ class CompatibilityController extends Controller
             'likes_count' => $media->likes_count,
             'views_count' => $media->views_count,
             'pin_position' => $media->pin_position,
-            'comments_count' => $media->comments()->where('is_published', true)->count(),
+            'comments_count' => isset($media->comments_count)
+                ? (int) $media->comments_count
+                : $media->comments()->where('is_published', true)->count(),
             'user_liked' => false,
             'dateInserted' => optional($media->published_at ?? $media->created_at)->toDateTimeString(),
         ];
