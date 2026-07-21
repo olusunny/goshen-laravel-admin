@@ -1108,13 +1108,8 @@ class GoshenRetreatController extends Controller
             }
         }
 
-        $missingProfileFields = $this->profileMissingFields($user);
-        if ($missingProfileFields !== []) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Please complete the member profile before registering for Goshen Retreat: '.implode(', ', $missingProfileFields).'.',
-                'missing_profile_fields' => $missingProfileFields,
-            ], 422);
+        if ($response = $this->profileCompletionRequiredResponse($user)) {
+            return $response;
         }
 
         $managedWalletCharge = null;
@@ -1895,6 +1890,18 @@ class GoshenRetreatController extends Controller
             ], 403);
         }
 
+        $bookingModel = $this->bookingFromKey($booking);
+        if (! $bookingModel || (int) $bookingModel->customer_id !== (int) $user->id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'This registration could not be found on your account.',
+            ], 404);
+        }
+
+        if ($response = $this->profileCompletionRequiredResponse($user)) {
+            return $response;
+        }
+
         try {
             $walletSecurityResets->assertWalletActionsAllowed($user);
         } catch (RuntimeException $exception) {
@@ -1903,14 +1910,6 @@ class GoshenRetreatController extends Controller
                 'message' => $exception->getMessage(),
                 'wallet_security_reset' => $walletSecurityResets->statusPayload($user),
             ], 423);
-        }
-
-        $bookingModel = $this->bookingFromKey($booking);
-        if (! $bookingModel || (int) $bookingModel->customer_id !== (int) $user->id) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'This registration could not be found on your account.',
-            ], 404);
         }
 
         try {
@@ -2180,6 +2179,11 @@ class GoshenRetreatController extends Controller
             ], 422);
         }
 
+        if ((int) $actor->id === (int) $beneficiary->id
+            && ($response = $this->profileCompletionRequiredResponse($beneficiary))) {
+            return $response;
+        }
+
         $installment = $bookingModel->installments()->orderBy('sequence')->first();
         if (! $installment) {
             return response()->json([
@@ -2386,6 +2390,10 @@ class GoshenRetreatController extends Controller
                 'status' => 'error',
                 'message' => 'This payment does not belong to a Goshen Retreat registration.',
             ], 404);
+        }
+
+        if ($response = $this->profileCompletionRequiredResponse($user)) {
+            return $response;
         }
 
         $bookingStatus = $booking->status?->value ?? $booking->status;
@@ -4986,6 +4994,20 @@ class GoshenRetreatController extends Controller
             ->filter(fn (string $label, string $field): bool => blank($user->{$field}))
             ->values()
             ->all();
+    }
+
+    private function profileCompletionRequiredResponse(MobileUser $user): ?JsonResponse
+    {
+        $missingProfileFields = $this->profileMissingFields($user);
+        if ($missingProfileFields === []) {
+            return null;
+        }
+
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Please complete the member profile before registering for Goshen Retreat: '.implode(', ', $missingProfileFields).'.',
+            'missing_profile_fields' => $missingProfileFields,
+        ], 422);
     }
 
     private function managedMemberPayload(MobileUser $member): array

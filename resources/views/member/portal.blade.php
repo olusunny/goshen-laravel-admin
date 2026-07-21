@@ -2150,8 +2150,10 @@
         const walletTabKey = 'goshen_wallet_tab';
         const migrationNoticeKey = 'goshen_migration_notice_2026_07_v1';
         const referralInvitationKey = 'goshen_referral_invitation';
-        const profileCompletionNoticeKey = 'goshen_profile_completion_notice_2026_07_v1';
-        const pendingRegistrationKey = 'goshen_pending_registration_v1';
+        const profileCompletionNoticeKeyPrefix = 'goshen_profile_completion_notice_2026_07_v2';
+        const pendingRegistrationKeyPrefix = 'goshen_pending_registration_v2';
+        const legacyProfileCompletionNoticeKey = 'goshen_profile_completion_notice_2026_07_v1';
+        const legacyPendingRegistrationKey = 'goshen_pending_registration_v1';
         const googleLoginConfig = @json($googleLogin ?? ['enabled' => false, 'clientId' => '']);
         const pageTitles = {
             home: 'Home',
@@ -2174,6 +2176,8 @@
         let churchGroupsCache = [];
         let handledReturnNotice = false;
         let profileEditMode = false;
+        let profileCompletionNoticePreviousFocus = null;
+        let profileCompletionReturnPage = null;
 
         const authShell = document.getElementById('authShell');
         const portalShell = document.getElementById('portalShell');
@@ -2367,9 +2371,24 @@
                 && (currentUser?.profile_needs_update === true || profileMissingFields().length > 0);
         }
 
+        function memberSessionStorageKey(prefix, user = currentUser) {
+            const memberId = `${user?.id || ''}`.trim();
+            return memberId ? `${prefix}:${encodeURIComponent(memberId)}` : null;
+        }
+
+        function pendingRegistrationStorageKey(user = currentUser) {
+            return memberSessionStorageKey(pendingRegistrationKeyPrefix, user);
+        }
+
+        function profileCompletionNoticeStorageKey(user = currentUser) {
+            return memberSessionStorageKey(profileCompletionNoticeKeyPrefix, user);
+        }
+
         function readPendingRegistration() {
+            const storageKey = pendingRegistrationStorageKey();
+            if (!storageKey) return null;
             try {
-                const draft = JSON.parse(sessionStorage.getItem(pendingRegistrationKey) || 'null');
+                const draft = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
                 return draft?.eventId && draft?.values ? draft : null;
             } catch {
                 return null;
@@ -2382,11 +2401,12 @@
         }
 
         function savePendingRegistration(form) {
-            if (!form?.dataset?.eventId) return;
+            const storageKey = pendingRegistrationStorageKey();
+            if (!form?.dataset?.eventId || !storageKey) return;
             const values = payloadFromForm(form);
             const attendees = collectAttendeeDrafts(form);
             try {
-                sessionStorage.setItem(pendingRegistrationKey, JSON.stringify({
+                sessionStorage.setItem(storageKey, JSON.stringify({
                     eventId: form.dataset.eventId,
                     values: {
                         ...values,
@@ -2398,33 +2418,86 @@
             } catch {}
         }
 
-        function clearPendingRegistration() {
-            try { sessionStorage.removeItem(pendingRegistrationKey); } catch {}
+        function clearPendingRegistration(user = currentUser) {
+            const storageKey = pendingRegistrationStorageKey(user);
+            try {
+                if (storageKey) sessionStorage.removeItem(storageKey);
+                sessionStorage.removeItem(legacyPendingRegistrationKey);
+            } catch {}
         }
 
-        function closeProfileCompletionNotice(markSeen = false) {
-            if (!profileCompletionNotice) return;
-            profileCompletionNotice.hidden = true;
-            if (markSeen) {
-                try { sessionStorage.setItem(profileCompletionNoticeKey, '1'); } catch {}
+        function clearMemberPortalSessionState(user = currentUser) {
+            const noticeKey = profileCompletionNoticeStorageKey(user);
+            clearPendingRegistration(user);
+            try {
+                if (noticeKey) sessionStorage.removeItem(noticeKey);
+                sessionStorage.removeItem(legacyProfileCompletionNoticeKey);
+            } catch {}
+        }
+
+        function profileCompletionNoticeFocusableElements() {
+            if (!profileCompletionNotice) return [];
+            return [...profileCompletionNotice.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+                .filter((element) => !element.hidden && element.getClientRects().length > 0);
+        }
+
+        function setProfileCompletionNoticeBackgroundInert(isInert) {
+            if (!portalShell) return;
+            portalShell.inert = isInert;
+            if (isInert) {
+                portalShell.setAttribute('aria-hidden', 'true');
+            } else {
+                portalShell.removeAttribute('aria-hidden');
             }
         }
 
-        function beginProfileCompletion(form = null) {
-            savePendingRegistration(form || document.querySelector('.registration-form'));
-            closeProfileCompletionNotice(true);
+        function closeProfileCompletionNotice({ markSeen = false, restoreFocus = true } = {}) {
+            if (!profileCompletionNotice) return;
+            profileCompletionNotice.hidden = true;
+            setProfileCompletionNoticeBackgroundInert(false);
+            if (markSeen) {
+                const storageKey = profileCompletionNoticeStorageKey();
+                try { if (storageKey) sessionStorage.setItem(storageKey, '1'); } catch {}
+            }
+            const previousFocus = profileCompletionNoticePreviousFocus;
+            profileCompletionNoticePreviousFocus = null;
+            if (restoreFocus) {
+                window.setTimeout(() => {
+                    const fallback = document.querySelector('[data-nav-page="retreat"]');
+                    (previousFocus?.isConnected ? previousFocus : fallback)?.focus();
+                }, 0);
+            }
+        }
+
+        function beginProfileCompletion(form = null, { returnPage = null, message = null } = {}) {
+            if (form) savePendingRegistration(form);
+            profileCompletionReturnPage = returnPage;
+            closeProfileCompletionNotice({ markSeen: true, restoreFocus: false });
             showPage('profile');
             profileEditMode = true;
             renderProfile();
-            notify('We saved your registration. Complete your profile and we will bring you right back.');
+            notify(message || 'We saved your registration. Complete your profile and we will bring you right back.');
             window.setTimeout(() => document.querySelector('.profile-update-form [name="title"]')?.focus(), 80);
+        }
+
+        function beginBookingPaymentProfileRecovery() {
+            beginProfileCompletion(null, {
+                returnPage: 'payments',
+                message: 'One quick profile update is needed before payment. Your pending payment is safe, and we will take you back to it when you are done.',
+            });
+        }
+
+        function isProfileCompletionError(error) {
+            return Boolean(error?.payload?.missing_profile_fields)
+                || /complete the member profile/i.test(error?.message || '');
         }
 
         function maybeShowProfileCompletionNotice() {
             if (!profileCompletionNotice || activePage !== 'retreat' || !profileNeedsCompletion()) return;
 
+            const storageKey = profileCompletionNoticeStorageKey();
             let seen = false;
-            try { seen = sessionStorage.getItem(profileCompletionNoticeKey) === '1'; } catch {}
+            try { seen = storageKey && sessionStorage.getItem(storageKey) === '1'; } catch {}
             if (seen) return;
 
             const missing = profileMissingFields();
@@ -2432,11 +2505,10 @@
                 ? `Before payment, please add your ${missing.join(', ')}. We will keep your retreat registration ready for you, then bring you straight back here.`
                 : 'Before payment, please complete your member profile. We will keep your retreat registration ready for you, then bring you straight back here.';
             document.getElementById('profileCompletionNoticeDescription').textContent = description;
+            profileCompletionNoticePreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            setProfileCompletionNoticeBackgroundInert(true);
             profileCompletionNotice.hidden = false;
             window.setTimeout(() => profileCompletionNotice.querySelector('[data-profile-completion-action="complete"]')?.focus(), 40);
-            window.setTimeout(() => {
-                if (!profileCompletionNotice.hidden && activePage === 'retreat' && profileNeedsCompletion()) beginProfileCompletion();
-            }, 1800);
         }
 
         function handlePaymentReturnNotice() {
@@ -2699,6 +2771,7 @@
         }
 
         function clearUser(message) {
+            clearMemberPortalSessionState(currentUser);
             currentUser = null;
             profileEditMode = false;
             localStorage.removeItem(storageKey);
@@ -3495,7 +3568,7 @@
                     showPage('tickets');
                 }
             } catch (error) {
-                if (error?.payload?.missing_profile_fields || /complete the member profile/i.test(error.message || '')) {
+                if (isProfileCompletionError(error)) {
                     beginProfileCompletion(form);
                     return;
                 }
@@ -4199,10 +4272,18 @@
         }
 
         async function startCheckout(bookingId, paymentId) {
-            const payload = await apiPost(`/api/goshen-retreat/bookings/${encodeURIComponent(bookingId)}/payments/${encodeURIComponent(paymentId)}/checkout`, authPayload());
-            const url = payload.checkout?.checkout_url || payload.checkout?.url;
-            if (!url) throw new Error('Checkout link was not returned. Please try again.');
-            window.location.href = url;
+            try {
+                const payload = await apiPost(`/api/goshen-retreat/bookings/${encodeURIComponent(bookingId)}/payments/${encodeURIComponent(paymentId)}/checkout`, authPayload());
+                const url = payload.checkout?.checkout_url || payload.checkout?.url;
+                if (!url) throw new Error('Checkout link was not returned. Please try again.');
+                window.location.href = url;
+            } catch (error) {
+                if (isProfileCompletionError(error)) {
+                    beginBookingPaymentProfileRecovery();
+                    return;
+                }
+                throw error;
+            }
         }
 
         function walletFormPayload(form) {
@@ -4243,6 +4324,10 @@
                 await loadWallet();
                 showPage('tickets');
             } catch (error) {
+                if (isProfileCompletionError(error)) {
+                    beginBookingPaymentProfileRecovery();
+                    return;
+                }
                 notify(error.message, 'error');
             } finally {
                 button.disabled = false;
@@ -4414,7 +4499,7 @@
                 beginProfileCompletion(document.querySelector('.registration-form'));
                 return;
             }
-            closeProfileCompletionNotice(true);
+            closeProfileCompletionNotice({ markSeen: true });
         });
 
         document.getElementById('openDrawer').addEventListener('click', openDrawer);
@@ -4422,7 +4507,32 @@
             if (event.target === drawerBackdrop) closeDrawer();
         });
         window.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') closeDrawer();
+            if (!profileCompletionNotice?.hidden && event.key === 'Tab') {
+                const focusable = profileCompletionNoticeFocusableElements();
+                if (!focusable.length) {
+                    event.preventDefault();
+                    return;
+                }
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (!profileCompletionNotice.contains(document.activeElement)) {
+                    event.preventDefault();
+                    (event.shiftKey ? last : first).focus();
+                } else if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+                return;
+            }
+            if (event.key !== 'Escape') return;
+            if (!profileCompletionNotice?.hidden) {
+                closeProfileCompletionNotice({ markSeen: true });
+                return;
+            }
+            closeDrawer();
         });
         window.addEventListener('popstate', () => {
             if (currentUser) showPage(currentPathSegment(), false);
@@ -4610,7 +4720,13 @@
                     profileEditMode = false;
                     renderProfile();
                     await loadMemberRetreatData();
-                    if (readPendingRegistration() && !profileNeedsCompletion()) {
+                    const returnPage = profileCompletionReturnPage;
+                    profileCompletionReturnPage = null;
+                    if (returnPage === 'payments' && !profileNeedsCompletion()) {
+                        showPage('payments');
+                        renderPayments();
+                        notify('Your profile is ready. Your pending payment is waiting for you on the Payments page.');
+                    } else if (readPendingRegistration() && !profileNeedsCompletion()) {
                         showPage('retreat');
                         renderEvents();
                         notify('Your profile is ready. We restored your retreat registration so you can finish payment.');
@@ -4639,6 +4755,10 @@
                     await loadMemberRetreatData();
                     showPage('tickets');
                 } catch (error) {
+                    if (isProfileCompletionError(error)) {
+                        beginBookingPaymentProfileRecovery();
+                        return;
+                    }
                     notify(error.message, 'error');
                 } finally {
                     setBusy(voucher, false);
