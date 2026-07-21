@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\MembershipProfileService;
 use App\Services\TriumphantIdService;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -36,6 +37,9 @@ class MobileUser extends Authenticatable
         'password_reset_expires_at' => 'datetime',
         'last_login_at' => 'datetime',
         'last_seen_at' => 'datetime',
+        'membership_status_changed_at' => 'datetime',
+        'birthday_month' => 'integer',
+        'birthday_day' => 'integer',
         'scanner_suspended_at' => 'datetime',
         'notification_preferences' => 'array',
         'wallet_security_reset_required' => 'boolean',
@@ -109,6 +113,13 @@ class MobileUser extends Authenticatable
             'default' => true,
         ],
     ];
+
+    protected static function booted(): void
+    {
+        static::updating(function (MobileUser $user): void {
+            app(MembershipProfileService::class)->recordStatusChange($user);
+        });
+    }
 
     public function communityPrayerRequests(): HasMany
     {

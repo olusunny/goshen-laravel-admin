@@ -897,8 +897,10 @@ class CompatibilityApiTest extends TestCase
             'is_verified' => true,
             'email_verified_at' => now(),
         ]);
+        $token = $user->issueApiToken();
 
         $this->postJson('/updateProfile', [
+            'api_token' => $token,
             'email' => 'profile@example.com',
             'fullname' => 'Updated Profile User',
             'phone' => '+2348111111111',
@@ -908,6 +910,7 @@ class CompatibilityApiTest extends TestCase
             'country_of_residence' => 'Nigeria',
             'state_county_province' => 'Abuja',
             'address' => '22 Mercy Avenue, Abuja',
+            'birthday' => '02-29',
             'about_me' => base64_encode('Serving in mercy.'),
         ])
             ->assertOk()
@@ -915,7 +918,8 @@ class CompatibilityApiTest extends TestCase
             ->assertJsonPath('user.name', 'Updated Profile User')
             ->assertJsonPath('user.gender', 'Female')
             ->assertJsonPath('user.phone', '+2348111111111')
-            ->assertJsonPath('user.state_county_province', 'Abuja');
+            ->assertJsonPath('user.state_county_province', 'Abuja')
+            ->assertJsonPath('user.birthday', '02-29');
 
         $this->assertDatabaseHas('mobile_users', [
             'id' => $user->id,
@@ -927,6 +931,8 @@ class CompatibilityApiTest extends TestCase
             'country_of_residence' => 'Nigeria',
             'state_county_province' => 'Abuja',
             'address' => '22 Mercy Avenue, Abuja',
+            'birthday_month' => 2,
+            'birthday_day' => 29,
         ]);
     }
 

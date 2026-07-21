@@ -476,6 +476,51 @@
             background: #fff0ef;
             color: var(--danger);
         }
+        .registration-profile-notice {
+            display: grid;
+            gap: 10px;
+            margin: 0 0 18px;
+            padding: 16px;
+            border: 1px solid color-mix(in srgb, var(--gold) 54%, var(--line));
+            border-radius: 16px;
+            background: color-mix(in srgb, var(--gold-2) 48%, var(--card));
+            color: var(--brand);
+        }
+        .registration-profile-notice strong { font-size: 16px; }
+        .registration-profile-notice p {
+            margin: 0;
+            color: var(--ink);
+            line-height: 1.5;
+        }
+        .registration-profile-notice .inline-actions { margin-top: 2px; }
+        .profile-completion-notice {
+            position: fixed;
+            z-index: 70;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            padding: 20px;
+            background: rgba(7, 21, 29, .58);
+        }
+        .profile-completion-notice-card {
+            width: min(100%, 480px);
+            display: grid;
+            gap: 16px;
+            padding: 26px;
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            background: var(--card);
+            box-shadow: 0 22px 54px rgba(7, 21, 29, .3);
+        }
+        .profile-completion-notice-card h2,
+        .profile-completion-notice-card p { margin: 0; }
+        .profile-completion-notice-card p { color: var(--muted); line-height: 1.55; }
+        .profile-completion-notice-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .profile-completion-notice-actions .button { flex: 1 1 180px; }
 
         .social-auth-panel {
             display: grid;
@@ -1663,6 +1708,17 @@
 </head>
 <body>
     <div id="toast" class="toast" role="status" hidden></div>
+    <div id="profileCompletionNotice" class="profile-completion-notice" role="dialog" aria-modal="true" aria-labelledby="profileCompletionNoticeTitle" aria-describedby="profileCompletionNoticeDescription" hidden>
+        <div class="profile-completion-notice-card" role="document">
+            <span class="badge">One quick step</span>
+            <h2 id="profileCompletionNoticeTitle">Let us finish your profile first</h2>
+            <p id="profileCompletionNoticeDescription">We will keep your retreat registration ready for you, then bring you straight back here to complete it.</p>
+            <div class="profile-completion-notice-actions">
+                <button class="button dark" type="button" data-profile-completion-action="complete">Complete my profile</button>
+                <button class="button outline" type="button" data-profile-completion-action="dismiss">I will do this later</button>
+            </div>
+        </div>
+    </div>
     <div id="migrationNotice" class="migration-notice" role="dialog" aria-modal="true" aria-labelledby="migrationNoticeTitle" aria-describedby="migrationNoticeDescription" hidden>
         <div class="migration-notice-card" role="document">
             <div class="migration-notice-icon" aria-hidden="true">
@@ -2094,6 +2150,8 @@
         const walletTabKey = 'goshen_wallet_tab';
         const migrationNoticeKey = 'goshen_migration_notice_2026_07_v1';
         const referralInvitationKey = 'goshen_referral_invitation';
+        const profileCompletionNoticeKey = 'goshen_profile_completion_notice_2026_07_v1';
+        const pendingRegistrationKey = 'goshen_pending_registration_v1';
         const googleLoginConfig = @json($googleLogin ?? ['enabled' => false, 'clientId' => '']);
         const pageTitles = {
             home: 'Home',
@@ -2121,6 +2179,7 @@
         const portalShell = document.getElementById('portalShell');
         const authNotice = document.getElementById('authNotice');
         const toast = document.getElementById('toast');
+        const profileCompletionNotice = document.getElementById('profileCompletionNotice');
         const migrationNotice = document.getElementById('migrationNotice');
         const drawerBackdrop = document.getElementById('drawerBackdrop');
         const googleAuthPanel = document.getElementById('googleAuthPanel');
@@ -2270,6 +2329,86 @@
             toast.hidden = false;
             clearTimeout(notify.timer);
             notify.timer = setTimeout(() => { toast.hidden = true; }, 5200);
+        }
+
+        function profileMissingFields() {
+            return Array.isArray(currentUser?.profile_missing_fields)
+                ? currentUser.profile_missing_fields.filter(Boolean)
+                : [];
+        }
+
+        function profileNeedsCompletion() {
+            return currentUser?.member_type !== 'visitor'
+                && (currentUser?.profile_needs_update === true || profileMissingFields().length > 0);
+        }
+
+        function readPendingRegistration() {
+            try {
+                const draft = JSON.parse(sessionStorage.getItem(pendingRegistrationKey) || 'null');
+                return draft?.eventId && draft?.values ? draft : null;
+            } catch {
+                return null;
+            }
+        }
+
+        function pendingRegistrationFor(event) {
+            const draft = readPendingRegistration();
+            return `${draft?.eventId || ''}` === `${event?.public_id || ''}` ? draft : null;
+        }
+
+        function savePendingRegistration(form) {
+            if (!form?.dataset?.eventId) return;
+            const values = payloadFromForm(form);
+            const attendees = collectAttendeeDrafts(form);
+            try {
+                sessionStorage.setItem(pendingRegistrationKey, JSON.stringify({
+                    eventId: form.dataset.eventId,
+                    values: {
+                        ...values,
+                        uk_privacy_consent: form.querySelector('[name="uk_privacy_consent"]')?.checked === true,
+                    },
+                    attendees,
+                    savedAt: new Date().toISOString(),
+                }));
+            } catch {}
+        }
+
+        function clearPendingRegistration() {
+            try { sessionStorage.removeItem(pendingRegistrationKey); } catch {}
+        }
+
+        function closeProfileCompletionNotice(markSeen = false) {
+            if (!profileCompletionNotice) return;
+            profileCompletionNotice.hidden = true;
+            if (markSeen) {
+                try { sessionStorage.setItem(profileCompletionNoticeKey, '1'); } catch {}
+            }
+        }
+
+        function beginProfileCompletion(form = null) {
+            savePendingRegistration(form || document.querySelector('.registration-form'));
+            closeProfileCompletionNotice(true);
+            showPage('profile');
+            profileEditMode = true;
+            renderProfile();
+            notify('We saved your registration. Complete your profile and we will bring you right back.');
+            window.setTimeout(() => document.querySelector('.profile-update-form [name="title"]')?.focus(), 80);
+        }
+
+        function maybeShowProfileCompletionNotice() {
+            if (!profileCompletionNotice || activePage !== 'retreat' || !profileNeedsCompletion()) return;
+
+            let seen = false;
+            try { seen = sessionStorage.getItem(profileCompletionNoticeKey) === '1'; } catch {}
+            if (seen) return;
+
+            const missing = profileMissingFields();
+            const description = missing.length
+                ? `Before payment, please add your ${missing.join(', ')}. We will keep your retreat registration ready for you, then bring you straight back here.`
+                : 'Before payment, please complete your member profile. We will keep your retreat registration ready for you, then bring you straight back here.';
+            document.getElementById('profileCompletionNoticeDescription').textContent = description;
+            profileCompletionNotice.hidden = false;
+            window.setTimeout(() => profileCompletionNotice.querySelector('[data-profile-completion-action="complete"]')?.focus(), 40);
         }
 
         function handlePaymentReturnNotice() {
@@ -2593,6 +2732,9 @@
                 profileEditMode = false;
                 renderProfile();
             }
+            if (activePage === 'retreat') {
+                window.setTimeout(maybeShowProfileCompletionNotice, 0);
+            }
             if (push) history.pushState(null, '', activePage === 'home' ? '/app' : `/app/${activePage}`);
             closeDrawer();
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2871,6 +3013,7 @@
                 renderPayments();
                 renderReceipts();
                 renderProfile();
+                maybeShowProfileCompletionNotice();
             } catch (error) {
                 ['ticketsList', 'paymentsList', 'receiptsList'].forEach((id) => {
                     document.getElementById(id).innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
@@ -3056,14 +3199,18 @@
             if (!tickets.length) {
                 return '<div class="empty">Ticket types are not available yet for this retreat edition.</div>';
             }
-            const ticketOptions = tickets.map((ticket) => `<option value="${escapeHtml(ticket.public_id)}">${escapeHtml(ticket.name || 'Ticket')} - ${escapeHtml(formatMoney(ticket.price, ticket.currency))} · ${escapeHtml(ticketQuantityHint(ticket))}</option>`).join('');
-            const firstTicket = tickets[0] || {};
-            const initialQuantity = ticketDefaultQuantity(firstTicket);
+            const draft = pendingRegistrationFor(event);
+            const values = draft?.values || {};
+            const selectedTicket = eventTicketById(event, values.ticket_type_id) || tickets[0] || {};
+            const ticketOptions = tickets.map((ticket) => `<option value="${escapeHtml(ticket.public_id)}" ${`${ticket.public_id}` === `${selectedTicket.public_id}` ? 'selected' : ''}>${escapeHtml(ticket.name || 'Ticket')} - ${escapeHtml(formatMoney(ticket.price, ticket.currency))} · ${escapeHtml(ticketQuantityHint(ticket))}</option>`).join('');
+            const initialQuantity = clampTicketQuantity(values.quantity || ticketDefaultQuantity(selectedTicket), selectedTicket);
             const quantityLabelId = `attendeeQuantityLabel-${event.public_id || 'current'}`;
-            const showQuantitySelector = ticketShowsQuantitySelector(firstTicket);
-            const invitationCode = referralInvitationCode();
+            const showQuantitySelector = ticketShowsQuantitySelector(selectedTicket);
+            const invitationCode = values.referral_code || referralInvitationCode();
+            const paymentMode = ['outright', 'wallet', 'voucher'].includes(values.payment_mode) ? values.payment_mode : 'outright';
             return `
                 <form class="form registration-form" data-event-id="${escapeHtml(event.public_id)}">
+                    ${profileNeedsCompletion() ? renderRegistrationProfileNotice() : ''}
                     <div class="form-grid">
                         <div class="field">
                             <label>Ticket type</label>
@@ -3077,27 +3224,43 @@
                         <div class="field">
                             <label>Payment method</label>
                             <select class="input payment-mode" name="payment_mode" required>
-                                <option value="outright">Card payment</option>
-                                <option value="wallet">Wallet funds</option>
-                                <option value="voucher">Voucher</option>
+                                <option value="outright" ${paymentMode === 'outright' ? 'selected' : ''}>Card payment</option>
+                                <option value="wallet" ${paymentMode === 'wallet' ? 'selected' : ''}>Wallet funds</option>
+                                <option value="voucher" ${paymentMode === 'voucher' ? 'selected' : ''}>Voucher</option>
                             </select>
                         </div>
-                        <div class="field voucher-field" hidden>
+                        <div class="field voucher-field" ${paymentMode === 'voucher' ? '' : 'hidden'}>
                             <label>Voucher code</label>
-                            <input class="input" name="voucher_code" autocomplete="off">
+                            <input class="input" name="voucher_code" autocomplete="off" value="${escapeHtml(values.voucher_code || '')}" ${paymentMode === 'voucher' ? 'required' : ''}>
                         </div>
                         <div class="field">
                             <label>Referral code (optional)</label>
                             <input class="input" name="referral_code" maxlength="32" autocomplete="off" value="${escapeHtml(invitationCode)}">
                         </div>
                     </div>
-                    <div class="attendee-fields">${renderAttendeeFields(initialQuantity, event, [], firstTicket)}</div>
+                    <div class="attendee-fields">${renderAttendeeFields(initialQuantity, event, draft?.attendees || [], selectedTicket)}</div>
                     <label class="choice">
-                        <input type="checkbox" name="uk_privacy_consent" value="1" required>
+                        <input type="checkbox" name="uk_privacy_consent" value="1" required ${values.uk_privacy_consent ? 'checked' : ''}>
                         <span>I agree that MFM Triumphant Church may process my registration, attendee, payment, ticket, and travel-support information for Goshen Retreat administration in line with UK data protection requirements.</span>
                     </label>
                     <button class="button" type="submit">Register for this retreat</button>
                 </form>
+            `;
+        }
+
+        function renderRegistrationProfileNotice() {
+            const missing = profileMissingFields();
+            const detail = missing.length
+                ? `Please add your ${escapeHtml(missing.join(', '))} before payment.`
+                : 'Please complete your member profile before payment.';
+            return `
+                <aside class="registration-profile-notice" aria-label="Profile completion required">
+                    <strong>One quick step before payment</strong>
+                    <p>${detail} We will keep this registration ready and bring you back as soon as you save.</p>
+                    <div class="inline-actions">
+                        <button class="button small dark complete-profile-for-registration" type="button">Complete my profile</button>
+                    </div>
+                </aside>
             `;
         }
 
@@ -3265,6 +3428,10 @@
 
         async function submitRegistration(form) {
             const eventModel = eventsCache.find((item) => `${item.public_id}` === `${form.dataset.eventId}`);
+            if (profileNeedsCompletion()) {
+                beginProfileCompletion(form);
+                return;
+            }
             syncRegistrationQuantity(form, eventModel);
             if (!form.reportValidity()) return;
             const values = payloadFromForm(form);
@@ -3289,6 +3456,7 @@
             setBusy(form, true);
             try {
                 const response = await apiPost('/api/goshen-retreat/bookings', payload);
+                clearPendingRegistration();
                 notify(response.message || 'Your Goshen Retreat registration has been started.');
                 await loadMemberRetreatData();
                 const booking = response.booking;
@@ -3299,6 +3467,10 @@
                     showPage('tickets');
                 }
             } catch (error) {
+                if (error?.payload?.missing_profile_fields || /complete the member profile/i.test(error.message || '')) {
+                    beginProfileCompletion(form);
+                    return;
+                }
                 notify(error.message, 'error');
             } finally {
                 setBusy(form, false);
@@ -4204,6 +4376,16 @@
             button.addEventListener('click', () => showPage(button.dataset.navPage));
         });
 
+        profileCompletionNotice?.addEventListener('click', (event) => {
+            const action = event.target.closest('[data-profile-completion-action]');
+            if (!action) return;
+            if (action.dataset.profileCompletionAction === 'complete') {
+                beginProfileCompletion(document.querySelector('.registration-form'));
+                return;
+            }
+            closeProfileCompletionNotice(true);
+        });
+
         document.getElementById('openDrawer').addEventListener('click', openDrawer);
         drawerBackdrop.addEventListener('click', (event) => {
             if (event.target === drawerBackdrop) closeDrawer();
@@ -4384,8 +4566,14 @@
                     updateUserIdentity();
                     profileEditMode = false;
                     renderProfile();
-                    notify(payload.message || 'Profile updated successfully.');
                     await loadMemberRetreatData();
+                    if (readPendingRegistration() && !profileNeedsCompletion()) {
+                        showPage('retreat');
+                        renderEvents();
+                        notify('Your profile is ready. We restored your retreat registration so you can finish payment.');
+                    } else {
+                        notify(payload.message || 'Profile updated successfully.');
+                    }
                 } catch (error) {
                     notify(error.message, 'error');
                 } finally {
@@ -4416,6 +4604,11 @@
         });
 
         document.getElementById('portalMain').addEventListener('click', async (event) => {
+            const completeProfileForRegistration = event.target.closest('.complete-profile-for-registration');
+            if (completeProfileForRegistration) {
+                beginProfileCompletion(completeProfileForRegistration.closest('.registration-form'));
+                return;
+            }
             const copyReferralCode = event.target.closest('.referral-copy-code');
             if (copyReferralCode) {
                 await copyReferralText(normalizeReferralCode(copyReferralCode.dataset.referralCode), 'Referral code copied.');

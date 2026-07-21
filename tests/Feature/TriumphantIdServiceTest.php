@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\MobileUser;
 use App\Models\User;
 use App\Services\TriumphantIdService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
@@ -82,33 +83,59 @@ class TriumphantIdServiceTest extends TestCase
         );
     }
 
-    public function test_visitors_never_receive_a_triumphant_id_and_lose_one_when_their_status_changes(): void
+    public function test_visitors_do_not_display_ids_and_keep_their_sequence_reserved_until_deletion(): void
     {
-        $visitor = MobileUser::query()->create([
-            'name' => 'Guest Visitor',
-            'email' => 'guest-visitor@example.test',
-            'phone' => '+2348012345678',
-            'password' => 'secret',
-            'gender' => 'female',
-            'member_type' => 'visitor',
-            'is_verified' => true,
-            'email_verified_at' => now(),
-        ]);
+        Carbon::setTestNow('2026-07-21 16:00:00');
 
-        $this->assertNull($visitor->refresh()->triumphant_id);
-        $this->assertNull($visitor->triumphant_id_sequence);
+        try {
+            $visitor = MobileUser::query()->create([
+                'name' => 'Guest Visitor',
+                'email' => 'guest-visitor@example.test',
+                'phone' => '+2348012345678',
+                'password' => 'secret',
+                'gender' => 'female',
+                'member_type' => 'visitor',
+                'is_verified' => true,
+                'email_verified_at' => now(),
+            ]);
 
-        $member = $this->mobileUser('status-change@example.test', 'Status Change');
-        $this->assertNotNull($member->refresh()->triumphant_id);
+            $this->assertNull($visitor->refresh()->triumphant_id);
+            $this->assertNull($visitor->triumphant_id_sequence);
 
-        $member->forceFill(['member_type' => 'visitor'])->save();
+            $member = $this->mobileUser('status-change@example.test', 'Status Change');
+            $this->assertSame('T003', $member->refresh()->triumphant_id);
+            $this->assertSame(3, (int) $member->triumphant_id_sequence);
 
-        $this->assertNull($member->refresh()->triumphant_id);
-        $this->assertNull($member->triumphant_id_sequence);
+            $member->forceFill(['member_type' => 'visitor'])->save();
 
-        $member->forceFill(['member_type' => 'church_member'])->save();
+            $member = $member->refresh();
+            $this->assertNull($member->triumphant_id);
+            $this->assertSame(3, (int) $member->triumphant_id_sequence);
+            $this->assertSame('2026-07-21 16:00:00', $member->membership_status_changed_at?->toDateTimeString());
 
-        $this->assertNotNull($member->refresh()->triumphant_id);
+            $replacement = $this->mobileUser('replacement-after-status@example.test', 'Replacement After Status');
+            $this->assertSame('T004', $replacement->refresh()->triumphant_id);
+
+            $this->assertValidationExceptionContains(
+                fn () => $member->forceFill(['member_type' => 'church_member'])->save(),
+                'You can change it again on',
+            );
+
+            Carbon::setTestNow(now()->addDays(30)->addSecond());
+            $member->refresh()->forceFill(['member_type' => 'church_member'])->save();
+
+            $this->assertSame('T003', $member->refresh()->triumphant_id);
+            $this->assertSame(3, (int) $member->triumphant_id_sequence);
+
+            $member->forceFill(['is_deleted' => true])->save();
+            $this->assertNull($member->refresh()->triumphant_id);
+            $this->assertNull($member->triumphant_id_sequence);
+
+            $replacementAfterDeletion = $this->mobileUser('replacement-after-deletion@example.test', 'Replacement After Deletion');
+            $this->assertSame('T003', $replacementAfterDeletion->refresh()->triumphant_id);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     private function mobileUser(string $email, string $name): MobileUser
@@ -116,7 +143,7 @@ class TriumphantIdServiceTest extends TestCase
         return MobileUser::query()->create([
             'name' => $name,
             'email' => $email,
-            'phone' => '+23480' . random_int(10000000, 99999999),
+            'phone' => '+23480'.random_int(10000000, 99999999),
             'password' => 'secret',
             'gender' => 'male',
             'member_type' => 'church_member',

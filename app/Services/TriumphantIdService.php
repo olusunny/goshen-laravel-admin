@@ -5,8 +5,8 @@ namespace App\Services;
 use App\Models\MobileUser;
 use App\Models\User;
 use BackedEnum;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -41,7 +41,7 @@ class TriumphantIdService
             return null;
         }
 
-        return 'T' . str_pad((string) $sequence, 3, '0', STR_PAD_LEFT);
+        return 'T'.str_pad((string) $sequence, 3, '0', STR_PAD_LEFT);
     }
 
     public function assignFor(MobileUser $user): MobileUser
@@ -52,8 +52,12 @@ class TriumphantIdService
             /** @var MobileUser $locked */
             $locked = MobileUser::query()->lockForUpdate()->findOrFail($user->id);
 
-            if ($locked->is_deleted || $this->isVisitor($locked)) {
+            if ($locked->is_deleted) {
                 return $this->release($locked);
+            }
+
+            if ($this->isVisitor($locked)) {
+                return $this->hideForVisitor($locked);
             }
 
             $reservedSequence = $this->reservedSequenceFor($locked);
@@ -67,9 +71,8 @@ class TriumphantIdService
             if (
                 $locked->triumphant_id_sequence
                 && (int) $locked->triumphant_id_sequence >= 3
-                && $locked->triumphant_id === $this->formatted((int) $locked->triumphant_id_sequence)
             ) {
-                return $locked;
+                return $this->setSequence($locked, (int) $locked->triumphant_id_sequence);
             }
 
             return $this->setSequence($locked, $this->nextAvailableGeneralSequence());
@@ -84,6 +87,15 @@ class TriumphantIdService
         ])->saveQuietly();
 
         return $user;
+    }
+
+    public function hideForVisitor(MobileUser $user): MobileUser
+    {
+        $user->forceFill([
+            'triumphant_id' => null,
+        ])->saveQuietly();
+
+        return $user->refresh();
     }
 
     private function isVisitor(MobileUser $user): bool

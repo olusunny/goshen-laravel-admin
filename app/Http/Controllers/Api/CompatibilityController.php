@@ -33,6 +33,7 @@ use App\Models\TransportationArrangement;
 use App\Models\VerseOfDay;
 use App\Services\AutomaticNotificationService;
 use App\Services\DynamicSmtpMailer;
+use App\Services\MembershipProfileService;
 use App\Services\MergedAccountCredentialService;
 use App\Services\MessagePersonalizationService;
 use App\Services\ProfileImageOptimizer;
@@ -828,8 +829,13 @@ class CompatibilityController extends Controller
             'address' => ['nullable', 'required_if:member_type,church_member', 'string', 'max:500'],
             'address_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'address_longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'birthday' => ['nullable', 'string', 'max:5'],
+            'birthday_month' => ['nullable', 'integer', 'between:1,12'],
+            'birthday_day' => ['nullable', 'integer', 'between:1,31'],
             'password' => ['required', 'string', 'min:8', 'max:255'],
         ])->validate();
+
+        $birthday = app(MembershipProfileService::class)->birthdayAttributes($data);
 
         $existingUser = MobileUser::where('email', $data['email'] ?? null)->first();
         if ($existingUser) {
@@ -857,6 +863,7 @@ class CompatibilityController extends Controller
                 'address' => $data['address'] ?? $existingUser->address,
                 'address_latitude' => $data['address_latitude'] ?? null,
                 'address_longitude' => $data['address_longitude'] ?? null,
+                ...$birthday,
                 'password' => Hash::make($data['password']),
             ])->save();
             $user = $existingUser;
@@ -878,6 +885,7 @@ class CompatibilityController extends Controller
                 'address' => $data['address'] ?? null,
                 'address_latitude' => $data['address_latitude'] ?? null,
                 'address_longitude' => $data['address_longitude'] ?? null,
+                ...$birthday,
                 'password' => Hash::make($data['password'] ?? str()->random(24)),
                 'is_verified' => false,
                 'email_verified_at' => null,
@@ -920,6 +928,9 @@ class CompatibilityController extends Controller
             'address' => ['nullable', 'string', 'max:500'],
             'address_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'address_longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'birthday' => ['nullable', 'string', 'max:5'],
+            'birthday_month' => ['nullable', 'integer', 'between:1,12'],
+            'birthday_day' => ['nullable', 'integer', 'between:1,31'],
         ])->validate();
 
         $allowedAudiences = collect([
@@ -1006,6 +1017,8 @@ class CompatibilityController extends Controller
             ], 403);
         }
 
+        $birthday = app(MembershipProfileService::class)->birthdayAttributes($data, $user);
+
         $user->forceFill([
             'google_id' => $google['sub'] ?? $user->google_id,
             'name' => $user->name ?: ($data['name'] ?? $google['name'] ?? explode('@', $email)[0]),
@@ -1018,6 +1031,7 @@ class CompatibilityController extends Controller
             'address' => $data['address'] ?? $user->address,
             'address_latitude' => $data['address_latitude'] ?? $user->address_latitude,
             'address_longitude' => $data['address_longitude'] ?? $user->address_longitude,
+            ...$birthday,
             'avatar' => $user->avatar ?: ($data['photo_url'] ?? $google['picture'] ?? null),
             'login_type' => $user->login_type ?: 'google',
             'is_verified' => true,
@@ -1339,10 +1353,15 @@ class CompatibilityController extends Controller
             'address' => ['nullable', 'required_if:member_type,church_member', 'string', 'max:500'],
             'address_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'address_longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'birthday' => ['nullable', 'string', 'max:5'],
+            'birthday_month' => ['nullable', 'integer', 'between:1,12'],
+            'birthday_day' => ['nullable', 'integer', 'between:1,31'],
             'about_me' => ['nullable', 'string'],
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'cover_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ])->validate();
+
+        $birthday = app(MembershipProfileService::class)->birthdayAttributes($validated, $user);
 
         if ($request->hasFile('avatar')) {
             $validated['avatar'] = app(ProfileImageOptimizer::class)->store($request->file('avatar'), 'mobile-users/avatars');
@@ -1386,6 +1405,7 @@ class CompatibilityController extends Controller
             'address' => $validated['address'] ?? $user->address,
             'address_latitude' => $validated['address_latitude'] ?? null,
             'address_longitude' => $validated['address_longitude'] ?? null,
+            ...$birthday,
             'bio' => $validated['about_me'] ?? null,
             'avatar' => $validated['avatar'] ?? $user->avatar,
             'cover_photo' => $validated['cover_photo'] ?? $user->cover_photo,
@@ -1835,6 +1855,7 @@ class CompatibilityController extends Controller
     private function mobileUserPayload(MobileUser $user, ?string $apiToken = null): array
     {
         $user->loadMissing('churchGroup');
+        $membership = app(MembershipProfileService::class);
 
         return [
             'id' => $user->id,
@@ -1859,7 +1880,7 @@ class CompatibilityController extends Controller
             'address' => $user->address ?? '',
             'address_latitude' => $user->address_latitude,
             'address_longitude' => $user->address_longitude,
-            'date_of_birth' => '',
+            'date_of_birth' => $membership->birthday($user) ?? '',
             'phone' => $user->phone ?? '',
             'about_me' => $user->bio ?? '',
             'location' => '',
@@ -1873,6 +1894,7 @@ class CompatibilityController extends Controller
             'can_charge_goshen_member_wallet' => $this->canChargeGoshenMemberWallet($user),
             'can_manage_goshen_vouchers' => $this->canManageGoshenVouchers($user),
             'can_manage_goshen_quiz' => $this->canManageGoshenQuiz($user),
+            ...$membership->payload($user),
             'can_manage_fundraising' => $this->canManageFundraising($user),
             'can_manage_wallet_withdrawals' => $this->canManageWalletWithdrawals($user),
             'can_manage_dynamic_forms' => $this->canManageDynamicForms($user),
@@ -1914,7 +1936,7 @@ class CompatibilityController extends Controller
             ->orWhere('phone_normalized', $phone)
             ->orWhere('phone', $phone)
             ->first()
-            ?: new MobileUser();
+            ?: new MobileUser;
     }
 
     private function phonePlaceholderEmail(string $phone): string

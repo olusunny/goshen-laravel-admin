@@ -18,9 +18,10 @@ use App\Services\GoshenRetreatNotificationService;
 use App\Services\GoshenSingleFullPaymentService;
 use App\Services\GoshenVoucherService;
 use App\Services\GoshenWalletService;
+use App\Services\MembershipProfileService;
 use App\Services\WalletSecurityResetService;
-use App\Support\StripeAppReturnUrls;
 use App\Support\MediaUrl;
+use App\Support\StripeAppReturnUrls;
 use chillerlan\QRCode\Output\QROutputInterface;
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
@@ -961,6 +962,7 @@ class GoshenRetreatController extends Controller
             ->get();
 
         $bookingIds = $bookings->pluck('id');
+        $membership = app(MembershipProfileService::class);
 
         return response()->json([
             'status' => 'ok',
@@ -976,6 +978,7 @@ class GoshenRetreatController extends Controller
                     'marital_status' => $user?->marital_status,
                     'country_of_residence' => $user?->country_of_residence,
                     'state_county_province' => $user?->state_county_province,
+                    'date_of_birth' => $membership->birthday($user) ?? '',
                     'profile_missing_fields' => $this->profileMissingFields($user),
                     'profile_needs_update' => $this->profileMissingFields($user) !== [],
                     'roles' => $user?->roles()->pluck('name')->values() ?? [],
@@ -987,6 +990,7 @@ class GoshenRetreatController extends Controller
                     'can_manage_fundraising' => $this->canManageFundraising($user),
                     'can_manage_dynamic_forms' => $this->canManageDynamicForms($user),
                     'can_manage_mobile_users' => $this->canManageMobileUsers($user),
+                    ...$membership->payload($user),
                 ],
                 'registrations' => $bookings
                     ->map(fn (Booking $booking): array => $this->bookingPayload($booking))
@@ -4987,6 +4991,7 @@ class GoshenRetreatController extends Controller
     private function managedMemberPayload(MobileUser $member): array
     {
         $missing = $this->profileMissingFields($member);
+        $membership = app(MembershipProfileService::class);
 
         return [
             'id' => $member->id,
@@ -5003,8 +5008,10 @@ class GoshenRetreatController extends Controller
             'country_of_residence' => $member->country_of_residence,
             'state_county_province' => $member->state_county_province,
             'address' => $member->address,
+            'date_of_birth' => $membership->birthday($member) ?? '',
             'profile_missing_fields' => $missing,
             'profile_needs_update' => $missing !== [],
+            ...$membership->payload($member),
         ];
     }
 
