@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\GoshenRetreatConsole;
 use App\Filament\Resources\GoshenTicketResource;
+use App\Filament\Resources\GoshenWalletResource;
 use App\Filament\Resources\GoshenTicketResource\Pages\CreateGoshenTicket;
 use App\Filament\Resources\GoshenTicketResource\Pages\ViewGoshenTicket;
 use App\Models\GoshenWallet;
@@ -735,6 +736,66 @@ class GoshenAdminTicketIssuanceTest extends TestCase
         ]);
         $this->assertSame('consumed', $challenge->fresh()->status);
         $this->assertArrayNotHasKey('wallet_otp', $booking->metadata ?? []);
+    }
+
+    public function test_authorized_admin_can_charge_the_selected_member_wallet_with_auditable_authorization(): void
+    {
+        [$member, $ticketType, $admin] = $this->issuanceFixture('-member-wallet-charge');
+        $permission = Permission::findOrCreate(AdminPermissions::GOSHEN_MEMBER_WALLET_CHARGE, 'web');
+        $role = Role::findOrCreate('member_wallet_charge_desk', 'web');
+        $role->givePermissionTo($permission);
+        $admin->assignRole($role);
+
+        $wallet = GoshenWallet::query()->firstOrCreate(
+            ['mobile_user_id' => $member->id],
+            ['currency' => 'GBP', 'balance' => 500],
+        );
+        $wallet->forceFill(['currency' => 'GBP', 'balance' => 500])->save();
+
+        $this->actingAs($admin);
+        $this->assertTrue(GoshenWalletResource::canChargeMemberWallet($wallet));
+
+        $note = 'Member confirmed this exact Goshen ticket charge by telephone.';
+        $ticket = app(GoshenAdminTicketIssuanceService::class)->issue(
+            $member,
+            $ticketType,
+            $admin,
+            'Member-authorized Goshen wallet charge from Filament admin portal.',
+            'member_wallet',
+            null,
+            null,
+            null,
+            '127.0.0.1',
+            'PHPUnit',
+            null,
+            [],
+            1,
+            [],
+            [
+                'confirmed' => true,
+                'authorization_method' => 'registered_contact',
+                'authorization_note' => $note,
+            ],
+        );
+
+        $booking = $ticket->booking()->with('installments.transactions')->firstOrFail();
+        $transaction = $booking->installments->sole()->transactions->sole();
+        $ledger = $wallet->fresh()->ledgerEntries()->sole();
+
+        $this->assertSame('350.00', $wallet->fresh()->balance);
+        $this->assertSame(BookingStatus::Paid, $booking->status);
+        $this->assertSame('member_wallet', data_get($ticket->metadata, 'payment_method'));
+        $this->assertSame('filament_member_wallet_charge', data_get($transaction->payload, 'source'));
+        $this->assertSame($member->id, data_get($transaction->payload, 'payer_mobile_user_id'));
+        $this->assertSame($wallet->id, data_get($transaction->payload, 'charged_member_wallet_id'));
+        $this->assertSame($note, data_get($ledger->metadata, 'member_wallet_authorization.authorization_note'));
+        $this->assertSame('registered_contact', data_get($ledger->metadata, 'member_wallet_authorization.authorization_method'));
+        $this->assertSame(500.0, (float) data_get($ledger->metadata, 'wallet_balance_before'));
+        $this->assertSame(350.0, (float) data_get($ledger->metadata, 'wallet_balance_after'));
+        $this->assertDatabaseHas('ei_event_audit_logs', [
+            'action' => 'member_wallet_charged_for_ticket',
+            'actor_id' => $admin->id,
+        ]);
     }
 
     public function test_paid_admin_issuance_reports_full_revenue_by_voucher_and_wallet_gateway(): void

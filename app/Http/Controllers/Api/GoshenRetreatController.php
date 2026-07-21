@@ -980,6 +980,7 @@ class GoshenRetreatController extends Controller
                     'profile_needs_update' => $this->profileMissingFields($user) !== [],
                     'roles' => $user?->roles()->pluck('name')->values() ?? [],
                     'can_manage_goshen_registration' => $this->canManageGoshenRegistration($user),
+                    'can_charge_goshen_member_wallet' => $this->canChargeGoshenMemberWallet($user),
                     'can_view_goshen_registration_stats' => $this->canManageGoshenRegistration($user),
                     'can_manage_goshen_vouchers' => $this->canManageGoshenVouchers($user),
                     'can_manage_goshen_quiz' => $this->canManageGoshenQuiz($user),

@@ -83,6 +83,7 @@ class GoshenAdminTicketIssuanceService
         array $extraMetadata = [],
         int $attendeeQuantity = 1,
         array $attendeeDetails = [],
+        ?array $memberWalletAuthorization = null,
     ): Ticket {
         $reason = trim($reason);
         $paymentMethod = strtolower(trim($paymentMethod));
@@ -95,9 +96,9 @@ class GoshenAdminTicketIssuanceService
             ]);
         }
 
-        if (! in_array($paymentMethod, ['voucher', 'wallet'], true)) {
+        if (! in_array($paymentMethod, ['voucher', 'wallet', 'member_wallet'], true)) {
             throw ValidationException::withMessages([
-                'payment_method' => 'Select voucher or wallet payment.',
+                'payment_method' => 'Select voucher, your wallet, or the selected member wallet.',
             ]);
         }
 
@@ -110,6 +111,9 @@ class GoshenAdminTicketIssuanceService
         $admin = User::query()->findOrFail($admin->getKey());
         $payer = null;
         $authorizedWalletContext = null;
+        $memberWalletAuthorization = $paymentMethod === 'member_wallet'
+            ? $this->validatedMemberWalletAuthorization($memberWalletAuthorization)
+            : null;
 
         if ($paymentMethod === 'wallet') {
             [$preflightMember, $preflightTicketType] = $this->availability
@@ -140,6 +144,8 @@ class GoshenAdminTicketIssuanceService
                 $ip,
                 $userAgent,
             );
+        } elseif ($paymentMethod === 'member_wallet') {
+            $payer = $member;
         } else {
             $payer = $this->linkedAccounts->forAdmin($admin);
         }
@@ -158,6 +164,7 @@ class GoshenAdminTicketIssuanceService
                 $extraMetadata,
                 $attendeeQuantity,
                 $attendeeDetails,
+                $memberWalletAuthorization,
             ): Ticket {
                 if ($paymentMethod === 'wallet') {
                     $admin = User::query()->whereKey($admin->id)->lockForUpdate()->firstOrFail();
@@ -189,8 +196,14 @@ class GoshenAdminTicketIssuanceService
                 }
 
                 $currency = strtoupper((string) $ticketType->currency);
+                $source = $paymentMethod === 'member_wallet'
+                    ? 'filament_member_wallet_charge'
+                    : 'filament_admin';
+                $ticketIssueSource = $paymentMethod === 'member_wallet'
+                    ? 'filament_member_wallet_charge'
+                    : 'filament_admin_ticket_issue';
                 $metadata = array_filter(array_merge([
-                    'source' => 'filament_admin',
+                    'source' => $source,
                     'issued_by_admin_id' => $admin->id,
                     'beneficiary_mobile_user_id' => $member->id,
                     'payment_method' => $paymentMethod,
@@ -201,6 +214,7 @@ class GoshenAdminTicketIssuanceService
                     'amount_paid' => $paymentTotal,
                     'historical_paid_amount' => $paymentAmount === null ? null : $paymentTotal,
                     'historical_discount_amount' => $paymentAmount === null ? null : max(0, round($listedTotal - $paymentTotal, 2)),
+                    'member_wallet_authorization' => $memberWalletAuthorization,
                 ], $extraMetadata), fn ($value): bool => $value !== null && $value !== '');
 
                 $booking = Booking::query()->create([
@@ -228,7 +242,7 @@ class GoshenAdminTicketIssuanceService
                         : round($paymentTotal / $attendeeQuantity, 2),
                     'line_total' => $paymentTotal,
                     'metadata' => [
-                        'source' => 'filament_admin_ticket_issue',
+                        'source' => $ticketIssueSource,
                         'listed_ticket_price' => $listPrice,
                         'listed_ticket_total' => $listedTotal,
                         'amount_paid' => $paymentTotal,
@@ -255,7 +269,7 @@ class GoshenAdminTicketIssuanceService
                             'gender' => $customFields['gender'] ?? $member->gender,
                             'marital_status' => $member->marital_status,
                             ...$customFields,
-                            'source' => 'filament_admin_ticket_issue',
+                            'source' => $ticketIssueSource,
                             'attendee_index' => $index + 1,
                             'admin_issued_family_quantity' => $attendeeQuantity > 1 ? $attendeeQuantity : null,
                         ], fn ($value): bool => filled($value)),
@@ -285,6 +299,25 @@ class GoshenAdminTicketIssuanceService
                     $paymentReferences = [
                         'voucher_usage_id' => $usage->id,
                         'voucher_code_suffix' => $usage->code_suffix,
+                    ];
+                } elseif ($paymentMethod === 'member_wallet') {
+                    $wallet = $member->wallet()->firstOrFail();
+                    $transaction = $this->walletPayments->settleMemberWallet(
+                        $booking,
+                        $fullPayment,
+                        $wallet,
+                        $member,
+                        $admin,
+                        $memberWalletAuthorization ?? [],
+                        [
+                            'request_ip' => request()->ip(),
+                            'request_user_agent' => request()->userAgent(),
+                        ],
+                    );
+                    $paymentReferences = [
+                        'payer_mobile_user_id' => $member->id,
+                        'wallet_id' => $wallet->id,
+                        'charged_member_wallet_id' => $wallet->id,
                     ];
                 } else {
                     $wallet = $payer?->wallet()->firstOrFail();
@@ -329,7 +362,9 @@ class GoshenAdminTicketIssuanceService
                 EventAuditLog::query()->create([
                     'event_id' => $ticketType->event_id,
                     'actor_id' => $admin->id,
-                    'action' => 'admin_ticket_issued',
+                    'action' => $paymentMethod === 'member_wallet'
+                        ? 'member_wallet_charged_for_ticket'
+                        : 'admin_ticket_issued',
                     'auditable_type' => $ticket::class,
                     'auditable_id' => $ticket->id,
                     'after' => [
@@ -361,6 +396,40 @@ class GoshenAdminTicketIssuanceService
                 'ticket_type_id' => 'Admin-issued tickets must have a positive listed price.',
             ]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $authorization
+     * @return array{confirmed: bool, authorization_method: string, authorization_note: string}
+     */
+    private function validatedMemberWalletAuthorization(?array $authorization): array
+    {
+        $method = trim((string) ($authorization['authorization_method'] ?? ''));
+        $note = trim((string) ($authorization['authorization_note'] ?? ''));
+
+        if (! filter_var($authorization['confirmed'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            throw ValidationException::withMessages([
+                'member_authorization_confirmed' => 'Confirm that the member authorized this charge from their own wallet.',
+            ]);
+        }
+
+        if (! in_array($method, ['registered_contact', 'in_person', 'church_record', 'other_verified_process'], true)) {
+            throw ValidationException::withMessages([
+                'member_authorization_method' => 'Select how the member authorization was verified.',
+            ]);
+        }
+
+        if (str($note)->length() < 20) {
+            throw ValidationException::withMessages([
+                'member_authorization_note' => 'Record a meaningful member authorization note of at least 20 characters.',
+            ]);
+        }
+
+        return [
+            'confirmed' => true,
+            'authorization_method' => $method,
+            'authorization_note' => $note,
+        ];
     }
 
     private function validatedAttendeeQuantity(EventTicketType $ticketType, int $quantity): int

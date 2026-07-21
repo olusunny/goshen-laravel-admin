@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\GoshenWallet;
 use App\Models\MobileUser;
 use App\Models\User;
+use App\Support\AdminPermissions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -31,6 +32,58 @@ class GoshenAdminWalletPaymentService
         User $admin,
         array $context = [],
     ): PaymentTransaction {
+        return $this->settleWallet(
+            $booking,
+            $fullPaymentRecord,
+            $wallet,
+            $payer,
+            $beneficiary,
+            $admin,
+            $context,
+        );
+    }
+
+    /**
+     * Settle an admin-authorized retreat ticket from the selected member's own wallet.
+     *
+     * @param  array{confirmed: bool, authorization_method: string, authorization_note: string}  $authorization
+     * @param  array<string, mixed>  $context
+     */
+    public function settleMemberWallet(
+        Booking $booking,
+        PaymentInstallment $fullPaymentRecord,
+        GoshenWallet $wallet,
+        MobileUser $member,
+        User $admin,
+        array $authorization,
+        array $context = [],
+    ): PaymentTransaction {
+        return $this->settleWallet(
+            $booking,
+            $fullPaymentRecord,
+            $wallet,
+            $member,
+            $member,
+            $admin,
+            $context,
+            $authorization,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @param  array{confirmed: bool, authorization_method: string, authorization_note: string}|null  $memberWalletAuthorization
+     */
+    private function settleWallet(
+        Booking $booking,
+        PaymentInstallment $fullPaymentRecord,
+        GoshenWallet $wallet,
+        MobileUser $payer,
+        MobileUser $beneficiary,
+        User $admin,
+        array $context = [],
+        ?array $memberWalletAuthorization = null,
+    ): PaymentTransaction {
         return DB::transaction(function () use (
             $booking,
             $fullPaymentRecord,
@@ -39,6 +92,7 @@ class GoshenAdminWalletPaymentService
             $beneficiary,
             $admin,
             $context,
+            $memberWalletAuthorization,
         ): PaymentTransaction {
             $admin = User::query()->whereKey($admin->id)->lockForUpdate()->firstOrFail();
             $booking = Booking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
@@ -55,7 +109,11 @@ class GoshenAdminWalletPaymentService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (! $payer->canUseCommunity()
+            $isMemberWalletCharge = $memberWalletAuthorization !== null;
+
+            if ($isMemberWalletCharge) {
+                $this->assertMemberWalletChargeAllowed($admin, $payer, $beneficiary, $memberWalletAuthorization);
+            } elseif (! $payer->canUseCommunity()
                 || strtolower(trim((string) $payer->email)) !== strtolower(trim((string) $admin->email))) {
                 throw ValidationException::withMessages([
                     'payment_method' => 'Your linked wallet account could not be verified.',
@@ -97,10 +155,18 @@ class GoshenAdminWalletPaymentService
                 ]);
             }
 
-            $reference = 'gw_admin_ticket_'.Str::ulid();
+            $source = $isMemberWalletCharge
+                ? 'filament_member_wallet_charge'
+                : 'filament_admin_ticket_issue';
+            $reference = ($isMemberWalletCharge ? 'gw_member_ticket_' : 'gw_admin_ticket_').Str::ulid();
+            $balanceBefore = round((float) $wallet->balance, 2);
             $wallet->forceFill([
-                'balance' => round(((float) $wallet->balance) - $amount, 2),
+                'balance' => round($balanceBefore - $amount, 2),
             ])->save();
+
+            $memberWalletAudit = $isMemberWalletCharge
+                ? $this->memberWalletAuthorizationAudit($memberWalletAuthorization, $admin, $payer, $wallet, $balanceBefore)
+                : null;
 
             $wallet->ledgerEntries()->create([
                 'type' => 'retreat_payment',
@@ -109,15 +175,19 @@ class GoshenAdminWalletPaymentService
                 'amount' => $amount,
                 'gateway' => 'wallet',
                 'provider_reference' => $reference,
-                'metadata' => [
-                    'source' => 'filament_admin_ticket_issue',
+                'metadata' => array_filter([
+                    'source' => $source,
                     'booking_id' => $booking->id,
                     'payer_mobile_user_id' => $payer->id,
                     'beneficiary_mobile_user_id' => $beneficiary->id,
                     'payer_admin_user_id' => $admin->id,
+                    'charged_member_wallet_id' => $isMemberWalletCharge ? $wallet->id : null,
+                    'wallet_balance_before' => $balanceBefore,
+                    'wallet_balance_after' => round((float) $wallet->balance, 2),
+                    'member_wallet_authorization' => $memberWalletAudit,
                     'request_ip' => $context['request_ip'] ?? null,
                     'request_user_agent' => $context['request_user_agent'] ?? null,
-                ],
+                ], fn (mixed $value): bool => $value !== null),
                 'settled_at' => now(),
             ]);
 
@@ -129,20 +199,79 @@ class GoshenAdminWalletPaymentService
                 'currency' => $currency,
                 'amount' => $amount,
                 'status' => 'pending',
-                'payload' => [
-                    'source' => 'filament_admin_ticket_issue',
+                'payload' => array_filter([
+                    'source' => $source,
                     'wallet_id' => $wallet->id,
                     'payer_mobile_user_id' => $payer->id,
                     'beneficiary_mobile_user_id' => $beneficiary->id,
                     'payer_admin_user_id' => $admin->id,
+                    'charged_member_wallet_id' => $isMemberWalletCharge ? $wallet->id : null,
+                    'member_wallet_authorization' => $memberWalletAudit,
                     'request_ip' => $context['request_ip'] ?? null,
                     'request_user_agent' => $context['request_user_agent'] ?? null,
-                ],
+                ], fn (mixed $value): bool => $value !== null),
             ]);
 
             $this->settlements->markPaid($transaction, $amount, $currency);
 
             return $transaction->fresh();
         });
+    }
+
+    /**
+     * @param  array{confirmed: bool, authorization_method: string, authorization_note: string}  $authorization
+     */
+    private function assertMemberWalletChargeAllowed(
+        User $admin,
+        MobileUser $payer,
+        MobileUser $beneficiary,
+        array $authorization,
+    ): void {
+        if (! $admin->hasRole('super_admin') && ! $admin->can(AdminPermissions::GOSHEN_MEMBER_WALLET_CHARGE)) {
+            throw ValidationException::withMessages([
+                'payment_method' => 'You are not authorized to charge a member wallet.',
+            ]);
+        }
+
+        if (! $payer->canUseCommunity() || (int) $payer->id !== (int) $beneficiary->id) {
+            throw ValidationException::withMessages([
+                'payment_method' => 'Only the selected active member wallet can be charged for this ticket.',
+            ]);
+        }
+
+        $method = trim((string) ($authorization['authorization_method'] ?? ''));
+        $note = trim((string) ($authorization['authorization_note'] ?? ''));
+        if (! filter_var($authorization['confirmed'] ?? false, FILTER_VALIDATE_BOOLEAN)
+            || ! in_array($method, ['registered_contact', 'in_person', 'church_record', 'other_verified_process'], true)
+            || str($note)->length() < 20) {
+            throw ValidationException::withMessages([
+                'member_authorization_note' => 'Record the member authorization method and a meaningful note before charging their wallet.',
+            ]);
+        }
+    }
+
+    /**
+     * @param  array{confirmed: bool, authorization_method: string, authorization_note: string}  $authorization
+     * @return array<string, mixed>
+     */
+    private function memberWalletAuthorizationAudit(
+        array $authorization,
+        User $admin,
+        MobileUser $member,
+        GoshenWallet $wallet,
+        float $balanceBefore,
+    ): array {
+        return [
+            'confirmed' => true,
+            'authorization_method' => trim((string) $authorization['authorization_method']),
+            'authorization_note' => trim((string) $authorization['authorization_note']),
+            'recorded_at' => now()->toIso8601String(),
+            'admin_user_id' => $admin->id,
+            'admin_email' => $admin->email,
+            'member_mobile_user_id' => $member->id,
+            'member_triumphant_id' => $member->triumphant_id,
+            'wallet_id' => $wallet->id,
+            'wallet_balance_before' => $balanceBefore,
+        ];
     }
 }

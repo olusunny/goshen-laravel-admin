@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\GoshenWalletResource\Pages;
 
 use App\Filament\Resources\GoshenWalletResource;
+use App\Services\GoshenAdminTicketIssuanceService;
 use App\Services\GoshenVoucherService;
 use App\Services\GoshenWalletService;
 use App\Services\WalletSecurityResetService;
@@ -16,6 +17,22 @@ class ViewGoshenWallet extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('chargeMemberWallet')
+                ->label('Charge member wallet')
+                ->icon('heroicon-o-ticket')
+                ->color('warning')
+                ->visible(fn (): bool => GoshenWalletResource::canChargeMemberWallet($this->record))
+                ->form(fn (): array => GoshenWalletResource::memberWalletChargeForm($this->record))
+                ->modalHeading('Charge member wallet for Goshen Retreat')
+                ->modalDescription(fn (): string => sprintf(
+                    'This registers and settles a Goshen Retreat ticket from %s\'s own wallet. It never uses the admin wallet. Only continue after the member has directly authorized the charge.',
+                    $this->record->user?->name ?: 'this member',
+                ))
+                ->modalSubmitActionLabel('Charge member wallet')
+                ->action(function (array $data, GoshenAdminTicketIssuanceService $issuer): void {
+                    GoshenWalletResource::chargeMemberWallet($this->record, $data, $issuer);
+                    $this->record->refresh();
+                }),
             Actions\Action::make('adminWalletTopUp')
                 ->label('Top up wallet')
                 ->icon('heroicon-o-banknotes')

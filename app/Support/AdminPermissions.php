@@ -35,6 +35,8 @@ class AdminPermissions
 
     public const GOSHEN_TICKET_ISSUE = 'goshen_ticket.issue';
 
+    public const GOSHEN_MEMBER_WALLET_CHARGE = 'goshen_member_wallet.charge';
+
     public const PAYMENT_GATEWAYS = 'manage_payment_gateways';
 
     public const WALLET_SECURITY_RESETS = 'manage_wallet_security_resets';
@@ -116,6 +118,7 @@ class AdminPermissions
             ->put(self::FUNDRAISING_CONTRIBUTE, 'Fundraising - Contribute')
             ->put(self::FUNDRAISING_MEDIA_MANAGE, 'Fundraising - Manage media')
             ->put(self::GOSHEN_TICKET_ISSUE, 'Goshen Retreat - Issue tickets')
+            ->put(self::GOSHEN_MEMBER_WALLET_CHARGE, 'Goshen Retreat - Charge member wallets')
             ->put(self::PAYMENT_GATEWAYS, 'Settings - Payment Gateways')
             ->put(self::WALLET_SECURITY_RESETS, 'Goshen Retreat - Wallet Security Resets')
             ->all();

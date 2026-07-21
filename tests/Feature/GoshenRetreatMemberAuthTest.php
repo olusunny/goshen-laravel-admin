@@ -32,6 +32,7 @@ use Personal\EventInstallments\Models\PaymentTransaction;
 use Personal\EventInstallments\Models\Ticket;
 use Personal\EventInstallments\Models\TicketEmailLog;
 use Mockery\MockInterface;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -61,6 +62,21 @@ class GoshenRetreatMemberAuthTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', 'ok')
             ->assertJsonPath('data.user.email', 'member@example.test');
+    }
+
+    public function test_member_dashboard_exposes_the_server_calculated_member_wallet_charge_capability(): void
+    {
+        $manager = $this->verifiedMember('wallet-charge-capability@example.test');
+        $permission = Permission::findOrCreate('charge_goshen_member_wallet', 'mobile');
+        $role = Role::findOrCreate('wallet_charge_manager', 'mobile');
+        $role->givePermissionTo($permission);
+        $manager->assignRole($role);
+
+        $this->postJson('/api/goshen-retreat/me', [
+            'data' => ['api_token' => $manager->issueApiToken()],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.user.can_charge_goshen_member_wallet', true);
     }
 
     public function test_web_profile_update_uploads_avatar_to_shared_mobile_user_profile(): void

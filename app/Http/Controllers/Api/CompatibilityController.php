@@ -1847,6 +1847,7 @@ class CompatibilityController extends Controller
             'roles' => $user->roles()->pluck('name')->values(),
             'can_manage_groups' => $this->canManageAnyGroup($user),
             'can_manage_goshen_registration' => $this->canManageGoshenRegistration($user),
+            'can_charge_goshen_member_wallet' => $this->canChargeGoshenMemberWallet($user),
             'can_manage_goshen_vouchers' => $this->canManageGoshenVouchers($user),
             'can_manage_goshen_quiz' => $this->canManageGoshenQuiz($user),
             'can_manage_fundraising' => $this->canManageFundraising($user),
@@ -2017,6 +2018,25 @@ class CompatibilityController extends Controller
             ->contains(fn ($role): bool => in_array(
                 str($role)->lower()->replaceMatches('/[^a-z]/', '')->toString(),
                 ['admin', 'superadmin', 'eventmanager', 'goshenmanager', 'retreatmanager', 'triumphantitmanager'],
+                true,
+            ));
+    }
+
+    private function canChargeGoshenMemberWallet(MobileUser $user): bool
+    {
+        if (! $user->canUseCommunity()) {
+            return false;
+        }
+
+        if ($user->can('charge_goshen_member_wallet')) {
+            return true;
+        }
+
+        return $user->roles()
+            ->pluck('name')
+            ->contains(fn ($role): bool => in_array(
+                str($role)->lower()->replaceMatches('/[^a-z]/', '')->toString(),
+                ['admin', 'superadmin'],
                 true,
             ));
     }
