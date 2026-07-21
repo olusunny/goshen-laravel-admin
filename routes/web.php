@@ -1,10 +1,10 @@
 <?php
 
-use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\CompatibilityController;
+use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\PrayerCommunityController;
-use App\Http\Controllers\Api\RetiredFeatureController;
 use App\Http\Controllers\Api\TestimonyController;
+use App\Http\Controllers\Api\RetiredFeatureController;
 use App\Http\Controllers\DynamicFormSubmissionFileController;
 use App\Http\Controllers\DynamicFormWebController;
 use App\Http\Controllers\GoshenReferralInviteController;
