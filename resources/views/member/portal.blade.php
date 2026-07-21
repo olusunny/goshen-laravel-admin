@@ -3246,8 +3246,8 @@
                         </div>
                         <div class="field attendee-quantity-field" ${showQuantitySelector ? '' : 'hidden'}>
                             <label id="${escapeHtml(quantityLabelId)}">Attendees</label>
-                            ${renderQuantityStepper(firstTicket, initialQuantity, quantityLabelId)}
-                            <span class="hint attendee-quantity-hint">${escapeHtml(ticketQuantityHint(firstTicket))}</span>
+                            ${renderQuantityStepper(selectedTicket, initialQuantity, quantityLabelId)}
+                            <span class="hint attendee-quantity-hint">${escapeHtml(ticketQuantityHint(selectedTicket))}</span>
                         </div>
                         <div class="field">
                             <label>Payment method</label>
