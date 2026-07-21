@@ -3374,10 +3374,17 @@
             const total = Math.max(1, Math.min(20, Number(quantity || 1)));
             const fields = registrationFieldsFor(event);
             const currency = ticket?.currency || event?.currency || 'GBP';
-            const name = splitName(currentUser?.name || '');
+            const nameFromFullName = splitName(currentUser?.name || '');
+            const name = {
+                first: currentUser?.first_name || nameFromFullName.first,
+                last: currentUser?.last_name || nameFromFullName.last,
+            };
             const cards = [];
             for (let index = 0; index < total; index += 1) {
                 const existing = existingAttendees[index] || {};
+                const attendeeFields = index === 0
+                    ? { ...accountHolderAttendeeProfileFields(fields), ...canonicalAttendeeFieldValues(existing), ...canonicalAttendeeFieldValues(existing.custom_fields) }
+                    : { ...canonicalAttendeeFieldValues(existing), ...canonicalAttendeeFieldValues(existing.custom_fields) };
                 cards.push(`
                     <div class="attendee-card" data-attendee-index="${index}">
                         <strong>Attendee ${index + 1}${index === 0 ? ' - account holder' : ''}</strong>
@@ -3386,7 +3393,7 @@
                             <div class="field"><label>Last name</label><input class="input attendee-last-name" value="${escapeHtml(existing.last_name ?? (index === 0 ? name.last : ''))}"></div>
                             <div class="field"><label>Email</label><input class="input attendee-email" type="email" value="${escapeHtml(existing.email ?? (index === 0 ? currentUser?.email || '' : ''))}"></div>
                             <div class="field"><label>Phone</label><input class="input attendee-phone" type="tel" value="${escapeHtml(existing.phone ?? (index === 0 ? currentUser?.phone || '' : ''))}"></div>
-                            ${fields.map((field) => renderRegistrationField(field, index, existing.custom_fields || existing, currency)).join('')}
+                            ${fields.map((field) => renderRegistrationField(field, index, attendeeFields, currency)).join('')}
                         </div>
                     </div>
                 `);
@@ -3416,6 +3423,47 @@
                 .replace(/_+/g, '_')
                 .replace(/^_|_$/g, '');
             const aliases = {
+                sex: 'gender',
+                gender_identity: 'gender',
+                genderidentity: 'gender',
+                profile_title: 'title',
+                profiletitle: 'title',
+                salutation: 'title',
+                honorific: 'title',
+                honorific_title: 'title',
+                honorifictitle: 'title',
+                marital: 'marital_status',
+                maritalstatus: 'marital_status',
+                marriage_status: 'marital_status',
+                marriagestatus: 'marital_status',
+                membership_status: 'member_type',
+                membership_type: 'member_type',
+                membershipstatus: 'member_type',
+                membershiptype: 'member_type',
+                member_status: 'member_type',
+                memberstatus: 'member_type',
+                country: 'country_of_residence',
+                residence_country: 'country_of_residence',
+                residencecountry: 'country_of_residence',
+                country_residence: 'country_of_residence',
+                countryresidence: 'country_of_residence',
+                countryofresidence: 'country_of_residence',
+                state: 'state_county_province',
+                county: 'state_county_province',
+                province: 'state_county_province',
+                state_county: 'state_county_province',
+                state_province: 'state_county_province',
+                statecounty: 'state_county_province',
+                stateprovince: 'state_county_province',
+                statecountyprovince: 'state_county_province',
+                home_address: 'address',
+                homeaddress: 'address',
+                residential_address: 'address',
+                residentialaddress: 'address',
+                address_line: 'address',
+                address_line_1: 'address',
+                addressline: 'address',
+                addressline1: 'address',
                 age: 'age_group',
                 agegroup: 'age_group',
                 free_bus: 'free_church_bus_interest',
@@ -3431,9 +3479,43 @@
             return aliases[normalized] || normalized;
         }
 
+        function canonicalAttendeeFieldValues(fields = {}) {
+            return Object.entries(fields || {}).reduce((values, [key, value]) => {
+                if (key === 'custom_fields' || value === undefined || value === null || typeof value === 'object') return values;
+                const normalizedValue = `${value}`.trim();
+                if (normalizedValue === '') return values;
+                values[attendeeFieldIdentity(key)] = normalizedValue;
+                return values;
+            }, {});
+        }
+
+        function accountHolderAttendeeProfileFields(attendeeFields = []) {
+            const user = currentUser || {};
+            const formKeys = new Set((attendeeFields || []).map((field) => attendeeFieldIdentity(field?.key)).filter(Boolean));
+            const profileFields = canonicalAttendeeFieldValues({
+                gender: user.gender,
+                title: user.title ?? user.profile_title,
+                marital_status: user.marital_status,
+                member_type: user.member_type,
+                country_of_residence: user.country_of_residence,
+                state_county_province: user.state_county_province,
+                address: user.address,
+            });
+            return Object.fromEntries(Object.entries(profileFields).filter(([key]) => formKeys.has(key)));
+        }
+
         function fieldValueForExisting(existingFields, key) {
             const canonicalKey = attendeeFieldIdentity(key);
             return `${(existingFields || {})[key] ?? (existingFields || {})[canonicalKey] ?? ''}`;
+        }
+
+        function attendeeFieldControlId(attendeeIndex, key) {
+            const safeKey = `${key || 'field'}`
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '') || 'field';
+            return `attendee-${attendeeIndex}-${safeKey}`;
         }
 
         function renderRegistrationField(field, attendeeIndex, existingFields = {}, currency = 'GBP') {
@@ -3443,9 +3525,10 @@
             const required = field.is_required ? 'required' : '';
             const options = Array.isArray(field.options) ? field.options : [];
             const currentValue = fieldValueForExisting(existingFields, key);
+            const controlId = attendeeFieldControlId(attendeeIndex, key);
 
             if (['select', 'single_select'].includes(type)) {
-                return `<div class="field"><label>${label}</label><select class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" ${required}>${options.map((option) => {
+                return `<div class="field"><label for="${escapeHtml(controlId)}">${label}</label><select id="${escapeHtml(controlId)}" class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" ${required}>${options.map((option) => {
                     const value = `${optionValue(option)}`;
                     const selected = value === currentValue ? 'selected' : '';
                     return `<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(`${optionLabel(option)}${optionFeeLabel(option, currency)}`)}</option>`;
@@ -3453,21 +3536,23 @@
             }
 
             if (type === 'textarea') {
-                return `<div class="field"><label>${label}</label><textarea class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" ${required}>${escapeHtml(currentValue)}</textarea></div>`;
+                return `<div class="field"><label for="${escapeHtml(controlId)}">${label}</label><textarea id="${escapeHtml(controlId)}" class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" ${required}>${escapeHtml(currentValue)}</textarea></div>`;
             }
 
             if (['image_select', 'color_select'].includes(type)) {
                 const radioName = `attendee_${attendeeIndex}_${key}`;
-                return `<div class="field"><label>${label}</label><div class="choice-grid">${options.filter((option) => `${optionValue(option)}` !== '').map((option) => {
+                const labelId = `${controlId}-label`;
+                return `<div class="field" role="radiogroup" aria-labelledby="${escapeHtml(labelId)}"><label id="${escapeHtml(labelId)}">${label}</label><div class="choice-grid">${options.filter((option) => `${optionValue(option)}` !== '').map((option, optionIndex) => {
                     const value = `${optionValue(option)}`;
+                    const optionId = `${controlId}-${optionIndex}`;
                     const image = option?.image_url ? `<img src="${escapeHtml(option.image_url)}" alt="">` : '';
                     const swatch = option?.color_hex ? `<span class="swatch" style="background:${escapeHtml(option.color_hex)}"></span>` : '';
                     const checked = value === currentValue ? 'checked' : '';
-                    return `<label class="choice"><input class="attendee-dynamic-control" data-field-key="${escapeHtml(key)}" type="radio" name="${escapeHtml(radioName)}" value="${escapeHtml(value)}" ${required} ${checked}>${image || swatch}<span>${escapeHtml(`${optionLabel(option)}${optionFeeLabel(option, currency)}`)}</span></label>`;
+                    return `<label class="choice" for="${escapeHtml(optionId)}"><input id="${escapeHtml(optionId)}" class="attendee-dynamic-control" data-field-key="${escapeHtml(key)}" type="radio" name="${escapeHtml(radioName)}" value="${escapeHtml(value)}" ${required} ${checked}>${image || swatch}<span>${escapeHtml(`${optionLabel(option)}${optionFeeLabel(option, currency)}`)}</span></label>`;
                 }).join('')}</div></div>`;
             }
 
-            return `<div class="field"><label>${label}</label><input class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" value="${escapeHtml(currentValue)}" ${required}></div>`;
+            return `<div class="field"><label for="${escapeHtml(controlId)}">${label}</label><input id="${escapeHtml(controlId)}" class="input attendee-dynamic-control" data-field-key="${escapeHtml(key)}" value="${escapeHtml(currentValue)}" ${required}></div>`;
         }
 
         function collectDynamicFields(card) {
