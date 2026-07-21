@@ -936,6 +936,48 @@ class CompatibilityApiTest extends TestCase
         ]);
     }
 
+    public function test_profile_birthday_rejects_malformed_and_impossible_month_day_values(): void
+    {
+        $baseRegistration = [
+            'name' => 'Birthday Visitor',
+            'first_name' => 'Birthday',
+            'last_name' => 'Visitor',
+            'email' => 'birthday-visitor@example.com',
+            'phone' => '+2348000000002',
+            'gender' => 'Female',
+            'member_type' => 'visitor',
+            'password' => 'Passw0rd!234',
+        ];
+
+        $this->postJson('/registerUser', [
+            'data' => array_merge($baseRegistration, ['birthday_month_day' => '07233444899']),
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('birthday_month_day');
+
+        $user = MobileUser::create([
+            'name' => 'Birthday Profile',
+            'email' => 'birthday-profile@example.com',
+            'phone' => '+2348000000003',
+            'gender' => 'Female',
+            'member_type' => 'visitor',
+            'password' => Hash::make('Passw0rd!234'),
+            'is_verified' => true,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->postJson('/updateProfile', [
+            'api_token' => $user->issueApiToken(),
+            'fullname' => 'Birthday Profile',
+            'phone' => '+2348000000003',
+            'gender' => 'Female',
+            'member_type' => 'visitor',
+            'birthday_month_day' => '02-30',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('birthday');
+    }
+
     public function test_mobile_email_verification_and_password_reset_flow(): void
     {
         $user = MobileUser::create([

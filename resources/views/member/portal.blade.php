@@ -2227,6 +2227,31 @@
             return formData;
         }
 
+        function normalizeBirthdayMonthDayInput(value) {
+            const digits = `${value || ''}`.replace(/\D/g, '').slice(0, 4);
+            return digits.length > 2 ? `${digits.slice(0, 2)}-${digits.slice(2)}` : digits;
+        }
+
+        function birthdayMonthDayError(value) {
+            if (!value) return '';
+            const match = /^(\d{2})-(\d{2})$/.exec(value);
+            if (!match) return 'Enter your birthday as MM-DD, for example 07-23.';
+
+            const month = Number(match[1]);
+            const day = Number(match[2]);
+            const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+            if (month < 1 || month > 12 || day < 1 || day > daysInMonth[month - 1]) {
+                return 'Enter a real calendar date as MM-DD, for example 07-23.';
+            }
+
+            return '';
+        }
+
+        function validateBirthdayMonthDayInput(input, { format = false } = {}) {
+            if (format) input.value = normalizeBirthdayMonthDayInput(input.value);
+            input.setCustomValidity(birthdayMonthDayError(input.value));
+        }
+
         function messageFromErrorPayload(payload, fallback) {
             return payload?.message || payload?.msg || Object.values(payload?.errors || {})?.flat?.()?.[0] || fallback;
         }
@@ -4118,7 +4143,7 @@
                             <select class="input" name="member_type" required ${user.membership_status_change_locked ? 'disabled' : ''}>${optionMarkup([{ value: 'church_member', label: 'Church member' }, { value: 'visitor', label: 'Visitor' }], user.member_type || 'church_member')}</select>
                             <small class="muted">${escapeHtml(user.membership_status_change_message || 'You can update this status once every 30 days.')}</small>
                         </div>
-                        <div class="field"><label>Birthday (month and day)</label><input class="input" name="birthday_month_day" inputmode="numeric" maxlength="5" autocomplete="bday" placeholder="MM-DD" value="${escapeHtml(user.birthday_month_day || '')}" pattern="^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$" title="Use MM-DD, for example 07-23."><small class="muted">Use MM-DD only, for example 07-23.</small></div>
+                        <div class="field"><label for="profileBirthdayMonthDay">Birthday (month and day)</label><input class="input" id="profileBirthdayMonthDay" name="birthday_month_day" type="text" inputmode="numeric" maxlength="5" autocomplete="bday" placeholder="MM-DD" value="${escapeHtml(user.birthday_month_day || '')}" pattern="^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$" title="Use MM-DD, for example 07-23." aria-describedby="profileBirthdayMonthDayHint"><small class="muted" id="profileBirthdayMonthDayHint">Enter month and day as MM-DD, for example 07-23.</small></div>
                         <div class="field">
                             <label>Church group</label>
                             <select class="input" name="group_id" required>${groupOptionsMarkup(user.group_id)}</select>
@@ -4413,6 +4438,11 @@
         });
 
         document.getElementById('portalMain').addEventListener('input', (event) => {
+            const birthdayInput = event.target.closest('.profile-update-form [name="birthday_month_day"]');
+            if (birthdayInput) {
+                validateBirthdayMonthDayInput(birthdayInput, { format: true });
+                return;
+            }
             const avatarInput = event.target.closest('.profile-update-form input[name="avatar"]');
             if (avatarInput) {
                 const file = avatarInput.files?.[0];
@@ -4443,6 +4473,11 @@
         });
 
         document.getElementById('portalMain').addEventListener('change', (event) => {
+            const birthdayInput = event.target.closest('.profile-update-form [name="birthday_month_day"]');
+            if (birthdayInput) {
+                validateBirthdayMonthDayInput(birthdayInput, { format: true });
+                return;
+            }
             const ticketSelect = event.target.closest('.registration-form [name="ticket_type_id"]');
             if (!ticketSelect) return;
 
@@ -4562,6 +4597,8 @@
             const profileUpdate = event.target.closest('.profile-update-form');
             if (profileUpdate) {
                 event.preventDefault();
+                const birthdayInput = profileUpdate.querySelector('[name="birthday_month_day"]');
+                if (birthdayInput) validateBirthdayMonthDayInput(birthdayInput);
                 if (!profileUpdate.reportValidity()) return;
                 const data = profileUpdateFormData(profileUpdate);
                 setBusy(profileUpdate, true);
