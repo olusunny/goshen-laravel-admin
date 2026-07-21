@@ -2409,6 +2409,9 @@
             document.getElementById('profileCompletionNoticeDescription').textContent = description;
             profileCompletionNotice.hidden = false;
             window.setTimeout(() => profileCompletionNotice.querySelector('[data-profile-completion-action="complete"]')?.focus(), 40);
+            window.setTimeout(() => {
+                if (!profileCompletionNotice.hidden && activePage === 'retreat' && profileNeedsCompletion()) beginProfileCompletion();
+            }, 1800);
         }
 
         function handlePaymentReturnNotice() {
@@ -4023,7 +4026,7 @@
                 user.name || [firstName, user.middle_name, lastName].filter(Boolean).join(' '),
                 'Member',
             );
-            const triumphantId = displayProfileValue(user.triumphant_id, 'Not assigned yet');
+            const triumphantId = displayProfileValue(user.triumphant_id, user.triumphant_id_status_message || 'Your Triumphant ID will be ready after you update your membership status.');
             const residence = [user.country_of_residence, user.state_county_province].filter(Boolean).join(', ');
             return `
                 <div class="profile-hero">
@@ -4051,6 +4054,7 @@
                     ${profileDetailCard('Gender', titleCaseLabel(user.gender))}
                     ${profileDetailCard('Marital status', user.marital_status)}
                     ${profileDetailCard('Member type', titleCaseLabel(user.member_type || 'church_member'))}
+                    ${profileDetailCard('Birthday', user.birthday_month_day, 'Not provided')}
                     ${profileDetailCard('Church group', user.group_name, 'Not selected')}
                     ${profileDetailCard('Residence', residence)}
                     ${profileDetailCard('Address', user.address, 'Not provided', true)}
@@ -4111,8 +4115,10 @@
                         </div>
                         <div class="field">
                             <label>Member type</label>
-                            <select class="input" name="member_type" required>${optionMarkup([{ value: 'church_member', label: 'Church member' }, { value: 'visitor', label: 'Visitor' }], user.member_type || 'church_member')}</select>
+                            <select class="input" name="member_type" required ${user.membership_status_change_locked ? 'disabled' : ''}>${optionMarkup([{ value: 'church_member', label: 'Church member' }, { value: 'visitor', label: 'Visitor' }], user.member_type || 'church_member')}</select>
+                            <small class="muted">${escapeHtml(user.membership_status_change_message || 'You can update this status once every 30 days.')}</small>
                         </div>
+                        <div class="field"><label>Birthday (month and day)</label><input class="input" name="birthday_month_day" placeholder="MM-DD" value="${escapeHtml(user.birthday_month_day || '')}" pattern="^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"></div>
                         <div class="field">
                             <label>Church group</label>
                             <select class="input" name="group_id" required>${groupOptionsMarkup(user.group_id)}</select>

@@ -679,6 +679,10 @@ class CompatibilityController extends Controller
     public function mediaTotals(Request $request)
     {
         $data = $this->payload($request) ?: $request->all();
+        if (isset($data['birthday_month_day']) && preg_match('/^(\d{2})-(\d{2})$/', (string) $data['birthday_month_day'], $birthdayParts)) {
+            $data['birthday_month'] = (int) $birthdayParts[1];
+            $data['birthday_day'] = (int) $birthdayParts[2];
+        }
         $media = MediaItem::find($data['media'] ?? $data['media_id'] ?? $data['id'] ?? null);
 
         if (! $media) {
@@ -1314,6 +1318,10 @@ class CompatibilityController extends Controller
     public function updateProfile(Request $request)
     {
         $data = $this->payload($request) ?: $request->all();
+        if (isset($data['birthday_month_day']) && preg_match('/^(\d{2})-(\d{2})$/', (string) $data['birthday_month_day'], $birthdayParts)) {
+            $data['birthday_month'] = (int) $birthdayParts[1];
+            $data['birthday_day'] = (int) $birthdayParts[2];
+        }
         $token = $data['api_token'] ?? $request->bearerToken();
         $user = filled($token)
             ? MobileUser::where('api_token_hash', hash('sha256', $token))->first()
