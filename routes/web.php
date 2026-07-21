@@ -1,18 +1,23 @@
 <?php
 
-use App\Http\Controllers\Api\CompatibilityController;
 use App\Http\Controllers\Api\AccommodationController;
+use App\Http\Controllers\Api\CompatibilityController;
 use App\Http\Controllers\Api\PrayerCommunityController;
-use App\Http\Controllers\Api\TestimonyController;
 use App\Http\Controllers\Api\RetiredFeatureController;
+use App\Http\Controllers\Api\TestimonyController;
 use App\Http\Controllers\DynamicFormSubmissionFileController;
 use App\Http\Controllers\DynamicFormWebController;
+use App\Http\Controllers\GoshenReferralInviteController;
 use App\Http\Controllers\MemberAppController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 use Personal\EventInstallments\Http\Controllers\Admin\TicketDocumentController;
 
 Route::redirect('/', '/admin');
+
+Route::get('invite/{code}', GoshenReferralInviteController::class)
+    ->whereAlphaNumeric('code')
+    ->name('goshen.referral-invite');
 
 Route::get('app/{path?}', MemberAppController::class)
     ->where('path', '.*')

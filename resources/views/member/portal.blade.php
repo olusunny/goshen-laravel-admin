@@ -1058,6 +1058,47 @@
             letter-spacing: .08em;
             overflow-wrap: anywhere;
         }
+        .referral-share-card {
+            display: grid;
+            gap: 16px;
+            margin: 18px 0;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            background: var(--field);
+        }
+        .referral-share-media {
+            width: 100%;
+            aspect-ratio: 16 / 7;
+            object-fit: cover;
+            border-radius: 14px;
+            background: var(--brand);
+        }
+        .referral-share-copy {
+            display: grid;
+            gap: 5px;
+        }
+        .referral-share-copy strong { font-size: 18px; }
+        .referral-share-copy span { color: var(--muted); line-height: 1.5; }
+        .referral-share-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .referral-share-actions .button { min-width: 0; }
+        .referral-share-actions .referral-share-button { grid-column: 1 / -1; }
+        .referral-share-link {
+            display: block;
+            overflow: hidden;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.4;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        @media (max-width: 380px) {
+            .referral-share-actions { grid-template-columns: 1fr; }
+        }
         .profile-hero {
             position: relative;
             overflow: hidden;
@@ -1683,6 +1724,16 @@
         <symbol id="icon-logout" viewBox="0 0 24 24">
             <path d="M10 6H6.8A1.8 1.8 0 0 0 5 7.8v8.4A1.8 1.8 0 0 0 6.8 18H10M14 8l4 4-4 4M8 12h10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
         </symbol>
+        <symbol id="icon-copy" viewBox="0 0 24 24">
+            <rect x="8" y="8" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-linejoin="round"/>
+            <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-share" viewBox="0 0 24 24">
+            <circle cx="18" cy="5" r="2.5" fill="none" stroke="currentColor"/>
+            <circle cx="6" cy="12" r="2.5" fill="none" stroke="currentColor"/>
+            <circle cx="18" cy="19" r="2.5" fill="none" stroke="currentColor"/>
+            <path d="m8.2 10.8 7.6-4.6M8.2 13.2l7.6 4.6" fill="none" stroke="currentColor" stroke-linecap="round"/>
+        </symbol>
     </svg>
 
     <section id="authShell" class="auth-shell">
@@ -2042,6 +2093,7 @@
         const themeKey = 'goshen_portal_theme';
         const walletTabKey = 'goshen_wallet_tab';
         const migrationNoticeKey = 'goshen_migration_notice_2026_07_v1';
+        const referralInvitationKey = 'goshen_referral_invitation';
         const googleLoginConfig = @json($googleLogin ?? ['enabled' => false, 'clientId' => '']);
         const pageTitles = {
             home: 'Home',
@@ -2080,6 +2132,20 @@
             return `${value ?? ''}`.replace(/[&<>"']/g, (char) => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
             }[char]));
+        }
+
+        function normalizeReferralCode(value) {
+            return `${value || ''}`.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 32);
+        }
+
+        function referralInvitationCode() {
+            const fromUrl = normalizeReferralCode(new URLSearchParams(window.location.search).get('ref'));
+            if (fromUrl) {
+                try { sessionStorage.setItem(referralInvitationKey, fromUrl); } catch {}
+                return fromUrl;
+            }
+
+            try { return normalizeReferralCode(sessionStorage.getItem(referralInvitationKey)); } catch { return ''; }
         }
 
         function payloadFromForm(form) {
@@ -2778,6 +2844,7 @@
                 renderEvents();
                 renderHome();
                 renderSupport();
+                if (currentUser && activePage === 'profile') renderProfile();
             } catch (error) {
                 document.getElementById('retreatEvents').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
             }
@@ -2994,6 +3061,7 @@
             const initialQuantity = ticketDefaultQuantity(firstTicket);
             const quantityLabelId = `attendeeQuantityLabel-${event.public_id || 'current'}`;
             const showQuantitySelector = ticketShowsQuantitySelector(firstTicket);
+            const invitationCode = referralInvitationCode();
             return `
                 <form class="form registration-form" data-event-id="${escapeHtml(event.public_id)}">
                     <div class="form-grid">
@@ -3020,7 +3088,7 @@
                         </div>
                         <div class="field">
                             <label>Referral code (optional)</label>
-                            <input class="input" name="referral_code" maxlength="32" autocomplete="off">
+                            <input class="input" name="referral_code" maxlength="32" autocomplete="off" value="${escapeHtml(invitationCode)}">
                         </div>
                     </div>
                     <div class="attendee-fields">${renderAttendeeFields(initialQuantity, event, [], firstTicket)}</div>
@@ -3680,6 +3748,46 @@
             return fallback;
         }
 
+        function referralShareLink(code) {
+            return `${window.location.origin}/invite/${encodeURIComponent(normalizeReferralCode(code))}`;
+        }
+
+        function referralShareDetails(code) {
+            const event = eventsCache[0] || {};
+            const title = event.name || 'Goshen Retreat 2026';
+            const date = eventDate(event);
+            const venue = eventVenue(event);
+
+            return {
+                title: `Join me at ${title}`,
+                text: `I'm attending ${title}. Come and seek God with me at ${venue} on ${date}. It will be a beautiful time of prayer, worship, and renewal. Use my referral code ${code} when you register.`,
+                url: referralShareLink(code),
+                image: eventImage(event) || '/icons/goshen-icon-512.png',
+                date,
+                venue,
+            };
+        }
+
+        async function copyReferralText(value, successMessage) {
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(value);
+                } else {
+                    const input = document.createElement('textarea');
+                    input.value = value;
+                    input.style.position = 'fixed';
+                    input.style.opacity = '0';
+                    document.body.append(input);
+                    input.select();
+                    document.execCommand('copy');
+                    input.remove();
+                }
+                notify(successMessage);
+            } catch {
+                notify('We could not copy that just now. Please try again.', 'error');
+            }
+        }
+
         function renderProfileReferralCard() {
             const referral = memberData.referral || currentUser?.referral || null;
             if (!referral) {
@@ -3698,6 +3806,7 @@
             const converted = referralValue(referral, ['converted_points'], 0);
             const walletAmount = referralValue(referral, ['wallet_amount', 'wallet_amount_available'], 0);
             const currency = referralValue(referral, ['currency'], walletData?.currency || 'GBP');
+            const share = referralShareDetails(code);
 
             return `
                 <article class="card">
@@ -3710,6 +3819,21 @@
                     <div class="profile-triumphant-id" aria-label="Referral code">
                         <span>Your referral code</span>
                         <strong>${escapeHtml(code)}</strong>
+                    </div>
+                    <div class="referral-share-card">
+                        <img class="referral-share-media" src="${escapeHtml(share.image)}" alt="${escapeHtml(eventsCache[0]?.name || 'Goshen Retreat')} feature image" loading="lazy">
+                        <div class="referral-share-copy">
+                            <strong>${escapeHtml(share.title)}</strong>
+                            <span>${escapeHtml(share.date)} · ${escapeHtml(share.venue)}</span>
+                        </div>
+                        <span class="referral-share-link">${escapeHtml(share.url)}</span>
+                        <div class="referral-share-actions">
+                            <button class="button small outline referral-copy-code" type="button" data-referral-code="${escapeHtml(code)}"><svg class="nav-icon" aria-hidden="true"><use href="#icon-copy"></use></svg>Copy code</button>
+                            <button class="button small outline referral-copy-link" type="button" data-referral-code="${escapeHtml(code)}"><svg class="nav-icon" aria-hidden="true"><use href="#icon-copy"></use></svg>Copy link</button>
+                            <button class="button small outline referral-share-network" type="button" data-referral-code="${escapeHtml(code)}" data-share-network="whatsapp"><svg class="nav-icon" aria-hidden="true"><use href="#icon-share"></use></svg>WhatsApp</button>
+                            <button class="button small outline referral-share-network" type="button" data-referral-code="${escapeHtml(code)}" data-share-network="facebook"><svg class="nav-icon" aria-hidden="true"><use href="#icon-share"></use></svg>Facebook</button>
+                            <button class="button small referral-share-button" type="button" data-referral-code="${escapeHtml(code)}"><svg class="nav-icon" aria-hidden="true"><use href="#icon-share"></use></svg>Share invite</button>
+                        </div>
                     </div>
                     <div class="stats-grid">
                         <div class="stat"><span>Total</span><strong>${escapeHtml(total)}</strong></div>
@@ -4292,6 +4416,43 @@
         });
 
         document.getElementById('portalMain').addEventListener('click', async (event) => {
+            const copyReferralCode = event.target.closest('.referral-copy-code');
+            if (copyReferralCode) {
+                await copyReferralText(normalizeReferralCode(copyReferralCode.dataset.referralCode), 'Referral code copied.');
+                return;
+            }
+            const copyReferralLink = event.target.closest('.referral-copy-link');
+            if (copyReferralLink) {
+                const code = normalizeReferralCode(copyReferralLink.dataset.referralCode);
+                await copyReferralText(referralShareLink(code), 'Invitation link copied.');
+                return;
+            }
+            const shareReferral = event.target.closest('.referral-share-button');
+            if (shareReferral) {
+                const code = normalizeReferralCode(shareReferral.dataset.referralCode);
+                const share = referralShareDetails(code);
+                try {
+                    if (!navigator.share) {
+                        await copyReferralText(share.url, 'Sharing is not available here, so the invitation link was copied.');
+                        return;
+                    }
+                    await navigator.share({ title: share.title, text: share.text, url: share.url });
+                } catch (error) {
+                    if (error?.name !== 'AbortError') notify('We could not open sharing just now. Please try again.', 'error');
+                }
+                return;
+            }
+            const shareReferralNetwork = event.target.closest('.referral-share-network');
+            if (shareReferralNetwork) {
+                const code = normalizeReferralCode(shareReferralNetwork.dataset.referralCode);
+                const share = referralShareDetails(code);
+                const shareUrl = shareReferralNetwork.dataset.shareNetwork === 'facebook'
+                    ? `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(share.url)}`
+                    : `https://wa.me/?text=${encodeURIComponent(`${share.text}\n\n${share.url}`)}`;
+                const popup = window.open(shareUrl, '_blank', 'noopener,noreferrer');
+                if (popup) popup.opener = null;
+                return;
+            }
             const editProfile = event.target.closest('.profile-edit-button');
             if (editProfile) {
                 profileEditMode = true;
