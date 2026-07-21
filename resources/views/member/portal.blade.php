@@ -643,9 +643,9 @@
             margin-bottom: 20px;
         }
         .user-chip-header {
-            display: flex;
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
             align-items: center;
-            justify-content: space-between;
             gap: 12px;
         }
         .user-chip-avatar {
@@ -688,11 +688,22 @@
         }
         .user-chip-main {
             min-width: 0;
+            display: grid;
+            gap: 3px;
         }
-        .user-chip strong { display: block; }
-        .user-chip span { color: rgba(255,255,255,.7); font-size: 13px; overflow-wrap: anywhere; }
+        .user-chip-main strong,
+        .user-chip-main span {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .user-chip-main span { color: rgba(255,255,255,.7); font-size: 13px; }
         .header-logout-button {
-            min-height: 38px;
+            grid-column: 1 / -1;
+            width: 100%;
+            justify-content: center;
+            min-height: 44px;
             border: 1px solid rgba(255,255,255,.18);
             border-radius: 13px;
             padding: 0 12px;
@@ -708,6 +719,10 @@
         .header-logout-button:hover {
             background: rgba(180, 35, 24, .22);
             color: #fff;
+        }
+        .header-logout-button:focus-visible {
+            outline: 3px solid rgba(248, 181, 34, .92);
+            outline-offset: 3px;
         }
         .header-logout-button .nav-icon {
             width: 20px;
@@ -2478,8 +2493,16 @@
             const avatarMarkup = avatar
                 ? `<img src="${escapeHtml(avatar)}" alt="${escapeHtml(name)} profile photo" loading="lazy">`
                 : `<span>${escapeHtml(profileInitials(currentUser, currentUser?.first_name, currentUser?.last_name))}</span>`;
-            ['sidebarUserName', 'drawerUserName'].forEach((id) => { document.getElementById(id).textContent = name; });
-            ['sidebarUserEmail', 'drawerUserEmail'].forEach((id) => { document.getElementById(id).textContent = email; });
+            ['sidebarUserName', 'drawerUserName'].forEach((id) => {
+                const element = document.getElementById(id);
+                element.textContent = name;
+                element.title = name;
+            });
+            ['sidebarUserEmail', 'drawerUserEmail'].forEach((id) => {
+                const element = document.getElementById(id);
+                element.textContent = email;
+                element.title = email;
+            });
             ['sidebarUserAvatar', 'drawerUserAvatar', 'mobileProfileAvatar'].forEach((id) => {
                 const element = document.getElementById(id);
                 if (element) element.innerHTML = avatarMarkup;
