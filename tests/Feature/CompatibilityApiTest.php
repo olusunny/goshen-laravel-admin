@@ -695,6 +695,33 @@ class CompatibilityApiTest extends TestCase
         ]);
     }
 
+    public function test_visitor_registration_does_not_require_member_profile_fields_or_assign_a_triumphant_id(): void
+    {
+        $this->postJson('/registerUser', [
+            'data' => [
+                'name' => 'Guest Visitor',
+                'first_name' => 'Guest',
+                'last_name' => 'Visitor',
+                'email' => 'guest-visitor@example.com',
+                'phone' => '+2348000000001',
+                'gender' => 'Female',
+                'member_type' => 'visitor',
+                'password' => 'Passw0rd!234',
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'ok');
+
+        $visitor = MobileUser::query()->where('email', 'guest-visitor@example.com')->firstOrFail();
+
+        $this->assertNull($visitor->triumphant_id);
+        $this->assertNull($visitor->triumphant_id_sequence);
+        $this->assertNull($visitor->group_id);
+        $this->assertNull($visitor->country_of_residence);
+        $this->assertNull($visitor->state_county_province);
+        $this->assertNull($visitor->address);
+    }
+
     public function test_content_page_endpoint_exposes_structured_about_page(): void
     {
         ContentPage::create([

@@ -58,7 +58,7 @@ class MobileUserResource extends Resource
                     ->label('Triumphant ID')
                     ->disabled()
                     ->dehydrated(false)
-                    ->helperText('Assigned automatically. T001 and T002 are reserved for the main pastor and IT manager roles.'),
+                    ->helperText('Assigned automatically to church members. T001 and T002 are reserved for the main pastor and IT manager roles.'),
                 Forms\Components\TextInput::make('phone')
                     ->tel()
                     ->maxLength(80),

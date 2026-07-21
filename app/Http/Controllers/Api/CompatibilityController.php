@@ -821,11 +821,11 @@ class CompatibilityController extends Controller
             'phone' => ['required', 'string', 'max:80'],
             'gender' => ['required', 'string', 'max:30'],
             'marital_status' => ['nullable', 'string', Rule::in(array_keys(MobileUser::MARITAL_STATUS_OPTIONS))],
-            'group_id' => ['required', 'integer', 'exists:church_groups,id'],
+            'group_id' => ['nullable', 'required_if:member_type,church_member', 'integer', 'exists:church_groups,id'],
             'member_type' => ['required', 'string', 'in:church_member,visitor'],
-            'country_of_residence' => ['required', 'string', 'max:120'],
-            'state_county_province' => ['required', 'string', 'max:120'],
-            'address' => ['required', 'string', 'max:500'],
+            'country_of_residence' => ['nullable', 'required_if:member_type,church_member', 'string', 'max:120'],
+            'state_county_province' => ['nullable', 'required_if:member_type,church_member', 'string', 'max:120'],
+            'address' => ['nullable', 'required_if:member_type,church_member', 'string', 'max:500'],
             'address_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'address_longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'password' => ['required', 'string', 'min:8', 'max:255'],
@@ -850,11 +850,11 @@ class CompatibilityController extends Controller
                 'phone' => $data['phone'],
                 'gender' => $data['gender'],
                 'marital_status' => $data['marital_status'] ?? $existingUser->marital_status,
-                'group_id' => $data['group_id'],
+                'group_id' => $data['group_id'] ?? $existingUser->group_id,
                 'member_type' => $data['member_type'],
-                'country_of_residence' => $data['country_of_residence'],
-                'state_county_province' => $data['state_county_province'],
-                'address' => $data['address'],
+                'country_of_residence' => $data['country_of_residence'] ?? $existingUser->country_of_residence,
+                'state_county_province' => $data['state_county_province'] ?? $existingUser->state_county_province,
+                'address' => $data['address'] ?? $existingUser->address,
                 'address_latitude' => $data['address_latitude'] ?? null,
                 'address_longitude' => $data['address_longitude'] ?? null,
                 'password' => Hash::make($data['password']),
@@ -871,11 +871,11 @@ class CompatibilityController extends Controller
                 'phone' => $data['phone'],
                 'gender' => $data['gender'],
                 'marital_status' => $data['marital_status'] ?? null,
-                'group_id' => $data['group_id'],
+                'group_id' => $data['group_id'] ?? null,
                 'member_type' => $data['member_type'],
-                'country_of_residence' => $data['country_of_residence'],
-                'state_county_province' => $data['state_county_province'],
-                'address' => $data['address'],
+                'country_of_residence' => $data['country_of_residence'] ?? null,
+                'state_county_province' => $data['state_county_province'] ?? null,
+                'address' => $data['address'] ?? null,
                 'address_latitude' => $data['address_latitude'] ?? null,
                 'address_longitude' => $data['address_longitude'] ?? null,
                 'password' => Hash::make($data['password'] ?? str()->random(24)),
@@ -1041,7 +1041,7 @@ class CompatibilityController extends Controller
             'message' => 'Signed in successfully.',
             'user' => $this->mobileUserPayload($user, $user->issueApiToken()),
             'is_new_user' => false,
-            'profile_needs_update' => blank($user->phone) || blank($user->gender) || blank($user->member_type) || blank($user->country_of_residence) || blank($user->state_county_province) || blank($user->address),
+            'profile_needs_update' => $this->profileNeedsUpdate($user),
         ]);
     }
 
@@ -1124,7 +1124,7 @@ class CompatibilityController extends Controller
             'message' => 'Signed in successfully.',
             'user' => $this->mobileUserPayload($user->fresh(), $user->issueApiToken()),
             'is_new_user' => $isNew,
-            'profile_needs_update' => blank($user->first_name) || blank($user->last_name) || blank($user->gender) || blank($user->member_type) || blank($user->country_of_residence) || blank($user->state_county_province) || blank($user->address),
+            'profile_needs_update' => $this->profileNeedsUpdate($user),
         ]);
     }
 
@@ -1332,11 +1332,11 @@ class CompatibilityController extends Controller
             'phone' => ['required', 'string', 'max:80'],
             'gender' => ['required', 'string', 'max:30'],
             'marital_status' => ['nullable', 'string', Rule::in(array_keys(MobileUser::MARITAL_STATUS_OPTIONS))],
-            'group_id' => ['required', 'integer', 'exists:church_groups,id'],
+            'group_id' => ['nullable', 'required_if:member_type,church_member', 'integer', 'exists:church_groups,id'],
             'member_type' => ['required', 'string', 'in:church_member,visitor'],
-            'country_of_residence' => ['required', 'string', 'max:120'],
-            'state_county_province' => ['required', 'string', 'max:120'],
-            'address' => ['required', 'string', 'max:500'],
+            'country_of_residence' => ['nullable', 'required_if:member_type,church_member', 'string', 'max:120'],
+            'state_county_province' => ['nullable', 'required_if:member_type,church_member', 'string', 'max:120'],
+            'address' => ['nullable', 'required_if:member_type,church_member', 'string', 'max:500'],
             'address_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'address_longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'about_me' => ['nullable', 'string'],
@@ -1379,11 +1379,11 @@ class CompatibilityController extends Controller
             'phone' => $validated['phone'],
             'gender' => $validated['gender'],
             'marital_status' => $validated['marital_status'] ?? $user->marital_status,
-            'group_id' => $validated['group_id'],
+            'group_id' => $validated['group_id'] ?? $user->group_id,
             'member_type' => $validated['member_type'],
-            'country_of_residence' => $validated['country_of_residence'],
-            'state_county_province' => $validated['state_county_province'],
-            'address' => $validated['address'],
+            'country_of_residence' => $validated['country_of_residence'] ?? $user->country_of_residence,
+            'state_county_province' => $validated['state_county_province'] ?? $user->state_county_province,
+            'address' => $validated['address'] ?? $user->address,
             'address_latitude' => $validated['address_latitude'] ?? null,
             'address_longitude' => $validated['address_longitude'] ?? null,
             'bio' => $validated['about_me'] ?? null,
@@ -1807,6 +1807,29 @@ class CompatibilityController extends Controller
             'is_published' => (bool) $devotional->is_published,
             'dateInserted' => optional($devotional->created_at)->toDateTimeString(),
         ];
+    }
+
+    private function profileNeedsUpdate(MobileUser $user): bool
+    {
+        $required = [
+            'first_name',
+            'last_name',
+            'phone',
+            'gender',
+            'member_type',
+        ];
+
+        if (str($user->member_type)->trim()->lower()->toString() !== 'visitor') {
+            $required = array_merge($required, [
+                'title',
+                'marital_status',
+                'country_of_residence',
+                'state_county_province',
+                'address',
+            ]);
+        }
+
+        return collect($required)->contains(fn (string $field): bool => blank($user->{$field}));
     }
 
     private function mobileUserPayload(MobileUser $user, ?string $apiToken = null): array

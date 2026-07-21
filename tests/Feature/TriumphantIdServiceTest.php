@@ -82,6 +82,35 @@ class TriumphantIdServiceTest extends TestCase
         );
     }
 
+    public function test_visitors_never_receive_a_triumphant_id_and_lose_one_when_their_status_changes(): void
+    {
+        $visitor = MobileUser::query()->create([
+            'name' => 'Guest Visitor',
+            'email' => 'guest-visitor@example.test',
+            'phone' => '+2348012345678',
+            'password' => 'secret',
+            'gender' => 'female',
+            'member_type' => 'visitor',
+            'is_verified' => true,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->assertNull($visitor->refresh()->triumphant_id);
+        $this->assertNull($visitor->triumphant_id_sequence);
+
+        $member = $this->mobileUser('status-change@example.test', 'Status Change');
+        $this->assertNotNull($member->refresh()->triumphant_id);
+
+        $member->forceFill(['member_type' => 'visitor'])->save();
+
+        $this->assertNull($member->refresh()->triumphant_id);
+        $this->assertNull($member->triumphant_id_sequence);
+
+        $member->forceFill(['member_type' => 'church_member'])->save();
+
+        $this->assertNotNull($member->refresh()->triumphant_id);
+    }
+
     private function mobileUser(string $email, string $name): MobileUser
     {
         return MobileUser::query()->create([

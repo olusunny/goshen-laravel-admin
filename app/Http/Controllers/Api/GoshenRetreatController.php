@@ -4961,17 +4961,22 @@ class GoshenRetreatController extends Controller
     private function profileMissingFields(MobileUser $user): array
     {
         $required = [
-            'title' => 'title',
             'name' => 'full name',
             'email' => 'email address',
             'phone' => 'phone number',
             'gender' => 'gender',
-            'marital_status' => 'marital status',
             'member_type' => 'church member or visitor status',
-            'country_of_residence' => 'country of residence',
-            'state_county_province' => 'state/county/province',
-            'address' => 'address',
         ];
+
+        if (str($user->member_type)->trim()->lower()->toString() !== 'visitor') {
+            $required = array_merge($required, [
+                'title' => 'title',
+                'marital_status' => 'marital status',
+                'country_of_residence' => 'country of residence',
+                'state_county_province' => 'state/county/province',
+                'address' => 'address',
+            ]);
+        }
 
         return collect($required)
             ->filter(fn (string $label, string $field): bool => blank($user->{$field}))

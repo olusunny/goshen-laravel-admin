@@ -52,7 +52,7 @@ class TriumphantIdService
             /** @var MobileUser $locked */
             $locked = MobileUser::query()->lockForUpdate()->findOrFail($user->id);
 
-            if ($locked->is_deleted) {
+            if ($locked->is_deleted || $this->isVisitor($locked)) {
                 return $this->release($locked);
             }
 
@@ -84,6 +84,11 @@ class TriumphantIdService
         ])->saveQuietly();
 
         return $user;
+    }
+
+    private function isVisitor(MobileUser $user): bool
+    {
+        return str($user->member_type)->trim()->lower()->toString() === 'visitor';
     }
 
     /**

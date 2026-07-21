@@ -79,6 +79,26 @@ class GoshenRetreatMemberAuthTest extends TestCase
             ->assertJsonPath('data.user.can_charge_goshen_member_wallet', true);
     }
 
+    public function test_visitor_can_reach_the_goshen_registration_flow_without_member_profile_fields(): void
+    {
+        $visitor = $this->verifiedMember('visitor-goshen@example.test');
+        $visitor->forceFill([
+            'member_type' => 'visitor',
+            'title' => null,
+            'marital_status' => null,
+            'country_of_residence' => null,
+            'state_county_province' => null,
+            'address' => null,
+        ])->save();
+
+        $this->postJson('/api/goshen-retreat/me', [
+            'data' => ['api_token' => $visitor->issueApiToken()],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.user.profile_needs_update', false)
+            ->assertJsonPath('data.user.profile_missing_fields', []);
+    }
+
     public function test_web_profile_update_uploads_avatar_to_shared_mobile_user_profile(): void
     {
         Storage::fake('public');

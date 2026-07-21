@@ -81,13 +81,9 @@ class AppServiceProvider extends ServiceProvider
                 return;
             }
 
-            if ($user->wasChanged('is_deleted')) {
+            if ($user->wasChanged(['is_deleted', 'member_type'])) {
                 try {
-                    if ($user->is_deleted) {
-                        app(TriumphantIdService::class)->release($user);
-                    } else {
-                        app(TriumphantIdService::class)->assignFor($user);
-                    }
+                    app(TriumphantIdService::class)->assignFor($user);
                 } catch (Throwable $exception) {
                     report($exception);
                 }
