@@ -679,10 +679,6 @@ class CompatibilityController extends Controller
     public function mediaTotals(Request $request)
     {
         $data = $this->payload($request) ?: $request->all();
-        if (isset($data['birthday_month_day']) && preg_match('/^(\d{2})-(\d{2})$/', (string) $data['birthday_month_day'], $birthdayParts)) {
-            $data['birthday_month'] = (int) $birthdayParts[1];
-            $data['birthday_day'] = (int) $birthdayParts[2];
-        }
         $media = MediaItem::find($data['media'] ?? $data['media_id'] ?? $data['id'] ?? null);
 
         if (! $media) {
@@ -814,6 +810,7 @@ class CompatibilityController extends Controller
     public function registerUser(Request $request)
     {
         $data = $this->payload($request) ?: $request->all();
+        $this->normalizeBirthdayMonthDay($data);
         validator($data, [
             'email' => ['required', 'email:rfc', 'max:255'],
             'name' => ['required', 'string', 'max:255'],
@@ -834,6 +831,7 @@ class CompatibilityController extends Controller
             'address_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'address_longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'birthday' => ['nullable', 'string', 'max:5'],
+            'birthday_month_day' => ['nullable', 'regex:/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/'],
             'birthday_month' => ['nullable', 'integer', 'between:1,12'],
             'birthday_day' => ['nullable', 'integer', 'between:1,31'],
             'password' => ['required', 'string', 'min:8', 'max:255'],
@@ -1318,10 +1316,7 @@ class CompatibilityController extends Controller
     public function updateProfile(Request $request)
     {
         $data = $this->payload($request) ?: $request->all();
-        if (isset($data['birthday_month_day']) && preg_match('/^(\d{2})-(\d{2})$/', (string) $data['birthday_month_day'], $birthdayParts)) {
-            $data['birthday_month'] = (int) $birthdayParts[1];
-            $data['birthday_day'] = (int) $birthdayParts[2];
-        }
+        $this->normalizeBirthdayMonthDay($data);
         $token = $data['api_token'] ?? $request->bearerToken();
         $user = filled($token)
             ? MobileUser::where('api_token_hash', hash('sha256', $token))->first()
@@ -1362,6 +1357,7 @@ class CompatibilityController extends Controller
             'address_latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'address_longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'birthday' => ['nullable', 'string', 'max:5'],
+            'birthday_month_day' => ['nullable', 'regex:/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/'],
             'birthday_month' => ['nullable', 'integer', 'between:1,12'],
             'birthday_day' => ['nullable', 'integer', 'between:1,31'],
             'about_me' => ['nullable', 'string'],
@@ -2703,6 +2699,20 @@ class CompatibilityController extends Controller
         $url = strtolower($url ?? '');
 
         return str_contains($url, 'youtube.com/') || str_contains($url, 'youtu.be/');
+    }
+
+    private function normalizeBirthdayMonthDay(array &$data): void
+    {
+        if (! array_key_exists('birthday_month_day', $data) || blank($data['birthday_month_day'])) {
+            return;
+        }
+
+        if (! preg_match('/^(\d{2})-(\d{2})$/', (string) $data['birthday_month_day'], $parts)) {
+            return;
+        }
+
+        $data['birthday_month'] = (int) $parts[1];
+        $data['birthday_day'] = (int) $parts[2];
     }
 
     private function streamPayload(Stream $stream): array

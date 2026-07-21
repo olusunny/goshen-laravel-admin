@@ -4118,7 +4118,7 @@
                             <select class="input" name="member_type" required ${user.membership_status_change_locked ? 'disabled' : ''}>${optionMarkup([{ value: 'church_member', label: 'Church member' }, { value: 'visitor', label: 'Visitor' }], user.member_type || 'church_member')}</select>
                             <small class="muted">${escapeHtml(user.membership_status_change_message || 'You can update this status once every 30 days.')}</small>
                         </div>
-                        <div class="field"><label>Birthday (month and day)</label><input class="input" name="birthday_month_day" placeholder="MM-DD" value="${escapeHtml(user.birthday_month_day || '')}" pattern="^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"></div>
+                        <div class="field"><label>Birthday (month and day)</label><input class="input" name="birthday_month_day" inputmode="numeric" maxlength="5" autocomplete="bday" placeholder="MM-DD" value="${escapeHtml(user.birthday_month_day || '')}" pattern="^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$" title="Use MM-DD, for example 07-23."><small class="muted">Use MM-DD only, for example 07-23.</small></div>
                         <div class="field">
                             <label>Church group</label>
                             <select class="input" name="group_id" required>${groupOptionsMarkup(user.group_id)}</select>
