@@ -7,6 +7,7 @@ use App\Models\GoshenAccommodationAllocation;
 use App\Models\GoshenVoucher;
 use App\Models\GoshenVoucherUsage;
 use App\Models\GoshenWallet;
+use App\Models\GoshenWalletLedgerEntry;
 use App\Models\MobileUser;
 use App\Services\GoshenAccommodationEligibility;
 use App\Services\GoshenBookingLifecycleService;
@@ -24,6 +25,7 @@ use chillerlan\QRCode\Output\QROutputInterface;
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -1049,6 +1051,9 @@ class GoshenRetreatController extends Controller
             'event_id' => ['required', 'string'],
             'managed_member_id' => ['nullable', 'integer', 'exists:mobile_users,id'],
             'payment_mode' => ['nullable', 'string', 'in:outright,wallet,voucher'],
+            'admin_authorization' => ['nullable', 'boolean'],
+            'admin_authorization_note' => ['nullable', 'string', 'max:1000'],
+            'member_wallet_charge_key' => ['nullable', 'string', 'min:16', 'max:128', 'regex:/\\A[a-zA-Z0-9_-]+\\z/'],
             'voucher_code' => ['nullable', 'string', 'max:80'],
             'referral_code' => ['nullable', 'string', 'max:32'],
             'ticket_type_id' => ['required', 'string'],
@@ -1107,8 +1112,10 @@ class GoshenRetreatController extends Controller
             ], 422);
         }
 
+        $managedWalletCharge = null;
+
         try {
-            return DB::transaction(function () use ($validated, $actor, $user, $ticketIssuer, $wallets, $walletSecurityResets, $referrals, $vouchers, $availability, $ticketEmails, $request): JsonResponse {
+            return DB::transaction(function () use ($validated, $actor, $user, $ticketIssuer, $wallets, $walletSecurityResets, $referrals, $vouchers, $availability, $ticketEmails, $request, &$managedWalletCharge): JsonResponse {
                 $event = $this->goshenEventsQuery()
                     ->where('public_id', $validated['event_id'])
                     ->where('status', 'published')
@@ -1175,35 +1182,57 @@ class GoshenRetreatController extends Controller
                     ], 422);
                 }
 
-                try {
-                    [$user, $ticketType] = $availability
-                        ->lockAndAssertAvailable($user, $ticketType, $quantity);
-                } catch (ValidationException $exception) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => collect($exception->errors())->flatten()->first()
-                            ?: 'This retreat ticket is no longer available.',
-                        'errors' => $exception->errors(),
-                    ], 422);
-                }
-
                 $paymentMode = in_array(($validated['payment_mode'] ?? ''), ['wallet', 'voucher'], true)
                     ? (string) $validated['payment_mode']
                     : 'outright';
                 $isManagerAssisted = (int) $actor->id !== (int) $user->id;
-                if ($isManagerAssisted && ! in_array($paymentMode, ['voucher'], true)) {
+                $managerWalletAuthorization = null;
+                $memberWalletChargeKey = null;
+                if ($isManagerAssisted && $paymentMode === 'wallet') {
+                    if (! $this->canChargeGoshenMemberWallet($actor)) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Your account is not authorized to charge a member wallet for Goshen Retreat.',
+                        ], 403);
+                    }
+
+                    $authorizationConfirmed = filter_var(
+                        $validated['admin_authorization'] ?? false,
+                        FILTER_VALIDATE_BOOLEAN,
+                    );
+                    $authorizationNote = trim((string) ($validated['admin_authorization_note'] ?? ''));
+
+                    if (! $authorizationConfirmed) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Confirm that the member authorized this wallet charge before continuing.',
+                        ], 422);
+                    }
+
+                    if (str($authorizationNote)->length() < 20) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Record a meaningful member authorization note of at least 20 characters before charging their wallet.',
+                        ], 422);
+                    }
+
+                    $memberWalletChargeKey = trim((string) ($validated['member_wallet_charge_key'] ?? ''));
+                    if ($memberWalletChargeKey === '') {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Provide a unique member wallet charge key before charging this wallet.',
+                        ], 422);
+                    }
+
+                    $managerWalletAuthorization = $this->managerWalletAuthorizationMetadata(
+                        $actor,
+                        $user,
+                        $authorizationNote,
+                    );
+                } elseif ($isManagerAssisted && $paymentMode !== 'voucher') {
                     return response()->json([
                         'status' => 'error',
                         'message' => 'Manager-assisted registrations must be completed with a voucher code.',
-                    ], 422);
-                }
-
-                try {
-                    $referralCode = $referrals->acceptedCodeForReferee($user, $validated['referral_code'] ?? null);
-                } catch (RuntimeException $exception) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => $exception->getMessage(),
                     ], 422);
                 }
 
@@ -1224,6 +1253,67 @@ class GoshenRetreatController extends Controller
                 $discount = $this->payInFullDiscount($event, $ticketSubtotal, (bool) ($validated['apply_pay_in_full_discount'] ?? true));
                 $total = round(max(0, $subtotal - $discount['amount']), 2);
                 $isFreeRegistration = $total <= 0;
+
+                $lockedManagedWallet = null;
+                if ($managerWalletAuthorization !== null) {
+                    $managedWalletCharge = [
+                        'reference' => $this->managedWalletChargeReference($actor, $memberWalletChargeKey),
+                        'key_hash' => hash('sha256', $memberWalletChargeKey),
+                        'request_fingerprint' => $this->managedWalletChargeFingerprint(
+                            $actor,
+                            $user,
+                            $event,
+                            $ticketType,
+                            $quantity,
+                            $total,
+                            $attendees,
+                            $authorizationNote,
+                        ),
+                    ];
+
+                    if ($replayedBooking = $this->replayedManagedWalletChargeBooking(
+                        $managedWalletCharge['reference'],
+                        $managedWalletCharge['request_fingerprint'],
+                    )) {
+                        return $this->managedWalletChargeReplayResponse($replayedBooking);
+                    }
+
+                    $managedWallet = $wallets->walletFor($user);
+                    $lockedManagedWallet = GoshenWallet::query()
+                        ->whereKey($managedWallet->id)
+                        ->lockForUpdate()
+                        ->firstOrFail();
+
+                    if ($replayedBooking = $this->replayedManagedWalletChargeBooking(
+                        $managedWalletCharge['reference'],
+                        $managedWalletCharge['request_fingerprint'],
+                    )) {
+                        return $this->managedWalletChargeReplayResponse($replayedBooking);
+                    }
+
+                    $managerWalletAuthorization['target_wallet_id'] = $lockedManagedWallet->id;
+                }
+
+                try {
+                    [$user, $ticketType] = $availability
+                        ->lockAndAssertAvailable($user, $ticketType, $quantity);
+                } catch (ValidationException $exception) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => collect($exception->errors())->flatten()->first()
+                            ?: 'This retreat ticket is no longer available.',
+                        'errors' => $exception->errors(),
+                    ], 422);
+                }
+
+                try {
+                    $referralCode = $referrals->acceptedCodeForReferee($user, $validated['referral_code'] ?? null);
+                } catch (RuntimeException $exception) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => $exception->getMessage(),
+                    ], 422);
+                }
 
                 if (! $isFreeRegistration && $paymentMode === 'voucher') {
                     $voucherCode = trim((string) ($validated['voucher_code'] ?? ''));
@@ -1255,7 +1345,7 @@ class GoshenRetreatController extends Controller
                         ], 423);
                     }
 
-                    $wallet = $wallets->walletFor($user);
+                    $wallet = $lockedManagedWallet ?? $wallets->walletFor($user);
                     $walletCurrency = strtoupper((string) $wallet->currency);
                     $ticketCurrency = strtoupper((string) $ticketType->currency);
 
@@ -1293,6 +1383,11 @@ class GoshenRetreatController extends Controller
                     'manager_assisted' => $isManagerAssisted,
                 ];
 
+                if ($managerWalletAuthorization !== null) {
+                    $bookingMetadata['manager_wallet_authorization'] = $managerWalletAuthorization;
+                    $bookingMetadata['member_wallet_charge'] = $managedWalletCharge;
+                }
+
                 if ($referralCode) {
                     $bookingMetadata = array_merge($bookingMetadata, [
                         'referral_code' => $referralCode->code,
@@ -1317,6 +1412,19 @@ class GoshenRetreatController extends Controller
                     'payment_expires_at' => $isFreeRegistration ? null : now()->addDay(),
                     'metadata' => $bookingMetadata,
                 ]);
+
+                if ($managerWalletAuthorization !== null) {
+                    $managerWalletAuthorization = array_merge($managerWalletAuthorization, [
+                        'booking_id' => $booking->id,
+                        'booking_public_id' => $booking->public_id,
+                        'booking_reference' => $booking->public_id,
+                    ]);
+                    $booking->forceFill([
+                        'metadata' => array_merge($booking->metadata ?? [], [
+                            'manager_wallet_authorization' => $managerWalletAuthorization,
+                        ]),
+                    ])->save();
+                }
 
                 BookingLine::query()->create([
                     'booking_id' => $booking->id,
@@ -1380,7 +1488,7 @@ class GoshenRetreatController extends Controller
                         throw new RuntimeException('Your wallet balance is not enough to complete this registration.');
                     }
 
-                    $reference = 'gw_retreat_'.Str::ulid();
+                    $reference = $managedWalletCharge['reference'] ?? 'gw_retreat_'.Str::ulid();
                     $wallet->forceFill([
                         'balance' => round(((float) $wallet->balance) - $total, 2),
                     ])->save();
@@ -1398,7 +1506,12 @@ class GoshenRetreatController extends Controller
                             'event_name' => $booking->event?->name,
                             'request_ip' => $request->ip(),
                             'request_user_agent' => $request->userAgent(),
-                        ],
+                        ] + ($managerWalletAuthorization !== null ? [
+                            'manager_wallet_authorization' => array_merge($managerWalletAuthorization, [
+                                'target_wallet_id' => $wallet->id,
+                            ]),
+                            'member_wallet_charge' => $managedWalletCharge,
+                        ] : []),
                         'settled_at' => now(),
                     ]);
 
@@ -1470,8 +1583,26 @@ class GoshenRetreatController extends Controller
                     'booking' => $this->bookingPayload($booking),
                 ]);
             });
+        } catch (UniqueConstraintViolationException $exception) {
+            if ($managedWalletCharge !== null) {
+                try {
+                    if ($replayedBooking = $this->replayedManagedWalletChargeBooking(
+                        $managedWalletCharge['reference'],
+                        $managedWalletCharge['request_fingerprint'],
+                    )) {
+                        return $this->managedWalletChargeReplayResponse($replayedBooking);
+                    }
+                } catch (RuntimeException $replayException) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => $replayException->getMessage(),
+                    ], 422);
+                }
+            }
+
+            throw $exception;
         } catch (RuntimeException $exception) {
-            if (($validated['payment_mode'] ?? null) === 'voucher') {
+            if (($validated['payment_mode'] ?? null) === 'voucher' || $managedWalletCharge !== null) {
                 return response()->json([
                     'status' => 'error',
                     'message' => $exception->getMessage(),
@@ -4385,6 +4516,132 @@ class GoshenRetreatController extends Controller
     private function canManageScanners(MobileUser $user): bool
     {
         return $this->canViewScannerDemographics($user);
+    }
+
+    private function managedWalletChargeReference(MobileUser $actor, string $chargeKey): string
+    {
+        return 'gw_managed_'.hash('sha256', $actor->id.'|'.$chargeKey);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $attendees
+     */
+    private function managedWalletChargeFingerprint(
+        MobileUser $actor,
+        MobileUser $member,
+        Event $event,
+        EventTicketType $ticketType,
+        int $quantity,
+        float $total,
+        array $attendees,
+        string $authorizationNote,
+    ): string {
+        $payload = [
+            'version' => 1,
+            'actor_mobile_user_id' => $actor->id,
+            'member_mobile_user_id' => $member->id,
+            'event_public_id' => $event->public_id,
+            'ticket_type_public_id' => $ticketType->public_id,
+            'quantity' => $quantity,
+            'currency' => strtoupper((string) $ticketType->currency),
+            'total' => number_format($total, 2, '.', ''),
+            'attendees' => $attendees,
+            'authorization_note' => $authorizationNote,
+        ];
+
+        return hash('sha256', (string) json_encode(
+            $payload,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION,
+        ));
+    }
+
+    private function replayedManagedWalletChargeBooking(string $reference, string $requestFingerprint): ?Booking
+    {
+        $ledgerEntry = GoshenWalletLedgerEntry::query()
+            ->where('provider_reference', $reference)
+            ->first();
+
+        if (! $ledgerEntry) {
+            return null;
+        }
+
+        $chargeMetadata = data_get($ledgerEntry->metadata, 'member_wallet_charge');
+        $storedFingerprint = is_array($chargeMetadata)
+            ? (string) ($chargeMetadata['request_fingerprint'] ?? '')
+            : '';
+
+        if ($storedFingerprint === '' || ! hash_equals($storedFingerprint, $requestFingerprint)) {
+            throw new RuntimeException('This member wallet charge key has already been used for a different registration request.');
+        }
+
+        $bookingId = data_get($ledgerEntry->metadata, 'booking_id');
+        $booking = $bookingId
+            ? Booking::query()
+                ->with(['event', 'lines.ticketType', 'attendees', 'installments', 'tickets.event', 'tickets.booking', 'tickets.attendee', 'tickets.ticketType'])
+                ->find($bookingId)
+            : null;
+
+        if (! $booking || ($booking->status?->value ?? $booking->status) !== BookingStatus::Paid->value) {
+            throw new RuntimeException('The original member wallet charge has not completed. Please do not reuse this charge key.');
+        }
+
+        return $booking;
+    }
+
+    private function managedWalletChargeReplayResponse(Booking $booking): JsonResponse
+    {
+        return response()->json([
+            'status' => 'ok',
+            'message' => 'This Goshen Retreat registration was already confirmed from the member wallet.',
+            'idempotent_replay' => true,
+            'booking' => $this->bookingPayload($booking),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function managerWalletAuthorizationMetadata(
+        MobileUser $actor,
+        MobileUser $member,
+        string $authorizationNote,
+    ): array {
+        return [
+            'confirmed' => true,
+            'authorization_note' => $authorizationNote,
+            'recorded_at' => now()->toIso8601String(),
+            'actor' => [
+                'mobile_user_id' => $actor->id,
+                'triumphant_id' => $actor->triumphant_id,
+                'name' => $actor->name,
+                'email' => $actor->email,
+            ],
+            'target_member' => [
+                'mobile_user_id' => $member->id,
+                'triumphant_id' => $member->triumphant_id,
+                'name' => $member->name,
+                'email' => $member->email,
+            ],
+        ];
+    }
+
+    private function canChargeGoshenMemberWallet(MobileUser $user): bool
+    {
+        if (! $user->canUseCommunity()) {
+            return false;
+        }
+
+        if ($user->can('charge_goshen_member_wallet')) {
+            return true;
+        }
+
+        return $user->roles()
+            ->pluck('name')
+            ->contains(fn ($role): bool => in_array(
+                str($role)->lower()->replaceMatches('/[^a-z]/', '')->toString(),
+                ['admin', 'superadmin'],
+                true,
+            ));
     }
 
     private function canManageGoshenRegistration(MobileUser $user): bool

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AppSetting;
+use App\Models\GoshenWallet;
 use App\Models\GoshenVoucher;
 use App\Models\GoshenVoucherUsage;
 use App\Models\MobileUser;
@@ -23,6 +24,7 @@ use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentTransaction;
 use Personal\EventInstallments\Models\Ticket;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -568,6 +570,234 @@ class GoshenVoucherApiTest extends TestCase
         $this->assertSame(true, $booking->metadata['manager_assisted'] ?? null);
     }
 
+    public function test_manager_cannot_charge_a_member_wallet_without_recording_authorization(): void
+    {
+        $manager = $this->walletChargeManager('wallet-charge-manager-missing-auth@example.test');
+        $member = $this->verifiedMember('wallet-charge-member-missing-auth@example.test');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 300);
+        $wallet = GoshenWallet::query()->updateOrCreate([
+            'mobile_user_id' => $member->id,
+        ], [
+            'currency' => 'NGN',
+            'balance' => 300,
+        ]);
+
+        $this->postJson('/api/goshen-retreat/bookings', [
+            'data' => $this->bookingPayload($manager->issueApiToken(), $event, $ticketType, [
+                'managed_member_id' => $member->id,
+                'payment_mode' => 'wallet',
+                'member_wallet_charge_key' => 'wallet-charge-missing-auth-2026',
+            ]),
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Confirm that the member authorized this wallet charge before continuing.');
+
+        $this->assertSame('300.00', $wallet->fresh()->balance);
+        $this->assertSame(0, Booking::query()->where('customer_id', $member->id)->count());
+    }
+
+    public function test_manager_cannot_charge_a_member_wallet_without_a_meaningful_authorization_note(): void
+    {
+        $manager = $this->walletChargeManager('wallet-charge-manager-missing-note@example.test');
+        $member = $this->verifiedMember('wallet-charge-member-missing-note@example.test');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 300);
+        $wallet = GoshenWallet::query()->updateOrCreate([
+            'mobile_user_id' => $member->id,
+        ], [
+            'currency' => 'NGN',
+            'balance' => 300,
+        ]);
+
+        $this->postJson('/api/goshen-retreat/bookings', [
+            'data' => $this->bookingPayload($manager->issueApiToken(), $event, $ticketType, [
+                'managed_member_id' => $member->id,
+                'payment_mode' => 'wallet',
+                'member_wallet_charge_key' => 'wallet-charge-missing-note-2026',
+                'admin_authorization' => true,
+                'admin_authorization_note' => 'Approved',
+            ]),
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Record a meaningful member authorization note of at least 20 characters before charging their wallet.');
+
+        $this->assertSame('300.00', $wallet->fresh()->balance);
+        $this->assertSame(0, Booking::query()->where('customer_id', $member->id)->count());
+    }
+
+    public function test_manager_can_charge_a_member_wallet_with_an_auditable_authorization_record(): void
+    {
+        $manager = $this->walletChargeManager('wallet-charge-manager@example.test');
+        $member = $this->verifiedMember('wallet-charge-member@example.test', 'Wallet Member', '+2348011112988');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 300);
+        $wallet = GoshenWallet::query()->updateOrCreate([
+            'mobile_user_id' => $member->id,
+        ], [
+            'currency' => 'NGN',
+            'balance' => 300,
+        ]);
+        $authorizationNote = 'Member confirmed this retreat wallet payment by telephone.';
+
+        $this->postJson('/api/goshen-retreat/bookings', [
+            'data' => $this->bookingPayload($manager->issueApiToken(), $event, $ticketType, [
+                'managed_member_id' => $member->id,
+                'payment_mode' => 'wallet',
+                'member_wallet_charge_key' => 'wallet-charge-audit-2026',
+                'admin_authorization' => true,
+                'admin_authorization_note' => $authorizationNote,
+            ]),
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('booking.status', BookingStatus::Paid->value)
+            ->assertJsonPath('booking.payment_mode', 'wallet');
+
+        $booking = Booking::query()->where('customer_id', $member->id)->sole();
+        $bookingAudit = $booking->metadata['manager_wallet_authorization'] ?? [];
+        $chargeAudit = $booking->metadata['member_wallet_charge'] ?? [];
+        $ledgerEntry = $wallet->fresh()->ledgerEntries()->sole();
+        $ledgerAudit = $ledgerEntry->metadata['manager_wallet_authorization'] ?? [];
+
+        $this->assertSame('0.00', $wallet->fresh()->balance);
+        $this->assertSame(true, $bookingAudit['confirmed'] ?? null);
+        $this->assertSame($authorizationNote, $bookingAudit['authorization_note'] ?? null);
+        $this->assertSame($manager->id, $bookingAudit['actor']['mobile_user_id'] ?? null);
+        $this->assertSame($member->id, $bookingAudit['target_member']['mobile_user_id'] ?? null);
+        $this->assertSame($wallet->id, $bookingAudit['target_wallet_id'] ?? null);
+        $this->assertSame($booking->public_id, $bookingAudit['booking_reference'] ?? null);
+        $this->assertNotEmpty($bookingAudit['recorded_at'] ?? null);
+        $this->assertSame('gw_managed_'.hash('sha256', $manager->id.'|wallet-charge-audit-2026'), $chargeAudit['reference'] ?? null);
+        $this->assertNotEmpty($chargeAudit['key_hash'] ?? null);
+        $this->assertNotEmpty($chargeAudit['request_fingerprint'] ?? null);
+        $this->assertSame($bookingAudit, $ledgerAudit);
+        $this->assertTrue(PaymentTransaction::query()
+            ->where('booking_id', $booking->id)
+            ->where('gateway', 'wallet')
+            ->where('status', 'paid')
+            ->exists());
+    }
+
+    public function test_event_manager_cannot_charge_a_member_wallet_even_with_recorded_authorization(): void
+    {
+        $manager = $this->manager('wallet-charge-unprivileged-manager@example.test');
+        $member = $this->verifiedMember('wallet-charge-unprivileged-member@example.test');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 300);
+        $wallet = GoshenWallet::query()->updateOrCreate([
+            'mobile_user_id' => $member->id,
+        ], [
+            'currency' => 'NGN',
+            'balance' => 300,
+        ]);
+
+        $this->postJson('/api/goshen-retreat/bookings', [
+            'data' => $this->bookingPayload($manager->issueApiToken(), $event, $ticketType, [
+                'managed_member_id' => $member->id,
+                'payment_mode' => 'wallet',
+                'member_wallet_charge_key' => 'wallet-charge-unprivileged-2026',
+                'admin_authorization' => true,
+                'admin_authorization_note' => 'Member confirmed this retreat wallet payment by telephone.',
+            ]),
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('message', 'Your account is not authorized to charge a member wallet for Goshen Retreat.');
+
+        $this->assertSame('300.00', $wallet->fresh()->balance);
+        $this->assertSame(0, Booking::query()->where('customer_id', $member->id)->count());
+    }
+
+    public function test_admin_can_charge_a_member_wallet_without_the_dedicated_permission(): void
+    {
+        $admin = $this->verifiedMember('wallet-charge-admin@example.test', 'Wallet Charge Admin', '+2348011112991');
+        $admin->assignRole(Role::findOrCreate('admin', 'mobile'));
+        $member = $this->verifiedMember('wallet-charge-admin-member@example.test');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 300);
+        $wallet = GoshenWallet::query()->updateOrCreate([
+            'mobile_user_id' => $member->id,
+        ], [
+            'currency' => 'NGN',
+            'balance' => 300,
+        ]);
+
+        $this->postJson('/api/goshen-retreat/bookings', [
+            'data' => $this->bookingPayload($admin->issueApiToken(), $event, $ticketType, [
+                'managed_member_id' => $member->id,
+                'payment_mode' => 'wallet',
+                'member_wallet_charge_key' => 'wallet-charge-admin-2026',
+                'admin_authorization' => true,
+                'admin_authorization_note' => 'Member confirmed this retreat wallet payment by telephone.',
+            ]),
+        ])
+            ->assertOk()
+            ->assertJsonPath('booking.status', BookingStatus::Paid->value);
+
+        $this->assertSame('0.00', $wallet->fresh()->balance);
+    }
+
+    public function test_managed_wallet_charge_replays_the_existing_paid_booking_for_the_same_key_and_fingerprint(): void
+    {
+        $manager = $this->walletChargeManager('wallet-charge-replay-manager@example.test');
+        $member = $this->verifiedMember('wallet-charge-replay-member@example.test');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 300);
+        $wallet = GoshenWallet::query()->updateOrCreate([
+            'mobile_user_id' => $member->id,
+        ], [
+            'currency' => 'NGN',
+            'balance' => 300,
+        ]);
+        $payload = $this->bookingPayload($manager->issueApiToken(), $event, $ticketType, [
+            'managed_member_id' => $member->id,
+            'payment_mode' => 'wallet',
+            'member_wallet_charge_key' => 'wallet-charge-replay-2026',
+            'admin_authorization' => true,
+            'admin_authorization_note' => 'Member confirmed this retreat wallet payment by telephone.',
+        ]);
+
+        $first = $this->postJson('/api/goshen-retreat/bookings', ['data' => $payload])
+            ->assertOk()
+            ->assertJsonPath('booking.status', BookingStatus::Paid->value);
+
+        $this->postJson('/api/goshen-retreat/bookings', ['data' => $payload])
+            ->assertOk()
+            ->assertJsonPath('idempotent_replay', true)
+            ->assertJsonPath('booking.public_id', $first->json('booking.public_id'));
+
+        $this->assertSame('0.00', $wallet->fresh()->balance);
+        $this->assertSame(1, $wallet->fresh()->ledgerEntries()->count());
+        $this->assertSame(1, Booking::query()->where('customer_id', $member->id)->count());
+    }
+
+    public function test_managed_wallet_charge_rejects_reusing_a_key_for_a_different_request(): void
+    {
+        $manager = $this->walletChargeManager('wallet-charge-key-reuse-manager@example.test');
+        $member = $this->verifiedMember('wallet-charge-key-reuse-member@example.test');
+        [$event, $ticketType] = $this->publishedRetreatEvent(price: 300);
+        $wallet = GoshenWallet::query()->updateOrCreate([
+            'mobile_user_id' => $member->id,
+        ], [
+            'currency' => 'NGN',
+            'balance' => 300,
+        ]);
+        $payload = $this->bookingPayload($manager->issueApiToken(), $event, $ticketType, [
+            'managed_member_id' => $member->id,
+            'payment_mode' => 'wallet',
+            'member_wallet_charge_key' => 'wallet-charge-key-reuse-2026',
+            'admin_authorization' => true,
+            'admin_authorization_note' => 'Member confirmed this retreat wallet payment by telephone.',
+        ]);
+
+        $this->postJson('/api/goshen-retreat/bookings', ['data' => $payload])
+            ->assertOk();
+
+        $payload['admin_authorization_note'] = 'Member confirmed a different retreat wallet payment by telephone.';
+
+        $this->postJson('/api/goshen-retreat/bookings', ['data' => $payload])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'This member wallet charge key has already been used for a different registration request.');
+
+        $this->assertSame('0.00', $wallet->fresh()->balance);
+        $this->assertSame(1, $wallet->fresh()->ledgerEntries()->count());
+        $this->assertSame(1, Booking::query()->where('customer_id', $member->id)->count());
+    }
+
     private function voucherCode(Event $event, float $amount): string
     {
         $created = app(GoshenVoucherService::class)->createVoucher([
@@ -586,6 +816,15 @@ class GoshenVoucherApiTest extends TestCase
         $manager = $this->verifiedMember($email, 'Voucher Manager', '+2348011119999');
         Role::findOrCreate('event_manager', 'mobile');
         $manager->assignRole('event_manager');
+
+        return $manager;
+    }
+
+    private function walletChargeManager(string $email): MobileUser
+    {
+        $manager = $this->manager($email);
+        Permission::findOrCreate('charge_goshen_member_wallet', 'mobile');
+        $manager->givePermissionTo('charge_goshen_member_wallet');
 
         return $manager;
     }
