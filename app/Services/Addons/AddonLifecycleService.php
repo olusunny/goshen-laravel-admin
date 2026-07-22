@@ -147,7 +147,8 @@ class AddonLifecycleService
             if ($wasActive) {
                 $this->activate($addon->fresh(), $admin);
             } else {
-                $this->clearCaches($addon->fresh(), $admin);
+                $this->runtimeLoader->registerAddon($manifest, $installPath);
+                $this->runSetupTasks($addon->fresh(), $manifest, $installPath, $admin);
                 $this->runtimeLoader->refreshActiveAddonCache();
             }
 

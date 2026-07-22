@@ -96,6 +96,47 @@ class AddonLifecycleActivationTest extends TestCase
         ]);
     }
 
+    public function test_dormant_addon_update_runs_setup_tasks_before_remaining_installed(): void
+    {
+        $manifest = $this->manifest([
+            'version' => '1.0.1',
+            'activate_on_install' => false,
+            'migrations_path' => 'database/migrations',
+        ]);
+        $installPath = $this->installRoot.'/church-tools.test-addon';
+        File::ensureDirectoryExists($installPath);
+        File::put($installPath.'/addon.json', '{}');
+
+        $addon = Addon::query()->create([
+            'package_key' => 'church-tools.test-addon',
+            'name' => 'Test Add-on',
+            'installed_version' => '1.0.0',
+            'status' => Addon::STATUS_INSTALLED,
+            'manifest' => $this->manifest(['activate_on_install' => false]),
+            'install_path' => $installPath,
+        ]);
+
+        Artisan::shouldReceive('call')
+            ->once()
+            ->with('migrate', [
+                '--path' => 'addons/testing-lifecycle/church-tools.test-addon/database/migrations',
+                '--force' => true,
+            ])
+            ->andReturn(0);
+        Artisan::shouldReceive('call')->once()->with('optimize:clear', [])->andReturn(0);
+        Artisan::shouldReceive('output')->twice()->andReturn('');
+
+        $updated = $this->service($manifest)->installFromZip('test-addon.zip');
+
+        $this->assertSame(Addon::STATUS_INSTALLED, $updated->status);
+        $this->assertSame('1.0.1', $updated->installed_version);
+        $this->assertDatabaseHas('addon_install_logs', [
+            'addon_id' => $addon->id,
+            'action' => 'migrate',
+            'status' => 'successful',
+        ]);
+    }
+
     /**
      * @param array<string, mixed> $manifest
      */

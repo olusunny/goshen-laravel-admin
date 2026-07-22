@@ -10,7 +10,8 @@ return new class extends Migration {
         Schema::create('prayer_attendance_sessions', function (Blueprint $table): void {
             $table->id();
             $table->ulid('public_id')->unique();
-            $table->foreignId('event_id')->constrained('ei_events')->restrictOnDelete();
+            $table->foreignId('event_id');
+            $table->foreign('event_id', 'pa_session_event_fk')->references('id')->on('ei_events')->restrictOnDelete();
             $table->string('name');
             $table->text('description')->nullable();
             $table->timestamp('scheduled_starts_at')->nullable();
@@ -35,9 +36,12 @@ return new class extends Migration {
 
         Schema::create('prayer_attendance_confirmations', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('prayer_session_id')->constrained('prayer_attendance_sessions')->cascadeOnDelete();
-            $table->foreignId('ticket_id')->constrained('ei_tickets')->restrictOnDelete();
-            $table->foreignId('attendee_id')->nullable()->constrained('ei_attendees')->nullOnDelete();
+            $table->foreignId('prayer_session_id');
+            $table->foreign('prayer_session_id', 'pa_confirm_session_fk')->references('id')->on('prayer_attendance_sessions')->cascadeOnDelete();
+            $table->foreignId('ticket_id');
+            $table->foreign('ticket_id', 'pa_confirm_ticket_fk')->references('id')->on('ei_tickets')->restrictOnDelete();
+            $table->foreignId('attendee_id')->nullable();
+            $table->foreign('attendee_id', 'pa_confirm_attendee_fk')->references('id')->on('ei_attendees')->nullOnDelete();
             $table->string('method', 40)->index();
             $table->unsignedBigInteger('recorded_by_mobile_user_id')->nullable()->index();
             $table->timestamp('confirmed_at')->index();
@@ -54,8 +58,10 @@ return new class extends Migration {
 
         Schema::create('prayer_attendance_notification_deliveries', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('prayer_session_id')->constrained('prayer_attendance_sessions')->cascadeOnDelete();
-            $table->foreignId('ticket_id')->constrained('ei_tickets')->cascadeOnDelete();
+            $table->foreignId('prayer_session_id');
+            $table->foreign('prayer_session_id', 'pa_delivery_session_fk')->references('id')->on('prayer_attendance_sessions')->cascadeOnDelete();
+            $table->foreignId('ticket_id');
+            $table->foreign('ticket_id', 'pa_delivery_ticket_fk')->references('id')->on('ei_tickets')->cascadeOnDelete();
             $table->unsignedBigInteger('mobile_user_id')->nullable()->index();
             $table->string('kind', 30)->index();
             $table->timestamp('claimed_at')->nullable();
@@ -68,7 +74,8 @@ return new class extends Migration {
 
         Schema::create('prayer_attendance_audits', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('prayer_session_id')->constrained('prayer_attendance_sessions')->cascadeOnDelete();
+            $table->foreignId('prayer_session_id');
+            $table->foreign('prayer_session_id', 'pa_audit_session_fk')->references('id')->on('prayer_attendance_sessions')->cascadeOnDelete();
             $table->unsignedBigInteger('actor_mobile_user_id')->nullable()->index();
             $table->string('action', 80)->index();
             $table->json('metadata')->nullable();
