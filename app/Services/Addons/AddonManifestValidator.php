@@ -56,6 +56,8 @@ class AddonManifestValidator
 
         $this->validateOptionalRelativePath($manifest, 'migrations_path');
         $this->validateSeeders($manifest, $namespace);
+        $this->validateActivateOnInstall($manifest);
+        $this->validateCapabilities($manifest);
 
         $this->assertCompatible(
             (string) ($manifest['minimum_php'] ?? config('addons.compatibility.minimum_php')),
@@ -117,6 +119,60 @@ class AddonManifestValidator
         foreach ($seeders as $seeder) {
             if (! is_string($seeder) || ! str_starts_with($seeder, $namespace)) {
                 throw new RuntimeException('Every manifest seeder must be inside the add-on namespace.');
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     */
+    private function validateActivateOnInstall(array $manifest): void
+    {
+        if (! array_key_exists('activate_on_install', $manifest)) {
+            return;
+        }
+
+        if (! is_bool($manifest['activate_on_install'])) {
+            throw new RuntimeException('The manifest activate_on_install field must be a boolean.');
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     */
+    private function validateCapabilities(array $manifest): void
+    {
+        if (! array_key_exists('capabilities', $manifest)) {
+            return;
+        }
+
+        $capabilities = $manifest['capabilities'];
+        if (! is_array($capabilities) || array_is_list($capabilities)) {
+            throw new RuntimeException('The manifest capabilities field must map each capability key to its permission mapping.');
+        }
+
+        foreach ($capabilities as $key => $definition) {
+            if (! is_string($key) || ! preg_match('/^[a-z0-9][a-z0-9._-]*$/', $key)) {
+                throw new RuntimeException('Every manifest capability key must use lowercase letters, numbers, dots, dashes, or underscores.');
+            }
+
+            if (! is_array($definition) || array_is_list($definition)) {
+                throw new RuntimeException("The manifest capability [{$key}] must define a permission mapping.");
+            }
+
+            $permissions = $definition['permissions'] ?? [];
+            if (! is_array($permissions) || ! array_is_list($permissions)) {
+                throw new RuntimeException("The manifest capability [{$key}] permissions field must be a list.");
+            }
+
+            foreach ($permissions as $permission) {
+                if (! is_string($permission) || ! preg_match('/^[a-z0-9][a-z0-9._-]*$/', $permission)) {
+                    throw new RuntimeException("The manifest capability [{$key}] contains an invalid permission.");
+                }
+            }
+
+            if (count(array_unique($permissions)) !== count($permissions)) {
+                throw new RuntimeException("The manifest capability [{$key}] contains duplicate permissions.");
             }
         }
     }

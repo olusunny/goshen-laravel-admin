@@ -70,9 +70,12 @@ class AddonLifecycleService
                 ],
             );
 
-            $this->runtimeLoader->registerAddon($manifest, $installPath);
-            $this->runSetupTasks($addon, $manifest, $installPath, $admin);
-            $this->activate($addon->fresh(), $admin);
+            if ($this->activateOnInstall($manifest)) {
+                $this->activate($addon->fresh(), $admin);
+            } else {
+                $this->runtimeLoader->refreshActiveAddonCache();
+                $this->log($addon, $packageKey, 'install', 'successful', 'Add-on installed and awaiting explicit activation.', [], $admin);
+            }
 
             return $addon->fresh();
         });
@@ -141,9 +144,6 @@ class AddonLifecycleService
                 'updated_by' => $admin?->id,
             ])->save();
 
-            $this->runtimeLoader->registerAddon($manifest, $installPath);
-            $this->runSetupTasks($addon->fresh(), $manifest, $installPath, $admin);
-
             if ($wasActive) {
                 $this->activate($addon->fresh(), $admin);
             } else {
@@ -171,6 +171,15 @@ class AddonLifecycleService
 
     public function activate(Addon $addon, ?User $admin = null): Addon
     {
+        $manifest = is_array($addon->manifest) ? $addon->manifest : [];
+        $installPath = (string) $addon->install_path;
+        if ($manifest === [] || $installPath === '') {
+            throw new RuntimeException('The add-on package files or manifest are unavailable for activation.');
+        }
+
+        $this->runtimeLoader->registerAddon($manifest, $installPath);
+        $this->runSetupTasks($addon, $manifest, $installPath, $admin);
+
         $addon->forceFill([
             'status' => Addon::STATUS_ACTIVE,
             'activated_by' => $admin?->id,
@@ -183,6 +192,17 @@ class AddonLifecycleService
         $this->runtimeLoader->refreshActiveAddonCache();
 
         return $addon->fresh();
+    }
+
+    /**
+     * Existing manifests predate this field and must keep their install-and-activate behavior.
+     *
+     * @param array<string, mixed> $manifest
+     */
+    private function activateOnInstall(array $manifest): bool
+    {
+        return ! array_key_exists('activate_on_install', $manifest)
+            || $manifest['activate_on_install'] === true;
     }
 
     public function deactivate(Addon $addon, ?User $admin = null): Addon

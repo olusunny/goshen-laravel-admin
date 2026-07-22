@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\PrayerPointController;
 use App\Http\Controllers\Api\RetiredFeatureController;
 use App\Http\Controllers\Api\TestimonyController;
 use App\Http\Controllers\Api\V1\AdminCommunityPrayerRequestController;
+use App\Http\Controllers\Api\V1\AddonCapabilityController;
 use App\Http\Controllers\Api\V1\CommunityPrayerRequestController;
 use Illuminate\Support\Facades\Route;
 
@@ -315,6 +316,9 @@ Route::prefix('v1')->group(function () {
     Route::get('health', [CompatibilityController::class, 'health']);
     Route::get('app/splash-media', [AppSplashMediaController::class, 'show'])
         ->middleware('throttle:60,1');
+
+    Route::get('mobile/capabilities', [AddonCapabilityController::class, 'index'])
+        ->middleware(['auth:mobile', 'throttle:60,1']);
 
     Route::middleware('auth:mobile')->prefix('prayer-community')->group(function () {
         Route::get('requests', [CommunityPrayerRequestController::class, 'index']);

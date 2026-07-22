@@ -53,6 +53,45 @@ class AddonManifestValidatorTest extends TestCase
         $this->validator()->validate($manifest);
     }
 
+    public function test_activate_on_install_must_be_a_boolean_when_present(): void
+    {
+        $manifest = $this->manifest(['activate_on_install' => 'false']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('activate_on_install');
+
+        $this->validator()->validate($manifest);
+    }
+
+    public function test_capability_permission_mappings_are_validated(): void
+    {
+        $manifest = $this->manifest([
+            'capabilities' => [
+                'prayer_session_attendance' => [
+                    'permissions' => ['attendance.scan', 'attendance.coordinate'],
+                ],
+            ],
+        ]);
+
+        $validated = $this->validator()->validate($manifest);
+
+        $this->assertSame(['attendance.scan', 'attendance.coordinate'], $validated['capabilities']['prayer_session_attendance']['permissions']);
+    }
+
+    public function test_capability_permission_mappings_reject_invalid_values(): void
+    {
+        $manifest = $this->manifest([
+            'capabilities' => [
+                'Prayer attendance' => ['permissions' => ['attendance.scan']],
+            ],
+        ]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('capability key');
+
+        $this->validator()->validate($manifest);
+    }
+
     private function validator(): AddonManifestValidator
     {
         return new AddonManifestValidator();

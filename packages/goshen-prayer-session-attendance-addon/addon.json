@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "package_key": "prayer_session_attendance",
+  "composer_name": "church-tools/goshen-prayer-session-attendance-addon",
+  "name": "Goshen Prayer Session Attendance",
+  "description": "Respectful, session-based prayer attendance confirmation for eligible Goshen Retreat tickets.",
+  "version": "1.0.0",
+  "minimum_php": "8.2",
+  "minimum_laravel": "12.0",
+  "maximum_laravel": null,
+  "provider": "ChurchTools\\GoshenPrayerAttendance\\PrayerSessionAttendanceServiceProvider",
+  "namespace": "ChurchTools\\GoshenPrayerAttendance\\",
+  "autoload_psr4": {
+    "ChurchTools\\GoshenPrayerAttendance\\": "src/"
+  },
+  "api_route_prefix": "api/v1/prayer-session-attendance",
+  "config_key": "prayer-attendance",
+  "migrations_path": "database/migrations",
+  "permissions": [
+    "prayer_session_attendance.view",
+    "prayer_session_attendance.confirm",
+    "prayer_session_attendance.coordinate",
+    "prayer_session_attendance.report",
+    "prayer_session_attendance.correct",
+    "prayer_session_attendance.admin"
+  ],
+  "capabilities": {
+    "prayer_session_attendance": {
+      "permissions": [
+        "prayer_session_attendance.view",
+        "prayer_session_attendance.confirm",
+        "prayer_session_attendance.coordinate",
+        "prayer_session_attendance.report",
+        "prayer_session_attendance.correct",
+        "prayer_session_attendance.admin"
+      ]
+    }
+  },
+  "activate_on_install": false,
+  "supports_disable": true,
+  "supports_uninstall": true,
+  "supports_update": true
+}
