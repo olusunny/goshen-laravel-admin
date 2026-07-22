@@ -1715,7 +1715,6 @@
             <p id="profileCompletionNoticeDescription">We will keep your retreat registration ready for you, then bring you straight back here to complete it.</p>
             <div class="profile-completion-notice-actions">
                 <button class="button dark" type="button" data-profile-completion-action="complete">Complete my profile</button>
-                <button class="button outline" type="button" data-profile-completion-action="dismiss">I will do this later</button>
             </div>
         </div>
     </div>
@@ -4301,7 +4300,7 @@
                             <select class="input" name="member_type" required ${user.membership_status_change_locked ? 'disabled' : ''}>${optionMarkup([{ value: 'church_member', label: 'Church member' }, { value: 'visitor', label: 'Visitor' }], user.member_type || 'church_member')}</select>
                             <small class="muted">${escapeHtml(user.membership_status_change_message || 'You can update this status once every 30 days.')}</small>
                         </div>
-                        <div class="field"><label for="profileBirthdayMonthDay">Birthday (month and day)</label><input class="input" id="profileBirthdayMonthDay" name="birthday_month_day" type="text" inputmode="numeric" maxlength="5" autocomplete="bday" placeholder="MM-DD" value="${escapeHtml(user.birthday_month_day || '')}" pattern="^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$" title="Use MM-DD, for example 07-23." aria-describedby="profileBirthdayMonthDayHint"><small class="muted" id="profileBirthdayMonthDayHint">Enter month and day as MM-DD, for example 07-23. We would love to celebrate your birthday with you.</small></div>
+                        <div class="field"><label for="profileBirthdayMonthDay">Birthday (month and day)</label><input class="input" id="profileBirthdayMonthDay" name="birthday_month_day" type="text" inputmode="numeric" maxlength="5" autocomplete="bday" placeholder="MM-DD" value="${escapeHtml(user.birthday_month_day || '')}" pattern="^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$" title="Use MM-DD, for example 07-23." aria-describedby="profileBirthdayMonthDayHint" required><small class="muted" id="profileBirthdayMonthDayHint">Enter month and day as MM-DD, for example 07-23. We would love to celebrate your birthday with you.</small></div>
                         <div class="field">
                             <label>Church group</label>
                             <select class="input" name="group_id" required>${groupOptionsMarkup(user.group_id)}</select>
@@ -4582,9 +4581,7 @@
             if (!action) return;
             if (action.dataset.profileCompletionAction === 'complete') {
                 beginProfileCompletion(document.querySelector('.registration-form'));
-                return;
             }
-            closeProfileCompletionNotice({ markSeen: true });
         });
 
         document.getElementById('openDrawer').addEventListener('click', openDrawer);
@@ -4614,7 +4611,8 @@
             }
             if (event.key !== 'Escape') return;
             if (!profileCompletionNotice?.hidden) {
-                closeProfileCompletionNotice({ markSeen: true });
+                event.preventDefault();
+                profileCompletionNotice.querySelector('[data-profile-completion-action="complete"]')?.focus();
                 return;
             }
             closeDrawer();

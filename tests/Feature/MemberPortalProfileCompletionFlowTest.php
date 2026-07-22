@@ -30,7 +30,7 @@ class MemberPortalProfileCompletionFlowTest extends TestCase
         $this->assertStringNotContainsString('1800', $notice);
     }
 
-    public function test_profile_completion_notice_is_modal_and_restores_focus_when_dismissed(): void
+    public function test_profile_completion_notice_requires_the_member_to_continue_to_profile(): void
     {
         $portal = file_get_contents(resource_path('views/member/portal.blade.php'));
 
@@ -43,10 +43,14 @@ class MemberPortalProfileCompletionFlowTest extends TestCase
         $this->assertStringContainsString('profileCompletionNoticePreviousFocus = document.activeElement instanceof HTMLElement', $portal);
         $this->assertStringContainsString('setProfileCompletionNoticeBackgroundInert(true);', $portal);
         $this->assertStringContainsString('setProfileCompletionNoticeBackgroundInert(false);', $portal);
-        $this->assertStringContainsString('(previousFocus?.isConnected ? previousFocus : fallback)?.focus();', $portal);
         $this->assertStringContainsString("event.key === 'Tab'", $portal);
         $this->assertStringContainsString('profileCompletionNotice.contains(document.activeElement)', $portal);
-        $this->assertStringContainsString("closeProfileCompletionNotice({ markSeen: true });", $portal);
+        $this->assertStringContainsString('data-profile-completion-action="complete"', $portal);
+        $this->assertStringNotContainsString('I will do this later', $portal);
+        $this->assertStringContainsString('event.preventDefault();', $portal);
+        $this->assertStringContainsString("profileCompletionNotice.querySelector('[data-profile-completion-action=\"complete\"]')?.focus();", $portal);
+        $this->assertStringContainsString('name="birthday_month_day"', $portal);
+        $this->assertStringContainsString('aria-describedby="profileBirthdayMonthDayHint" required', $portal);
     }
 
     public function test_existing_booking_payments_recover_without_overwriting_a_registration_draft(): void

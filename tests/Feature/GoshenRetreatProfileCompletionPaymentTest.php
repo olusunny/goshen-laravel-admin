@@ -42,7 +42,7 @@ class GoshenRetreatProfileCompletionPaymentTest extends TestCase
     {
         [$member, $booking, $installment] = $this->bookingFor($this->incompleteMember());
         $token = $member->issueApiToken();
-        $expectedMessage = 'Please complete the member profile before registering for Goshen Retreat: title, marital status, country of residence, state/county/province, address.';
+        $expectedMessage = 'Please complete the member profile before registering for Goshen Retreat: title, marital status, country of residence, state/county/province, address, birthday (month and day).';
 
         $this->postJson("/api/goshen-retreat/bookings/{$booking->public_id}/wallet-pay", [
             'data' => ['api_token' => $token],
@@ -56,6 +56,7 @@ class GoshenRetreatProfileCompletionPaymentTest extends TestCase
                 'country of residence',
                 'state/county/province',
                 'address',
+                'birthday (month and day)',
             ]);
 
         $this->postJson("/api/goshen-retreat/bookings/{$booking->public_id}/voucher-pay", [
@@ -80,7 +81,7 @@ class GoshenRetreatProfileCompletionPaymentTest extends TestCase
         $this->assertSame(422, $response->status());
         $this->assertSame('error', $response->getData(true)['status']);
         $this->assertSame($expectedMessage, $response->getData(true)['message']);
-        $this->assertSame(['title', 'marital status', 'country of residence', 'state/county/province', 'address'], $response->getData(true)['missing_profile_fields']);
+        $this->assertSame(['title', 'marital status', 'country of residence', 'state/county/province', 'address', 'birthday (month and day)'], $response->getData(true)['missing_profile_fields']);
         $this->assertSame(0, $gateway->checkoutCalls);
     }
 

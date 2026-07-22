@@ -46,6 +46,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Kreait\Firebase\Contract\Auth as FirebaseAuth;
 use Sunny\Fundraising\Contracts\PermissionResolverContract;
 
@@ -1366,6 +1367,15 @@ class CompatibilityController extends Controller
         ])->validate();
 
         $birthday = app(MembershipProfileService::class)->birthdayAttributes($validated, $user);
+        $birthdayProvided = filled($data['birthday_month_day'] ?? null)
+            || filled($data['birthday'] ?? null)
+            || (filled($data['birthday_month'] ?? null) && filled($data['birthday_day'] ?? null));
+        if (($validated['member_type'] ?? $user->member_type) === 'church_member'
+            && (! $birthdayProvided || ! $birthday['birthday_month'] || ! $birthday['birthday_day'])) {
+            throw ValidationException::withMessages([
+                'birthday' => 'Choose your birthday month and day before saving your profile.',
+            ]);
+        }
 
         if ($request->hasFile('avatar')) {
             $validated['avatar'] = app(ProfileImageOptimizer::class)->store($request->file('avatar'), 'mobile-users/avatars');

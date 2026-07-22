@@ -4984,7 +4984,8 @@ class GoshenRetreatController extends Controller
             'member_type' => 'church member or visitor status',
         ];
 
-        if (str($user->member_type)->trim()->lower()->toString() !== 'visitor') {
+        $isVisitor = str($user->member_type)->trim()->lower()->toString() === 'visitor';
+        if (! $isVisitor) {
             $required = array_merge($required, [
                 'title' => 'title',
                 'marital_status' => 'marital status',
@@ -4994,10 +4995,15 @@ class GoshenRetreatController extends Controller
             ]);
         }
 
-        return collect($required)
+        $missing = collect($required)
             ->filter(fn (string $label, string $field): bool => blank($user->{$field}))
-            ->values()
-            ->all();
+            ->values();
+
+        if (! $isVisitor && (! $user->birthday_month || ! $user->birthday_day)) {
+            $missing->push('birthday (month and day)');
+        }
+
+        return $missing->all();
     }
 
     private function profileCompletionRequiredResponse(MobileUser $user): ?JsonResponse
