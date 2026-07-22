@@ -87,6 +87,25 @@ class AddonCapabilityApiTest extends TestCase
             ->assertJsonPath('data.capabilities.0.permissions', ['prayer_session_attendance.confirm']);
     }
 
+    public function test_event_manager_receives_the_prayer_management_capability(): void
+    {
+        $member = $this->mobileUser();
+        $role = Role::findOrCreate('event_manager', 'mobile');
+        Permission::findOrCreate('prayer_session_attendance.coordinate', 'mobile');
+        $role->givePermissionTo('prayer_session_attendance.coordinate');
+        $member->assignRole('event_manager');
+        $this->addon('church-tools.prayer-attendance', Addon::STATUS_ACTIVE, [
+            'prayer_session_attendance' => [
+                'permissions' => ['prayer_session_attendance.coordinate'],
+            ],
+        ]);
+
+        $this->withToken($member->issueApiToken())
+            ->getJson('/api/v1/mobile/capabilities')
+            ->assertOk()
+            ->assertJsonPath('data.capabilities.0.permissions', ['prayer_session_attendance.coordinate']);
+    }
+
     /**
      * @param array<string, array{permissions: array<int, string>}> $capabilities
      */
