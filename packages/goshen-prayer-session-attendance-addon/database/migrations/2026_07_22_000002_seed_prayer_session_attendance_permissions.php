@@ -25,11 +25,13 @@ return new class extends Migration
         // Super administrators remain immediately operational. Other staff are
         // deliberately not auto-granted access; administrators can assign the
         // seeded, granular keys through the existing role/user permission UI.
-        Role::query()
-            ->where('guard_name', 'web')
-            ->where('name', 'super_admin')
-            ->get()
-            ->each(fn (Role $role) => $role->givePermissionTo($permissions));
+        foreach (['web', 'mobile'] as $guard) {
+            Role::query()
+                ->where('guard_name', $guard)
+                ->where('name', 'super_admin')
+                ->get()
+                ->each(fn (Role $role) => $role->givePermissionTo($permissions));
+        }
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }

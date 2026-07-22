@@ -78,6 +78,10 @@ class AddonCapabilityService
     private function hasPermission(MobileUser $user, string $permission): bool
     {
         try {
+            if ($user->hasRole('super_admin')) {
+                return true;
+            }
+
             return $user->can($permission);
         } catch (Throwable) {
             return false;

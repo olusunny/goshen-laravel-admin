@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\TestimonyController;
 use App\Http\Controllers\Api\V1\AdminCommunityPrayerRequestController;
 use App\Http\Controllers\Api\V1\AddonCapabilityController;
 use App\Http\Controllers\Api\V1\CommunityPrayerRequestController;
+use App\Http\Middleware\AuthenticateMobileApiToken;
 use Illuminate\Support\Facades\Route;
 
 Route::match(['get', 'post'], 'saveDonation', [RetiredFeatureController::class, 'manualDonation']);
@@ -318,7 +319,7 @@ Route::prefix('v1')->group(function () {
         ->middleware('throttle:60,1');
 
     Route::get('mobile/capabilities', [AddonCapabilityController::class, 'index'])
-        ->middleware(['auth:mobile', 'throttle:60,1']);
+        ->middleware([AuthenticateMobileApiToken::class, 'throttle:60,1']);
 
     Route::middleware('auth:mobile')->prefix('prayer-community')->group(function () {
         Route::get('requests', [CommunityPrayerRequestController::class, 'index']);

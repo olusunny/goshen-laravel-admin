@@ -7,7 +7,7 @@ return [
     'api_prefix' => env('PRAYER_ATTENDANCE_API_PREFIX', 'api/v1/prayer-session-attendance'),
     'admin_prefix' => env('PRAYER_ATTENDANCE_ADMIN_PREFIX', 'admin/prayer-attendance'),
     'middleware' => [
-        'api' => ['api', 'auth:mobile', \ChurchTools\GoshenPrayerAttendance\Http\Middleware\EnsurePrayerAttendanceActive::class],
+        'api' => ['api', \ChurchTools\GoshenPrayerAttendance\Http\Middleware\AuthenticatePrayerAttendanceRequester::class, \ChurchTools\GoshenPrayerAttendance\Http\Middleware\EnsurePrayerAttendanceActive::class],
         'admin' => ['web', 'auth', \ChurchTools\GoshenPrayerAttendance\Http\Middleware\EnsurePrayerAttendanceActive::class],
     ],
     'models' => [

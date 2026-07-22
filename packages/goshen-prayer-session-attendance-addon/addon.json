@@ -4,7 +4,7 @@
   "composer_name": "church-tools/goshen-prayer-session-attendance-addon",
   "name": "Goshen Prayer Session Attendance",
   "description": "Respectful, session-based prayer attendance confirmation for eligible Goshen Retreat tickets.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "minimum_php": "8.2",
   "minimum_laravel": "12.0",
   "maximum_laravel": null,

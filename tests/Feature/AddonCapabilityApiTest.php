@@ -6,6 +6,7 @@ use App\Models\Addon;
 use App\Models\MobileUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class AddonCapabilityApiTest extends TestCase
@@ -34,7 +35,7 @@ class AddonCapabilityApiTest extends TestCase
             ],
         ]);
 
-        $this->actingAs($member, 'mobile')
+        $this->withToken($member->issueApiToken())
             ->getJson('/api/v1/mobile/capabilities')
             ->assertOk()
             ->assertJsonPath('status', 'ok')
@@ -52,7 +53,7 @@ class AddonCapabilityApiTest extends TestCase
             ],
         ]);
 
-        $this->actingAs($member, 'mobile')
+        $this->withToken($member->issueApiToken())
             ->getJson('/api/v1/mobile/capabilities')
             ->assertOk()
             ->assertJsonPath('status', 'ok')
@@ -62,9 +63,28 @@ class AddonCapabilityApiTest extends TestCase
 
     public function test_unverified_mobile_users_cannot_discover_capabilities(): void
     {
-        $this->actingAs($this->mobileUser(['is_verified' => false]), 'mobile')
+        $member = $this->mobileUser(['is_verified' => false]);
+
+        $this->withToken($member->issueApiToken())
             ->getJson('/api/v1/mobile/capabilities')
             ->assertForbidden();
+    }
+
+    public function test_super_admin_receives_addon_control_permissions(): void
+    {
+        $member = $this->mobileUser();
+        Role::findOrCreate('super_admin', 'mobile');
+        $member->assignRole('super_admin');
+        $this->addon('church-tools.prayer-attendance', Addon::STATUS_ACTIVE, [
+            'prayer_session_attendance' => [
+                'permissions' => ['prayer_session_attendance.confirm'],
+            ],
+        ]);
+
+        $this->withToken($member->issueApiToken())
+            ->getJson('/api/v1/mobile/capabilities')
+            ->assertOk()
+            ->assertJsonPath('data.capabilities.0.permissions', ['prayer_session_attendance.confirm']);
     }
 
     /**
