@@ -21,6 +21,7 @@ class AddonCapabilityController extends Controller
         );
 
         return response()->json([
+            'status' => 'ok',
             'data' => [
                 'capabilities' => $capabilities->forMobileUser($user),
             ],

@@ -37,6 +37,7 @@ class AddonCapabilityApiTest extends TestCase
         $this->actingAs($member, 'mobile')
             ->getJson('/api/v1/mobile/capabilities')
             ->assertOk()
+            ->assertJsonPath('status', 'ok')
             ->assertJsonPath('data.capabilities.0.key', 'prayer_session_attendance')
             ->assertJsonPath('data.capabilities.0.permissions', ['attendance.scan'])
             ->assertJsonCount(1, 'data.capabilities');
@@ -54,6 +55,7 @@ class AddonCapabilityApiTest extends TestCase
         $this->actingAs($member, 'mobile')
             ->getJson('/api/v1/mobile/capabilities')
             ->assertOk()
+            ->assertJsonPath('status', 'ok')
             ->assertJsonPath('data.capabilities.0.key', 'prayer_session_attendance')
             ->assertJsonPath('data.capabilities.0.permissions', []);
     }
