@@ -2050,9 +2050,9 @@
                     <p>Manage your registration, tickets, payments, receipts, and retreat updates in one secure place.</p>
                 </div>
                 <div id="homeStats" class="stats-grid"></div>
+                <div id="homeAccommodation" class="card" hidden></div>
                 <div id="homeNextAction" class="card"></div>
                 <div id="homeEventPreview" class="card"></div>
-                <div id="homeAccommodation" class="card" hidden></div>
             </section>
 
             <section class="page-view" data-page-view="retreat">
@@ -3686,7 +3686,7 @@
             document.getElementById('homeNextAction').innerHTML = payable.length
                 ? `<h3>Payment waiting</h3><p class="muted">You have a Goshen Retreat payment to complete.</p><button class="button" type="button" data-nav-page="payments">Continue payment</button>`
                 : (registrations.length
-                    ? `<h3>Registration ready</h3><p class="muted">Your registration records are available. View tickets and receipts from this portal.</p><button class="button subtle" type="button" data-nav-page="tickets">View tickets</button>`
+                    ? `<h3>Your retreat details</h3><p class="muted">Your registration records are available. View tickets and receipts from this portal.</p><button class="button subtle" type="button" data-nav-page="tickets">View tickets</button>`
                     : `<h3>Start your retreat journey</h3><p class="muted">Register for a published Goshen Retreat edition when you are ready.</p><button class="button" type="button" data-nav-page="retreat">Start registration</button>`);
             const event = eventsCache[0];
             document.getElementById('homeEventPreview').innerHTML = event

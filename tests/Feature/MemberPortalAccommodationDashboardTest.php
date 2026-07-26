@@ -18,6 +18,10 @@ class MemberPortalAccommodationDashboardTest extends TestCase
         $dashboard = substr($portal, $start, $end - $start);
 
         $this->assertStringContainsString('id="homeAccommodation"', $portal);
+        $this->assertLessThan(
+            strpos($portal, 'id="homeNextAction"'),
+            strpos($portal, 'id="homeAccommodation"')
+        );
         $this->assertStringContainsString('const allocations = memberData.accommodation_allocations || [];', $dashboard);
         $this->assertStringContainsString('const hasRoomAllocationStatus = allocations.length > 0 || tickets.length > 0;', $dashboard);
         $this->assertStringContainsString('Room allocation', $dashboard);
@@ -25,5 +29,7 @@ class MemberPortalAccommodationDashboardTest extends TestCase
         $this->assertStringContainsString("allocation.attendee?.name || 'Registered attendee'", $dashboard);
         $this->assertStringContainsString("statusBadge(allocation.status || 'assigned')", $dashboard);
         $this->assertStringNotContainsString('allocation.check_in_note', $dashboard);
+        $this->assertStringContainsString('Your retreat details', $dashboard);
+        $this->assertStringNotContainsString('Registration ready', $dashboard);
     }
 }
