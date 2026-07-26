@@ -2052,6 +2052,7 @@
                 <div id="homeStats" class="stats-grid"></div>
                 <div id="homeNextAction" class="card"></div>
                 <div id="homeEventPreview" class="card"></div>
+                <div id="homeAccommodation" class="card" hidden></div>
             </section>
 
             <section class="page-view" data-page-view="retreat">
@@ -3675,6 +3676,7 @@
         function renderHome() {
             const registrations = memberData.registrations || [];
             const tickets = memberData.tickets || [];
+            const allocations = memberData.accommodation_allocations || [];
             const payable = payableRows();
             document.getElementById('homeStats').innerHTML = `
                 <div class="stat"><span>Registrations</span><strong>${registrations.length}</strong></div>
@@ -3690,6 +3692,24 @@
             document.getElementById('homeEventPreview').innerHTML = event
                 ? `<h3>${escapeHtml(event.name || 'Goshen Retreat')}</h3><p class="muted">${escapeHtml(eventDate(event))}</p><div class="detail-list"><div class="detail-row"><strong>Venue</strong><span>${escapeHtml(eventVenue(event))}</span></div></div>`
                 : '<div class="empty">No published retreat edition is available yet.</div>';
+
+            const accommodation = document.getElementById('homeAccommodation');
+            accommodation.hidden = !allocations.length;
+            accommodation.innerHTML = allocations.length ? `
+                <h3>Room allocation</h3>
+                <p class="muted">Your allocation status will be updated here by the retreat team.</p>
+                <div class="record-list">
+                    ${allocations.map((allocation) => `
+                        <article class="record">
+                            <div class="record-title">
+                                <strong>${escapeHtml(allocation.attendee?.name || 'Registered attendee')}</strong>
+                                <span class="item-meta">${escapeHtml(allocation.event?.name || 'Goshen Retreat')}</span>
+                                ${statusBadge(allocation.status || 'assigned')}
+                            </div>
+                        </article>
+                    `).join('')}
+                </div>
+            ` : '';
         }
 
         function walletAmount(amount, currency) {
