@@ -3694,7 +3694,8 @@
                 : '<div class="empty">No published retreat edition is available yet.</div>';
 
             const accommodation = document.getElementById('homeAccommodation');
-            accommodation.hidden = !allocations.length;
+            const hasRoomAllocationStatus = allocations.length > 0 || tickets.length > 0;
+            accommodation.hidden = !hasRoomAllocationStatus;
             accommodation.innerHTML = allocations.length ? `
                 <h3>Room allocation</h3>
                 <p class="muted">Your allocation status will be updated here by the retreat team.</p>
@@ -3709,7 +3710,11 @@
                         </article>
                     `).join('')}
                 </div>
-            ` : '';
+            ` : `
+                <h3>Room allocation</h3>
+                <p class="muted">Your room allocation is being prepared. Once confirmed, your room status will appear here before check-in.</p>
+                ${statusBadge('Room allocation pending')}
+            `;
         }
 
         function walletAmount(amount, currency) {

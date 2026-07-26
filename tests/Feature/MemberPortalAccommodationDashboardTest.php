@@ -19,7 +19,9 @@ class MemberPortalAccommodationDashboardTest extends TestCase
 
         $this->assertStringContainsString('id="homeAccommodation"', $portal);
         $this->assertStringContainsString('const allocations = memberData.accommodation_allocations || [];', $dashboard);
+        $this->assertStringContainsString('const hasRoomAllocationStatus = allocations.length > 0 || tickets.length > 0;', $dashboard);
         $this->assertStringContainsString('Room allocation', $dashboard);
+        $this->assertStringContainsString("statusBadge('Room allocation pending')", $dashboard);
         $this->assertStringContainsString("allocation.attendee?.name || 'Registered attendee'", $dashboard);
         $this->assertStringContainsString("statusBadge(allocation.status || 'assigned')", $dashboard);
         $this->assertStringNotContainsString('allocation.check_in_note', $dashboard);
