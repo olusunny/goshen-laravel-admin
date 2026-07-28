@@ -835,6 +835,7 @@ class CompatibilityController extends Controller
             'birthday_month_day' => ['nullable', 'regex:/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/'],
             'birthday_month' => ['nullable', 'integer', 'between:1,12'],
             'birthday_day' => ['nullable', 'integer', 'between:1,31'],
+            'adult_confirmation' => ['nullable', 'boolean'],
             'password' => ['required', 'string', 'min:8', 'max:255'],
         ])->validate();
 
@@ -1361,6 +1362,7 @@ class CompatibilityController extends Controller
             'birthday_month_day' => ['nullable', 'regex:/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/'],
             'birthday_month' => ['nullable', 'integer', 'between:1,12'],
             'birthday_day' => ['nullable', 'integer', 'between:1,31'],
+            'adult_confirmation' => ['nullable', 'boolean'],
             'about_me' => ['nullable', 'string'],
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'cover_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
@@ -1419,6 +1421,9 @@ class CompatibilityController extends Controller
             'address' => $validated['address'] ?? $user->address,
             'address_latitude' => $validated['address_latitude'] ?? null,
             'address_longitude' => $validated['address_longitude'] ?? null,
+            'adult_confirmed_at' => array_key_exists('adult_confirmation', $validated)
+                ? (filter_var($validated['adult_confirmation'], FILTER_VALIDATE_BOOLEAN) ? ($user->adult_confirmed_at ?? now()) : null)
+                : $user->adult_confirmed_at,
             ...$birthday,
             'bio' => $validated['about_me'] ?? null,
             'avatar' => $validated['avatar'] ?? $user->avatar,

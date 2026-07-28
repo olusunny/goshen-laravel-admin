@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\MobileUser;
+use App\Models\GoshenFamily;
+use App\Models\GoshenFamilyMember;
 use App\Models\User;
 use App\Models\WebWalletVerificationChallenge;
 use Illuminate\Support\Facades\DB;
@@ -84,9 +86,61 @@ class GoshenAdminTicketIssuanceService
         int $attendeeQuantity = 1,
         array $attendeeDetails = [],
         ?array $memberWalletAuthorization = null,
+        ?array $family = null,
     ): Ticket {
+        if (app(GoshenFamilyRegistrationService::class)->isFamilyTicket((string) $ticketType->name)
+            && DB::transactionLevel() === 0) {
+            return DB::transaction(fn (): Ticket => $this->issue(
+                $member,
+                $ticketType,
+                $admin,
+                $reason,
+                $paymentMethod,
+                $voucherCode,
+                $challenge,
+                $walletCode,
+                $ip,
+                $userAgent,
+                $paymentAmount,
+                $extraMetadata,
+                $attendeeQuantity,
+                $attendeeDetails,
+                $memberWalletAuthorization,
+                $family,
+            ));
+        }
+
         $reason = trim($reason);
         $paymentMethod = strtolower(trim($paymentMethod));
+        $familyRegistration = null;
+        $payableQuantity = $attendeeQuantity;
+        if (app(GoshenFamilyRegistrationService::class)->isFamilyTicket((string) $ticketType->name)) {
+            if ($paymentMethod !== 'voucher') {
+                throw ValidationException::withMessages(['payment_method' => 'Family registrations issued by an admin must use a Goshen voucher.']);
+            }
+
+            $familyRegistration = app(GoshenFamilyRegistrationService::class)->prepare($family ?? [], $member, true);
+            $attendeeQuantity = count($familyRegistration['members']);
+            $payableQuantity = $familyRegistration['payable_count'];
+            $paymentAmount ??= round((float) $ticketType->price * $payableQuantity, 2);
+            $attendeeDetails = collect($familyRegistration['members'])->map(function (array $familyMember) use ($familyRegistration, $ticketType): array {
+                return [
+                    'first_name' => $familyMember['first_name'],
+                    'last_name' => $familyMember['last_name'],
+                    'email' => $familyMember['email'],
+                    'phone' => $familyMember['phone'],
+                    'custom_fields' => [
+                        'family_name' => $familyRegistration['family_name'],
+                        'family_role' => $familyMember['role'],
+                        'family_age' => $familyMember['age'],
+                        'family_parent_names' => $familyMember['role'] === 'child' ? $familyRegistration['parent_names'] : [],
+                        'ticket_amount' => $familyMember['is_payable'] ? (float) $ticketType->price : 0,
+                        'payment_exempt' => ! $familyMember['is_payable'],
+                    ],
+                    '_family_member' => $familyMember,
+                ];
+            })->all();
+        }
         $attendeeQuantity = $this->validatedAttendeeQuantity($ticketType, $attendeeQuantity);
         $attendeeDetails = $this->normalizedAttendeeDetails($member, $attendeeQuantity, $attendeeDetails);
 
@@ -165,6 +219,8 @@ class GoshenAdminTicketIssuanceService
                 $attendeeQuantity,
                 $attendeeDetails,
                 $memberWalletAuthorization,
+                $familyRegistration,
+                $payableQuantity,
             ): Ticket {
                 if ($paymentMethod === 'wallet') {
                     $admin = User::query()->whereKey($admin->id)->lockForUpdate()->firstOrFail();
@@ -187,7 +243,7 @@ class GoshenAdminTicketIssuanceService
                 }
 
                 $listPrice = round((float) $ticketType->price, 2);
-                $listedTotal = round($listPrice * $attendeeQuantity, 2);
+                $listedTotal = round($listPrice * ($familyRegistration['payable_count'] ?? $attendeeQuantity), 2);
                 $paymentTotal = $this->paymentTotal($ticketType, $attendeeQuantity, $paymentAmount);
                 if ($paymentTotal <= 0) {
                     throw ValidationException::withMessages([
@@ -216,6 +272,13 @@ class GoshenAdminTicketIssuanceService
                     'historical_discount_amount' => $paymentAmount === null ? null : max(0, round($listedTotal - $paymentTotal, 2)),
                     'member_wallet_authorization' => $memberWalletAuthorization,
                 ], $extraMetadata), fn ($value): bool => $value !== null && $value !== '');
+                if ($familyRegistration !== null) {
+                    $metadata['family_registration'] = [
+                        'name' => $familyRegistration['family_name'],
+                        'payable_count' => $familyRegistration['payable_count'],
+                        'complimentary_count' => $familyRegistration['complimentary_count'],
+                    ];
+                }
 
                 $booking = Booking::query()->create([
                     'event_id' => $ticketType->event_id,
@@ -235,11 +298,11 @@ class GoshenAdminTicketIssuanceService
                 BookingLine::query()->create([
                     'booking_id' => $booking->id,
                     'ticket_type_id' => $ticketType->id,
-                    'quantity' => $attendeeQuantity,
+                    'quantity' => $payableQuantity,
                     'currency' => $currency,
                     'unit_price' => $paymentAmount === null
                         ? $listPrice
-                        : round($paymentTotal / $attendeeQuantity, 2),
+                        : round($paymentTotal / $payableQuantity, 2),
                     'line_total' => $paymentTotal,
                     'metadata' => [
                         'source' => $ticketIssueSource,
@@ -250,7 +313,20 @@ class GoshenAdminTicketIssuanceService
                     ],
                 ]);
 
+                if ($familyRegistration !== null && $familyRegistration['complimentary_count'] > 0) {
+                    BookingLine::query()->create([
+                        'booking_id' => $booking->id,
+                        'ticket_type_id' => $ticketType->id,
+                        'quantity' => $familyRegistration['complimentary_count'],
+                        'currency' => $currency,
+                        'unit_price' => 0,
+                        'line_total' => 0,
+                        'metadata' => ['family_child_payment_exemption' => true],
+                    ]);
+                }
+
                 $firstAttendee = null;
+                $createdAttendees = [];
                 for ($index = 0; $index < $attendeeQuantity; $index++) {
                     $attendeeDetail = $attendeeDetails[$index] ?? $this->defaultAttendeeDetails($member);
                     $customFields = is_array($attendeeDetail['custom_fields'] ?? null) ? $attendeeDetail['custom_fields'] : [];
@@ -276,6 +352,35 @@ class GoshenAdminTicketIssuanceService
                     ]);
 
                     $firstAttendee ??= $attendee;
+                    $createdAttendees[] = $attendee;
+                }
+
+                if ($familyRegistration !== null) {
+                    $goshenFamily = GoshenFamily::query()->create([
+                        'event_id' => $ticketType->event_id,
+                        'booking_id' => $booking->id,
+                        'created_by_mobile_user_id' => $member->id,
+                        'name' => $familyRegistration['family_name'],
+                    ]);
+                    foreach ($createdAttendees as $index => $attendee) {
+                        $familyMember = $familyRegistration['members'][$index];
+                        GoshenFamilyMember::query()->create([
+                            'goshen_family_id' => $goshenFamily->id,
+                            'attendee_id' => $attendee->id,
+                            'mobile_user_id' => $familyMember['mobile_user_id'],
+                            'role' => $familyMember['role'],
+                            'date_of_birth' => $familyMember['date_of_birth'],
+                            'first_name' => $familyMember['first_name'],
+                            'last_name' => $familyMember['last_name'] ?: null,
+                            'email' => $familyMember['email'],
+                            'phone' => $familyMember['phone'],
+                            'metadata' => [
+                                'age' => $familyMember['age'],
+                                'is_payable' => $familyMember['is_payable'],
+                                'profile_status' => $familyMember['profile_status'],
+                            ],
+                        ]);
+                    }
                 }
 
                 $fullPayment = $this->fullPayments->createForBooking($booking);
@@ -355,9 +460,20 @@ class GoshenAdminTicketIssuanceService
                 $booking->forceFill([
                     'metadata' => array_merge($booking->fresh()->metadata ?? [], $safePaymentMetadata),
                 ])->save();
-                $ticket->forceFill([
-                    'metadata' => array_merge($ticket->metadata ?? [], $safePaymentMetadata),
-                ])->save();
+                if ($familyRegistration !== null) {
+                    $sharedTicketMetadata = collect($safePaymentMetadata)
+                        ->except(['amount_paid', 'historical_paid_amount', 'historical_discount_amount'])
+                        ->all();
+                    $booking->tickets()->get()->each(function (Ticket $issuedTicket) use ($sharedTicketMetadata): void {
+                        $issuedTicket->forceFill([
+                            'metadata' => array_merge($issuedTicket->metadata ?? [], $sharedTicketMetadata),
+                        ])->save();
+                    });
+                } else {
+                    $ticket->forceFill([
+                        'metadata' => array_merge($ticket->metadata ?? [], $safePaymentMetadata),
+                    ])->save();
+                }
 
                 EventAuditLog::query()->create([
                     'event_id' => $ticketType->event_id,

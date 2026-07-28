@@ -143,7 +143,7 @@ class GoshenTicketResource extends Resource
                             static::clearWalletAuthorization($set);
                         })
                         ->required(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
-                        ->visible(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
+                        ->visible(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')) && ! static::ticketTypeIsFamily($get('ticket_type_id')))
                         ->helperText(fn (Get $get): string => static::attendeeQuantityHelperText($get('ticket_type_id'))),
                 ]),
             Section::make('Attendee details')
@@ -169,12 +169,42 @@ class GoshenTicketResource extends Resource
                         ->itemLabel(fn (array $state): string => filled($state['first_name'] ?? null)
                             ? trim(($state['first_name'] ?? '').' '.($state['last_name'] ?? ''))
                             : 'Attendee details')
-                        ->visible(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
-                        ->required(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
+                        ->visible(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')) && ! static::ticketTypeIsFamily($get('ticket_type_id')))
+                        ->required(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')) && ! static::ticketTypeIsFamily($get('ticket_type_id')))
                         ->helperText('Change the attendee quantity above to automatically show the matching number of attendee detail cards.')
                         ->columnSpanFull(),
                 ])
-                ->visible(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')))
+                ->visible(fn (Get $get): bool => static::ticketTypeUsesAttendeeQuantity($get('ticket_type_id')) && ! static::ticketTypeIsFamily($get('ticket_type_id')))
+                ->columnSpanFull(),
+            Section::make('Family registration')
+                ->description('Add one or both parents and their children. Children aged 1-14 receive complimentary tickets; children aged 15+ are paid. Adult children need their own verified contact details.')
+                ->schema([
+                    Forms\Components\TextInput::make('family.name')
+                        ->label('Family name')
+                        ->placeholder('e.g. Adeola Family')
+                        ->required(),
+                    Section::make("Father's details")
+                        ->schema(static::familyParentFields('father'))
+                        ->columns(2),
+                    Section::make("Mother's details")
+                        ->schema(static::familyParentFields('mother'))
+                        ->columns(2),
+                    Forms\Components\Repeater::make('family.children')
+                        ->label("Children's details")
+                        ->schema([
+                            Forms\Components\TextInput::make('first_name')->required(),
+                            Forms\Components\TextInput::make('last_name'),
+                            Forms\Components\DatePicker::make('date_of_birth')->native(false)->required(),
+                            Forms\Components\TextInput::make('email')->email()->label('Email (18+ only)'),
+                            Forms\Components\TextInput::make('phone')->tel()->label('Phone (18+ only)'),
+                            Forms\Components\Toggle::make('adult_confirmation')->label('I confirm this child is 18 or over.'),
+                        ])
+                        ->columns(2)
+                        ->addActionLabel('Add child')
+                        ->defaultItems(0)
+                        ->columnSpanFull(),
+                ])
+                ->visible(fn (Get $get): bool => static::ticketTypeIsFamily($get('ticket_type_id')))
                 ->columnSpanFull(),
             Section::make('Payment and authorization')
                 ->description('Settle the listed ticket amount by voucher or from your linked Goshen wallet. Use a special approved amount only for authorised exception cases.')
@@ -770,6 +800,21 @@ class GoshenTicketResource extends Resource
         return [...$coreFields, ...$registrationFields];
     }
 
+    /** @return array<int, Forms\Components\Field> */
+    private static function familyParentFields(string $role): array
+    {
+        return [
+            Forms\Components\Toggle::make("family.{$role}.included")
+                ->label('Include '.$role)
+                ->default($role === 'father')
+                ->live(),
+            Forms\Components\TextInput::make("family.{$role}.first_name")->label('First name'),
+            Forms\Components\TextInput::make("family.{$role}.last_name")->label('Last name'),
+            Forms\Components\TextInput::make("family.{$role}.email")->label('Email')->email(),
+            Forms\Components\TextInput::make("family.{$role}.phone")->label('Phone')->tel(),
+        ];
+    }
+
     private static function attendeeRegistrationField(EventAttendeeField $field): Forms\Components\Field
     {
         $key = 'custom_fields.'.((string) $field->key);
@@ -871,7 +916,13 @@ class GoshenTicketResource extends Resource
         }
 
         return (int) ($ticketType->min_per_booking ?: 1) > 1
-            || (int) ($ticketType->max_per_booking ?: 0) > 1;
+            || (int) ($ticketType->max_per_booking ?: 0) > 1
+            || static::ticketTypeIsFamily($ticketTypeId);
+    }
+
+    private static function ticketTypeIsFamily(mixed $ticketTypeId): bool
+    {
+        return str_contains(strtolower((string) EventTicketType::query()->find($ticketTypeId)?->name), 'family');
     }
 
     private static function attendeeQuantityHelperText(mixed $ticketTypeId): string

@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class MemberPortalRetreatRegistrationRenderTest extends TestCase
 {
-    public function test_retreat_registration_form_uses_the_selected_ticket_for_quantity_controls(): void
+    public function test_retreat_registration_form_switches_family_tickets_to_role_based_details(): void
     {
         $portal = file_get_contents(resource_path('views/member/portal.blade.php'));
         $start = strpos($portal, 'function renderRegistrationForm(event)');
@@ -17,7 +17,9 @@ class MemberPortalRetreatRegistrationRenderTest extends TestCase
 
         $registrationForm = substr($portal, $start, $end - $start);
 
-        $this->assertStringContainsString('renderQuantityStepper(selectedTicket, initialQuantity, quantityLabelId)', $registrationForm);
+        $this->assertStringContainsString('const familyTicket = isFamilyTicket(selectedTicket);', $registrationForm);
+        $this->assertStringContainsString('renderFamilyRegistrationFields(draft?.family || {})', $registrationForm);
+        $this->assertStringContainsString('familyTicket ? 1 : initialQuantity', $registrationForm);
         $this->assertStringContainsString('ticketQuantityHint(selectedTicket)', $registrationForm);
         $this->assertStringNotContainsString('firstTicket', $registrationForm);
     }

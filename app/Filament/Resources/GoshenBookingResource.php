@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\GoshenBookingResource\Pages;
+use App\Models\GoshenFamily;
 use App\Services\GoshenBookingExportService;
 use App\Services\GoshenBookingLifecycleService;
 use BackedEnum;
@@ -98,6 +99,22 @@ class GoshenBookingResource extends Resource
                     TextEntry::make('subtotal')->money(fn (Booking $record): string => $record->currency ?: 'NGN'),
                     TextEntry::make('total')->money(fn (Booking $record): string => $record->currency ?: 'NGN'),
                     TextEntry::make('paid_total')->money(fn (Booking $record): string => $record->currency ?: 'NGN'),
+                ]),
+            Section::make('Family registration')
+                ->visible(fn (Booking $record): bool => GoshenFamily::query()->where('booking_id', $record->id)->exists())
+                ->schema([
+                    TextEntry::make('family_name')
+                        ->label('Family')
+                        ->state(fn (Booking $record): string => (string) GoshenFamily::query()->where('booking_id', $record->id)->value('name')),
+                    TextEntry::make('family_members')
+                        ->label('Members')
+                        ->state(function (Booking $record): array {
+                            $family = GoshenFamily::query()->with('members')->where('booking_id', $record->id)->first();
+
+                            return $family?->members->map(fn ($member): string => trim($member->first_name.' '.$member->last_name).' · '.str($member->role)->headline())->all() ?? [];
+                        })
+                        ->listWithLineBreaks()
+                        ->columnSpanFull(),
                 ]),
             Section::make('Attendees')
                 ->schema([

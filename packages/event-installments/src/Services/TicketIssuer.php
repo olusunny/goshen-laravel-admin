@@ -25,6 +25,16 @@ class TicketIssuer
                 }
 
                 $number = $this->nextTicketNumber($booking);
+                $fields = is_array($attendee->custom_fields) ? $attendee->custom_fields : [];
+                $metadata = [];
+                foreach (['family_name', 'family_role', 'family_age', 'family_parent_names', 'payment_exempt'] as $key) {
+                    if (array_key_exists($key, $fields)) {
+                        $metadata[$key] = $fields[$key];
+                    }
+                }
+                if (array_key_exists('ticket_amount', $fields)) {
+                    $metadata['amount_paid'] = (float) $fields['ticket_amount'];
+                }
 
                 $created[] = Ticket::query()->create([
                     'event_id' => $booking->event_id,
@@ -36,7 +46,7 @@ class TicketIssuer
                     'qr_hash' => hash('sha256', $booking->public_id . '|' . $attendee->public_id . '|' . Str::random(32)),
                     'status' => $this->initialStatus($booking),
                     'issued_at' => now(),
-                    'metadata' => [],
+                    'metadata' => $metadata,
                 ]);
             }
 

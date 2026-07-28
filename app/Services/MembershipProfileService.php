@@ -121,6 +121,8 @@ class MembershipProfileService
             'birthday' => $this->birthday($user),
             'birthday_month' => $user->birthday_month,
             'birthday_day' => $user->birthday_day,
+            'is_adult_confirmed' => $user->adult_confirmed_at !== null,
+            'adult_confirmed_at' => $user->adult_confirmed_at?->toIso8601String(),
             'membership_status_change_locked' => $isLocked,
             'membership_status_change_available_at' => $availableAt?->toIso8601String(),
             'membership_status_change_message' => $isLocked

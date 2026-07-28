@@ -1357,6 +1357,31 @@
             display: grid;
             gap: 12px;
         }
+        .family-tree-members {
+            display: grid;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .family-tree-member {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            min-width: 0;
+        }
+        .family-tree-avatar {
+            width: 40px;
+            height: 40px;
+            flex: 0 0 40px;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: var(--brand);
+            color: #fff;
+            font-weight: 900;
+        }
+        .family-tree-avatar img { width: 100%; height: 100%; object-fit: cover; }
         .record {
             border: 1px solid var(--line);
             background: var(--field);
@@ -2051,6 +2076,7 @@
                 </div>
                 <div id="homeStats" class="stats-grid"></div>
                 <div id="homeAccommodation" class="card" hidden></div>
+                <div id="homeFamily" class="card" hidden></div>
                 <div id="homeNextAction" class="card"></div>
                 <div id="homeEventPreview" class="card"></div>
             </section>
@@ -2169,7 +2195,7 @@
 
         let currentUser = null;
         let eventsCache = [];
-        let memberData = { registrations: [], payment_history: [], tickets: [], accommodation_allocations: [] };
+        let memberData = { registrations: [], payment_history: [], tickets: [], accommodation_allocations: [], family: null };
         let walletData = null;
         let activePage = 'home';
         let activeWalletTab = localStorage.getItem(walletTabKey) || 'overview';
@@ -2405,6 +2431,7 @@
             if (!form?.dataset?.eventId || !storageKey) return;
             const values = payloadFromForm(form);
             const attendees = collectAttendeeDrafts(form);
+            const family = collectFamilyRegistration(form);
             try {
                 sessionStorage.setItem(storageKey, JSON.stringify({
                     eventId: form.dataset.eventId,
@@ -2413,6 +2440,7 @@
                         uk_privacy_consent: form.querySelector('[name="uk_privacy_consent"]')?.checked === true,
                     },
                     attendees,
+                    family,
                     savedAt: new Date().toISOString(),
                 }));
             } catch {}
@@ -3102,6 +3130,7 @@
                     payment_history: payload.data?.payment_history || [],
                     tickets: payload.data?.tickets || [],
                     accommodation_allocations: payload.data?.accommodation_allocations || [],
+                    family: payload.data?.family || null,
                     referral: payload.data?.referral || null,
                 };
                 if (payload.data?.user) {
@@ -3269,6 +3298,10 @@
             return explicitMin > 1 || hasExplicitMultiMax || ticketName.includes('family');
         }
 
+        function isFamilyTicket(ticket) {
+            return `${ticket?.name || ''}`.toLowerCase().includes('family');
+        }
+
         function renderQuantityStepper(ticket, quantity, labelId = 'attendeeQuantityLabel') {
             const min = ticketMinimum(ticket);
             const max = ticketMaximum(ticket);
@@ -3309,6 +3342,7 @@
             const showQuantitySelector = ticketShowsQuantitySelector(selectedTicket);
             const invitationCode = values.referral_code || referralInvitationCode();
             const paymentMode = ['outright', 'wallet', 'voucher'].includes(values.payment_mode) ? values.payment_mode : 'outright';
+            const familyTicket = isFamilyTicket(selectedTicket);
             return `
                 <form class="form registration-form" data-event-id="${escapeHtml(event.public_id)}">
                     ${profileNeedsCompletion() ? renderRegistrationProfileNotice() : ''}
@@ -3317,9 +3351,9 @@
                             <label>Ticket type</label>
                             <select class="input" name="ticket_type_id" required>${ticketOptions}</select>
                         </div>
-                        <div class="field attendee-quantity-field" ${showQuantitySelector ? '' : 'hidden'}>
+                        <div class="field attendee-quantity-field" ${showQuantitySelector && !familyTicket ? '' : 'hidden'}>
                             <label id="${escapeHtml(quantityLabelId)}">Attendees</label>
-                            ${renderQuantityStepper(selectedTicket, initialQuantity, quantityLabelId)}
+                            ${renderQuantityStepper(selectedTicket, familyTicket ? 1 : initialQuantity, quantityLabelId)}
                             <span class="hint attendee-quantity-hint">${escapeHtml(ticketQuantityHint(selectedTicket))}</span>
                         </div>
                         <div class="field">
@@ -3339,7 +3373,7 @@
                             <input class="input" name="referral_code" maxlength="32" autocomplete="off" value="${escapeHtml(invitationCode)}">
                         </div>
                     </div>
-                    <div class="attendee-fields">${renderAttendeeFields(initialQuantity, event, draft?.attendees || [], selectedTicket)}</div>
+                    <div class="attendee-fields">${familyTicket ? renderFamilyRegistrationFields(draft?.family || {}) : renderAttendeeFields(initialQuantity, event, draft?.attendees || [], selectedTicket)}</div>
                     <label class="choice">
                         <input type="checkbox" name="uk_privacy_consent" value="1" required ${values.uk_privacy_consent ? 'checked' : ''}>
                         <span>I agree that MFM Triumphant Church may process my registration, attendee, payment, ticket, and travel-support information for Goshen Retreat administration in line with UK data protection requirements.</span>
@@ -3479,6 +3513,48 @@
             return aliases[normalized] || normalized;
         }
 
+        function renderFamilyRegistrationFields(existing = {}) {
+            const account = currentUser || {};
+            const currentGender = `${account.gender || ''}`.toLowerCase();
+            const parentFields = (role, label) => {
+                const value = existing[role] || {};
+                const included = value.included ?? (role === 'father' ? currentGender === 'male' : currentGender === 'female');
+                const own = included && ((role === 'father' && currentGender === 'male') || (role === 'mother' && currentGender === 'female'));
+                const name = splitName(account.name || '');
+                return `<article class="attendee-card family-parent" data-family-parent="${role}">
+                    <label class="choice"><input class="family-parent-included" type="checkbox" ${included ? 'checked' : ''}> <span>Add ${label.toLowerCase()} details</span></label>
+                    <div class="form-grid">
+                        <div class="field"><label>First name</label><input class="input family-first-name" value="${escapeHtml(value.first_name ?? (own ? (account.first_name || name.first) : ''))}"></div>
+                        <div class="field"><label>Last name</label><input class="input family-last-name" value="${escapeHtml(value.last_name ?? (own ? (account.last_name || name.last) : ''))}"></div>
+                        <div class="field"><label>Email</label><input class="input family-email" type="email" value="${escapeHtml(value.email ?? (own ? account.email || '' : ''))}"></div>
+                        <div class="field"><label>Phone</label><input class="input family-phone" type="tel" value="${escapeHtml(value.phone ?? (own ? account.phone || '' : ''))}"></div>
+                    </div>
+                </article>`;
+            };
+            const children = Array.isArray(existing.children) ? existing.children : [];
+            return `<div class="family-registration-fields">
+                <article class="attendee-card"><strong>Family details</strong><div class="form-grid"><div class="field"><label>Family name</label><input class="input" name="family_name" value="${escapeHtml(existing.name || '')}" placeholder="e.g. Adeola Family" required></div></div><p class="muted">Each parent receives a paid ticket. Children aged 1-14 receive a complimentary ticket; children aged 15+ receive a paid ticket.</p></article>
+                ${parentFields('father', "Father's")}
+                ${parentFields('mother', "Mother's")}
+                <div class="family-children-list">${children.map((child, index) => renderFamilyChildFields(child, index)).join('')}</div>
+                <button class="button small outline add-family-child" type="button">Add child</button>
+            </div>`;
+        }
+
+        function renderFamilyChildFields(child = {}, index = 0) {
+            return `<article class="attendee-card family-child" data-family-child>
+                <div class="record-top"><strong>Child ${index + 1}</strong><button class="button small outline remove-family-child" type="button">Remove</button></div>
+                <div class="form-grid">
+                    <div class="field"><label>First name</label><input class="input family-first-name" value="${escapeHtml(child.first_name || '')}" required></div>
+                    <div class="field"><label>Last name</label><input class="input family-last-name" value="${escapeHtml(child.last_name || '')}"></div>
+                    <div class="field"><label>Date of birth</label><input class="input family-date-of-birth" type="date" value="${escapeHtml(child.date_of_birth || '')}" required></div>
+                    <div class="field"><label>Email (18+ only)</label><input class="input family-email" type="email" value="${escapeHtml(child.email || '')}"></div>
+                    <div class="field"><label>Phone (18+ only)</label><input class="input family-phone" type="tel" value="${escapeHtml(child.phone || '')}"></div>
+                    <div class="field"><label><input class="family-adult-confirmation" type="checkbox" ${child.adult_confirmation ? 'checked' : ''}> I confirm this child is 18 or over.</label><small class="muted">Only needed for children aged 18 or over. They will receive their own Triumphant profile.</small></div>
+                </div>
+            </article>`;
+        }
+
         function canonicalAttendeeFieldValues(fields = {}) {
             return Object.entries(fields || {}).reduce((values, [key, value]) => {
                 if (key === 'custom_fields' || value === undefined || value === null || typeof value === 'object') return values;
@@ -3588,28 +3664,54 @@
             });
         }
 
+        function collectFamilyRegistration(form) {
+            if (!form.querySelector('.family-registration-fields')) return null;
+            const parent = (role) => {
+                const card = form.querySelector(`[data-family-parent="${role}"]`);
+                return {
+                    included: card?.querySelector('.family-parent-included')?.checked === true,
+                    first_name: card?.querySelector('.family-first-name')?.value || '',
+                    last_name: card?.querySelector('.family-last-name')?.value || '',
+                    email: card?.querySelector('.family-email')?.value || '',
+                    phone: card?.querySelector('.family-phone')?.value || '',
+                };
+            };
+            return {
+                name: form.querySelector('[name="family_name"]')?.value || '',
+                father: parent('father'),
+                mother: parent('mother'),
+                children: [...form.querySelectorAll('[data-family-child]')].map((card) => ({
+                    first_name: card.querySelector('.family-first-name')?.value || '',
+                    last_name: card.querySelector('.family-last-name')?.value || '',
+                    date_of_birth: card.querySelector('.family-date-of-birth')?.value || '',
+                    email: card.querySelector('.family-email')?.value || '',
+                    phone: card.querySelector('.family-phone')?.value || '',
+                    adult_confirmation: card.querySelector('.family-adult-confirmation')?.checked === true,
+                })),
+            };
+        }
+
         function syncRegistrationQuantity(form, eventModel, preferredQuantity = null) {
             const select = form.querySelector('[name="ticket_type_id"]');
             const quantityInput = form.querySelector('.attendee-quantity');
             if (!select || !quantityInput) return;
 
             const ticket = eventTicketById(eventModel, select.value);
+            const familyTicket = isFamilyTicket(ticket);
             const nextQuantity = clampTicketQuantity(preferredQuantity ?? quantityInput.value, ticket);
-            quantityInput.value = `${nextQuantity}`;
-            updateQuantityStepper(form, ticket, nextQuantity);
+            quantityInput.value = `${familyTicket ? 1 : nextQuantity}`;
+            updateQuantityStepper(form, ticket, familyTicket ? 1 : nextQuantity);
 
             const quantityField = form.querySelector('.attendee-quantity-field');
-            if (quantityField) quantityField.hidden = !ticketShowsQuantitySelector(ticket);
+            if (quantityField) quantityField.hidden = !ticketShowsQuantitySelector(ticket) || familyTicket;
 
             const hint = form.querySelector('.attendee-quantity-hint');
             if (hint) hint.textContent = ticketQuantityHint(ticket);
 
-            form.querySelector('.attendee-fields').innerHTML = renderAttendeeFields(
-                nextQuantity,
-                eventModel,
-                collectAttendeeDrafts(form),
-                ticket,
-            );
+            const attendeeRoot = form.querySelector('.attendee-fields');
+            attendeeRoot.innerHTML = familyTicket
+                ? renderFamilyRegistrationFields(collectFamilyRegistration(form) || {})
+                : renderAttendeeFields(nextQuantity, eventModel, collectAttendeeDrafts(form), ticket);
         }
 
         async function submitRegistration(form) {
@@ -3621,7 +3723,8 @@
             syncRegistrationQuantity(form, eventModel);
             if (!form.reportValidity()) return;
             const values = payloadFromForm(form);
-            const attendees = collectAttendeeDrafts(form).map((attendee) => ({
+            const family = collectFamilyRegistration(form);
+            const attendees = family ? [] : collectAttendeeDrafts(form).map((attendee) => ({
                 ...attendee,
                 email: attendee.email || currentUser.email || '',
                 phone: attendee.phone || currentUser.phone || '',
@@ -3633,6 +3736,7 @@
                 voucher_code: values.voucher_code || '',
                 referral_code: values.referral_code || '',
                 quantity: Number(values.quantity || 1),
+                family,
                 uk_privacy_consent: form.querySelector('input[name="uk_privacy_consent"]')?.checked === true,
                 privacy_policy_version: 'uk-gdpr-2026-06',
                 apply_pay_in_full_discount: true,
@@ -3715,6 +3819,23 @@
                 <p class="muted">Your room allocation is being prepared. Once confirmed, your room status will appear here before check-in.</p>
                 ${statusBadge('Room allocation pending')}
             `;
+
+            const family = memberData.family;
+            const familyCard = document.getElementById('homeFamily');
+            familyCard.hidden = !family?.members?.length;
+            familyCard.innerHTML = family?.members?.length ? `
+                <h3>${escapeHtml(family.name || 'Your Goshen family')}</h3>
+                <p class="muted">Your family registration for ${escapeHtml(family.event_name || 'Goshen Retreat')}.</p>
+                <div class="family-tree-members">
+                    ${family.members.map((member) => {
+                        const initials = `${member.name || ''}`.split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || '?';
+                        return `<div class="family-tree-member">
+                            <span class="family-tree-avatar">${member.avatar ? `<img src="${escapeHtml(member.avatar)}" alt="${escapeHtml(member.name)} profile photo">` : escapeHtml(initials)}</span>
+                            <div class="record-title"><strong>${escapeHtml(member.name)}${member.is_current_user ? ' (You)' : ''}</strong><span class="item-meta">${escapeHtml(member.role === 'child' ? `Child${member.age ? `, age ${member.age}` : ''}` : member.role)}</span></div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            ` : '';
         }
 
         function walletAmount(amount, currency) {
@@ -4326,6 +4447,7 @@
                             <small class="muted">${escapeHtml(user.membership_status_change_message || 'You can update this status once every 30 days.')}</small>
                         </div>
                         <div class="field"><label for="profileBirthdayMonthDay">Birthday (month and day)</label><input class="input" id="profileBirthdayMonthDay" name="birthday_month_day" type="text" inputmode="numeric" maxlength="5" autocomplete="bday" placeholder="MM-DD" value="${escapeHtml(user.birthday_month_day || '')}" pattern="^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$" title="Use MM-DD, for example 07-23." aria-describedby="profileBirthdayMonthDayHint" required><small class="muted" id="profileBirthdayMonthDayHint">Enter month and day as MM-DD, for example 07-23. We would love to celebrate your birthday with you.</small></div>
+                        <div class="field"><label><input type="checkbox" name="adult_confirmation" value="1" ${user.is_adult_confirmed ? 'checked' : ''} required> I confirm that I am 18 years or older.</label><small class="muted">This helps us keep adult retreat registrations accurate.</small></div>
                         <div class="field">
                             <label>Church group</label>
                             <select class="input" name="group_id" required>${groupOptionsMarkup(user.group_id)}</select>
@@ -4875,6 +4997,17 @@
         });
 
         document.getElementById('portalMain').addEventListener('click', async (event) => {
+            const addFamilyChild = event.target.closest('.add-family-child');
+            if (addFamilyChild) {
+                const list = addFamilyChild.closest('.family-registration-fields')?.querySelector('.family-children-list');
+                if (list) list.insertAdjacentHTML('beforeend', renderFamilyChildFields({}, list.querySelectorAll('[data-family-child]').length));
+                return;
+            }
+            const removeFamilyChild = event.target.closest('.remove-family-child');
+            if (removeFamilyChild) {
+                removeFamilyChild.closest('[data-family-child]')?.remove();
+                return;
+            }
             const completeProfileForRegistration = event.target.closest('.complete-profile-for-registration');
             if (completeProfileForRegistration) {
                 beginProfileCompletion(completeProfileForRegistration.closest('.registration-form'));

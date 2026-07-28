@@ -40,6 +40,7 @@ class MobileUser extends Authenticatable
         'membership_status_changed_at' => 'datetime',
         'birthday_month' => 'integer',
         'birthday_day' => 'integer',
+        'adult_confirmed_at' => 'datetime',
         'scanner_suspended_at' => 'datetime',
         'notification_preferences' => 'array',
         'wallet_security_reset_required' => 'boolean',

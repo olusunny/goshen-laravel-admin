@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\AppSetting;
 use App\Models\GoshenAccommodationAllocation;
+use App\Models\GoshenFamily;
+use App\Models\GoshenFamilyMember;
 use App\Models\GoshenVoucher;
 use App\Models\GoshenVoucherUsage;
 use App\Models\GoshenWallet;
@@ -11,6 +13,7 @@ use App\Models\GoshenWalletLedgerEntry;
 use App\Models\MobileUser;
 use App\Services\GoshenAccommodationEligibility;
 use App\Services\GoshenBookingLifecycleService;
+use App\Services\GoshenFamilyRegistrationService;
 use App\Services\GoshenReferralService;
 use App\Services\GoshenRegistrationAvailabilityService;
 use App\Services\GoshenRegistrationFieldService;
@@ -963,6 +966,14 @@ class GoshenRetreatController extends Controller
 
         $bookingIds = $bookings->pluck('id');
         $membership = app(MembershipProfileService::class);
+        $family = GoshenFamily::query()
+            ->with(['event', 'members.mobileUser'])
+            ->where(function ($query) use ($user): void {
+                $query->where('created_by_mobile_user_id', $user->id)
+                    ->orWhereHas('members', fn ($members) => $members->where('mobile_user_id', $user->id));
+            })
+            ->latest()
+            ->first();
 
         return response()->json([
             'status' => 'ok',
@@ -1023,6 +1034,7 @@ class GoshenRetreatController extends Controller
                     ->get()
                     ->map(fn (GoshenAccommodationAllocation $allocation): array => $this->accommodationAllocationPayload($allocation))
                     ->values(),
+                'family' => $family ? $this->familyDashboardPayload($family, $user) : null,
                 'referral' => $referrals->summaryFor($user),
             ],
         ]);
@@ -1036,6 +1048,7 @@ class GoshenRetreatController extends Controller
         GoshenReferralService $referrals,
         GoshenVoucherService $vouchers,
         GoshenRegistrationAvailabilityService $availability,
+        GoshenFamilyRegistrationService $families,
         TicketNotificationService $ticketEmails,
     ): JsonResponse {
         abort_unless($this->enabled(), 404, 'Goshen Retreat is not currently available.');
@@ -1071,7 +1084,7 @@ class GoshenRetreatController extends Controller
             'uk_privacy_consent' => ['accepted'],
             'privacy_policy_version' => ['nullable', 'string', 'max:80'],
             'apply_pay_in_full_discount' => ['nullable', 'boolean'],
-            'attendees' => ['required', 'array', 'min:1'],
+            'attendees' => ['nullable', 'array'],
             'attendees.*.first_name' => ['nullable', 'string', 'max:100'],
             'attendees.*.last_name' => ['nullable', 'string', 'max:100'],
             'attendees.*.email' => ['nullable', 'email', 'max:255'],
@@ -1083,6 +1096,11 @@ class GoshenRetreatController extends Controller
             'attendees.*.free_church_bus_interest' => ['nullable', 'string', 'max:80'],
             'attendees.*.volunteer_department' => ['nullable', 'string', 'max:120'],
             'attendees.*.custom_fields' => ['nullable', 'array'],
+            'family' => ['nullable', 'array'],
+            'family.name' => ['nullable', 'string', 'max:120'],
+            'family.father' => ['nullable', 'array'],
+            'family.mother' => ['nullable', 'array'],
+            'family.children' => ['nullable', 'array', 'max:18'],
         ]);
 
         if ($validator->fails()) {
@@ -1119,7 +1137,7 @@ class GoshenRetreatController extends Controller
         $managedWalletCharge = null;
 
         try {
-            return DB::transaction(function () use ($validated, $actor, $user, $ticketIssuer, $wallets, $walletSecurityResets, $referrals, $vouchers, $availability, $ticketEmails, $request, &$managedWalletCharge): JsonResponse {
+            return DB::transaction(function () use ($validated, $actor, $user, $ticketIssuer, $wallets, $walletSecurityResets, $referrals, $vouchers, $availability, $families, $ticketEmails, $request, &$managedWalletCharge): JsonResponse {
                 $event = $this->goshenEventsQuery()
                     ->where('public_id', $validated['event_id'])
                     ->where('status', 'published')
@@ -1137,17 +1155,6 @@ class GoshenRetreatController extends Controller
                     app(GoshenRegistrationFieldService::class)->ensureDefaultsForEvent($event);
                     $event->unsetRelation('attendeeFields');
                     $event->load('attendeeFields');
-                }
-
-                $registrationFields = app(GoshenRegistrationFieldService::class);
-                [$attendees, $fieldErrors] = $registrationFields->normalizeSubmittedAttendees($event, $validated['attendees'] ?? []);
-
-                if ($fieldErrors !== []) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => collect($fieldErrors)->first(),
-                        'errors' => $fieldErrors,
-                    ], 422);
                 }
 
                 if (! $this->registrationIsOpen($event)) {
@@ -1171,7 +1178,55 @@ class GoshenRetreatController extends Controller
                     ], 422);
                 }
 
-                $quantity = (int) $validated['quantity'];
+                $registrationFields = app(GoshenRegistrationFieldService::class);
+                $isManagerAssisted = (int) $actor->id !== (int) $user->id;
+                $familyRegistration = null;
+                if ($families->isFamilyTicket((string) $ticketType->name)) {
+                    try {
+                        $familyRegistration = $families->prepare(
+                            is_array($validated['family'] ?? null) ? $validated['family'] : [],
+                            $user,
+                            $isManagerAssisted,
+                        );
+                    } catch (ValidationException $exception) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => collect($exception->errors())->flatten()->first() ?: 'Please complete the family details.',
+                            'errors' => $exception->errors(),
+                        ], 422);
+                    }
+
+                    $attendees = collect($familyRegistration['members'])->map(function (array $member) use ($familyRegistration, $ticketType): array {
+                        return [
+                            'first_name' => $member['first_name'],
+                            'last_name' => $member['last_name'] ?: null,
+                            'email' => $member['email'],
+                            'phone' => $member['phone'],
+                            'free_church_bus_interest' => 'no_thanks',
+                            '_registration_custom_fields' => [
+                                'family_name' => $familyRegistration['family_name'],
+                                'family_role' => $member['role'],
+                                'family_age' => $member['age'],
+                                'family_parent_names' => $member['role'] === 'child' ? $familyRegistration['parent_names'] : [],
+                                'ticket_amount' => $member['is_payable'] ? (float) $ticketType->price : 0,
+                                'payment_exempt' => ! $member['is_payable'],
+                            ],
+                            '_family_member' => $member,
+                        ];
+                    })->all();
+                    $quantity = count($attendees);
+                } else {
+                    [$attendees, $fieldErrors] = $registrationFields->normalizeSubmittedAttendees($event, $validated['attendees'] ?? []);
+                    if ($fieldErrors !== []) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => collect($fieldErrors)->first(),
+                            'errors' => $fieldErrors,
+                        ], 422);
+                    }
+                    $quantity = (int) $validated['quantity'];
+                }
+
                 if ($ticketType->max_per_booking && $quantity > (int) $ticketType->max_per_booking) {
                     return response()->json([
                         'status' => 'error',
@@ -1189,7 +1244,6 @@ class GoshenRetreatController extends Controller
                 $paymentMode = in_array(($validated['payment_mode'] ?? ''), ['wallet', 'voucher'], true)
                     ? (string) $validated['payment_mode']
                     : 'outright';
-                $isManagerAssisted = (int) $actor->id !== (int) $user->id;
                 $managerWalletAuthorization = null;
                 $memberWalletChargeKey = null;
                 if ($isManagerAssisted && $paymentMode === 'wallet') {
@@ -1250,8 +1304,11 @@ class GoshenRetreatController extends Controller
                 $freeChurchBusInterested = collect($attendees)
                     ->contains(fn (array $attendee): bool => ($attendee['free_church_bus_interest'] ?? 'no_thanks') === 'yes');
 
-                $ticketSubtotal = (float) $ticketType->price * $quantity;
-                $selectedOptionFees = $registrationFields->selectedOptionFees($event, $attendees, (string) $ticketType->currency);
+                $payableQuantity = $familyRegistration['payable_count'] ?? $quantity;
+                $ticketSubtotal = (float) $ticketType->price * $payableQuantity;
+                $selectedOptionFees = $familyRegistration === null
+                    ? $registrationFields->selectedOptionFees($event, $attendees, (string) $ticketType->currency)
+                    : ['total' => 0, 'items' => []];
                 $optionFeeTotal = (float) ($selectedOptionFees['total'] ?? 0);
                 $subtotal = round($ticketSubtotal + $optionFeeTotal, 2);
                 $discount = $this->payInFullDiscount($event, $ticketSubtotal, (bool) ($validated['apply_pay_in_full_discount'] ?? true));
@@ -1387,6 +1444,14 @@ class GoshenRetreatController extends Controller
                     'manager_assisted' => $isManagerAssisted,
                 ];
 
+                if ($familyRegistration !== null) {
+                    $bookingMetadata['family_registration'] = [
+                        'name' => $familyRegistration['family_name'],
+                        'payable_count' => $familyRegistration['payable_count'],
+                        'complimentary_count' => $familyRegistration['complimentary_count'],
+                    ];
+                }
+
                 if ($managerWalletAuthorization !== null) {
                     $bookingMetadata['manager_wallet_authorization'] = $managerWalletAuthorization;
                     $bookingMetadata['member_wallet_charge'] = $managedWalletCharge;
@@ -1433,30 +1498,44 @@ class GoshenRetreatController extends Controller
                 BookingLine::query()->create([
                     'booking_id' => $booking->id,
                     'ticket_type_id' => $ticketType->id,
-                    'quantity' => $quantity,
+                    'quantity' => $payableQuantity,
                     'currency' => $booking->currency,
                     'unit_price' => $ticketType->price,
                     'line_total' => $ticketSubtotal,
-                    'metadata' => ($discount['amount'] > 0 || $optionFeeTotal > 0) ? [
+                    'metadata' => ($discount['amount'] > 0 || $optionFeeTotal > 0 || $familyRegistration !== null) ? [
                         'discount_amount' => $discount['amount'],
                         'payable_total' => $total,
                         'selected_option_fees' => $selectedOptionFees['items'] ?? [],
                         'selected_option_fee_total' => $optionFeeTotal,
+                        'family_paid_members' => $familyRegistration['payable_count'] ?? null,
                     ] : null,
                 ]);
 
+                if ($familyRegistration !== null && $familyRegistration['complimentary_count'] > 0) {
+                    BookingLine::query()->create([
+                        'booking_id' => $booking->id,
+                        'ticket_type_id' => $ticketType->id,
+                        'quantity' => $familyRegistration['complimentary_count'],
+                        'currency' => $booking->currency,
+                        'unit_price' => 0,
+                        'line_total' => 0,
+                        'metadata' => ['family_child_payment_exemption' => true],
+                    ]);
+                }
+
+                $createdAttendees = [];
                 for ($index = 0; $index < $quantity; $index++) {
                     $attendee = $attendees[$index] ?? $attendees[0];
                     $customFields = is_array($attendee['_registration_custom_fields'] ?? null)
                         ? $attendee['_registration_custom_fields']
                         : [];
-                    Attendee::query()->create([
+                    $createdAttendees[] = Attendee::query()->create([
                         'booking_id' => $booking->id,
                         'ticket_type_id' => $ticketType->id,
                         'first_name' => $attendee['first_name'] ?? null,
                         'last_name' => $attendee['last_name'] ?? null,
-                        'email' => $attendee['email'] ?? $user->email,
-                        'phone' => $attendee['phone'] ?? $user->phone,
+                        'email' => $familyRegistration !== null ? ($attendee['email'] ?? null) : ($attendee['email'] ?? $user->email),
+                        'phone' => $familyRegistration !== null ? ($attendee['phone'] ?? null) : ($attendee['phone'] ?? $user->phone),
                         'company' => $attendee['company'] ?? null,
                         'designation' => $attendee['designation'] ?? null,
                         'custom_fields' => array_merge([
@@ -1464,6 +1543,35 @@ class GoshenRetreatController extends Controller
                             'attendee_index' => $index + 1,
                         ], $customFields),
                     ]);
+                }
+
+                if ($familyRegistration !== null) {
+                    $family = GoshenFamily::query()->create([
+                        'event_id' => $event->id,
+                        'booking_id' => $booking->id,
+                        'created_by_mobile_user_id' => $user->id,
+                        'name' => $familyRegistration['family_name'],
+                    ]);
+
+                    foreach ($createdAttendees as $index => $attendee) {
+                        $member = $attendees[$index]['_family_member'];
+                        GoshenFamilyMember::query()->create([
+                            'goshen_family_id' => $family->id,
+                            'attendee_id' => $attendee->id,
+                            'mobile_user_id' => $member['mobile_user_id'],
+                            'role' => $member['role'],
+                            'date_of_birth' => $member['date_of_birth'],
+                            'first_name' => $member['first_name'],
+                            'last_name' => $member['last_name'] ?: null,
+                            'email' => $member['email'],
+                            'phone' => $member['phone'],
+                            'metadata' => [
+                                'age' => $member['age'],
+                                'is_payable' => $member['is_payable'],
+                                'profile_status' => $member['profile_status'],
+                            ],
+                        ]);
+                    }
                 }
 
                 if (! $isFreeRegistration) {
@@ -3937,6 +4045,7 @@ class GoshenRetreatController extends Controller
 
         $paidAmount = $this->ticketPaidAmount($ticket);
         $currency = strtoupper((string) ($ticket->booking?->currency ?: $ticket->ticketType?->currency ?: 'GBP'));
+        $metadata = is_array($ticket->metadata) ? $ticket->metadata : [];
 
         return [
             'public_id' => $ticket->public_id,
@@ -3951,6 +4060,11 @@ class GoshenRetreatController extends Controller
             'amount_paid' => $paidAmount,
             'paid_amount' => $paidAmount,
             'amount_paid_label' => trim($currency.' '.number_format($paidAmount, 2)),
+            'family' => array_filter([
+                'name' => $metadata['family_name'] ?? null,
+                'role' => $metadata['family_role'] ?? null,
+                'parent_names' => $metadata['family_parent_names'] ?? null,
+            ], fn (mixed $value): bool => $value !== null && $value !== []),
             'qr_payload' => $payload,
             'qr_encoded' => $encoded,
             'document_urls' => $ticket->public_id ? [
@@ -3964,8 +4078,10 @@ class GoshenRetreatController extends Controller
     private function ticketPaidAmount(Ticket $ticket): float
     {
         $metadata = is_array($ticket->metadata) ? $ticket->metadata : [];
-        $metadataAmount = $metadata['amount_paid'] ?? $metadata['historical_paid_amount'] ?? null;
-        if (is_numeric($metadataAmount) && (float) $metadataAmount > 0) {
+        $metadataAmount = array_key_exists('amount_paid', $metadata)
+            ? $metadata['amount_paid']
+            : ($metadata['historical_paid_amount'] ?? null);
+        if (is_numeric($metadataAmount)) {
             return round((float) $metadataAmount, 2);
         }
 
@@ -4974,6 +5090,28 @@ class GoshenRetreatController extends Controller
             ));
     }
 
+    private function familyDashboardPayload(GoshenFamily $family, MobileUser $user): array
+    {
+        return [
+            'name' => $family->name,
+            'event_name' => $family->event?->name,
+            'members' => $family->members
+                ->sortBy(fn (GoshenFamilyMember $member): int => match ($member->role) {
+                    'father' => 0,
+                    'mother' => 1,
+                    default => 2,
+                })
+                ->map(fn (GoshenFamilyMember $member): array => [
+                    'name' => trim($member->first_name.' '.$member->last_name),
+                    'role' => $member->role,
+                    'age' => $member->role === 'child' ? $member->metadata['age'] ?? null : null,
+                    'avatar' => MediaUrl::resolve($member->mobileUser?->avatar) ?: null,
+                    'is_current_user' => (int) $member->mobile_user_id === (int) $user->id,
+                ])
+                ->values(),
+        ];
+    }
+
     private function profileMissingFields(MobileUser $user): array
     {
         $required = [
@@ -5001,6 +5139,10 @@ class GoshenRetreatController extends Controller
 
         if (! $isVisitor && (! $user->birthday_month || ! $user->birthday_day)) {
             $missing->push('birthday (month and day)');
+        }
+
+        if (! $user->adult_confirmed_at) {
+            $missing->push('18+ confirmation');
         }
 
         return $missing->all();

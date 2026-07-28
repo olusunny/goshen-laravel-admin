@@ -120,6 +120,11 @@ class TicketDocumentService
             : (string) $ticket->status;
         $eventTitle = $ticket->event?->name ?: 'Goshen Retreat';
         $ticketType = $ticket->ticketType?->name ?: 'Ticket';
+        $metadata = is_array($ticket->metadata) ? $ticket->metadata : [];
+        $parents = collect($metadata['family_parent_names'] ?? [])->filter()->implode(' and ');
+        if ($parents !== '') {
+            $ticketType .= ' | Parent(s): '.$parents;
+        }
         $issuedAt = $ticket->issued_at?->format('M j, Y g:i A') ?: 'Not recorded';
         $logo = $this->imageDataUri(public_path('images/goshenretreatlogo.png'), 'image/png');
         $qr = $this->qrDataUri($ticket);

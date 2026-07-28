@@ -8,6 +8,7 @@ use App\Filament\Resources\GoshenWalletResource;
 use App\Filament\Resources\GoshenTicketResource\Pages\CreateGoshenTicket;
 use App\Filament\Resources\GoshenTicketResource\Pages\ViewGoshenTicket;
 use App\Models\GoshenWallet;
+use App\Models\GoshenFamily;
 use App\Models\MobileUser;
 use App\Models\SmtpSetting;
 use App\Models\User;
@@ -85,7 +86,7 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             ->assertDontSee('zero-value');
     }
 
-    public function test_family_ticket_type_reveals_attendee_quantity_on_admin_issue_form(): void
+    public function test_family_ticket_type_reveals_family_fields_on_admin_issue_form(): void
     {
         [$member, $ticketType, $admin] = $this->issuanceFixture();
         $ticketType->forceFill([
@@ -105,11 +106,12 @@ class GoshenAdminTicketIssuanceTest extends TestCase
                 'issuance_reason' => 'Family desk registration',
                 'payment_method' => 'voucher',
             ])
-            ->assertSchemaComponentVisible('attendee_quantity')
-            ->assertSet('data.attendee_quantity', 2);
+            ->assertSchemaComponentHidden('attendee_quantity')
+            ->assertSchemaComponentVisible('family.name')
+            ->assertSee('Family registration');
     }
 
-    public function test_family_ticket_quantity_syncs_visible_attendee_detail_rows_on_admin_issue_form(): void
+    public function test_family_ticket_hides_generic_attendee_rows_on_admin_issue_form(): void
     {
         [$member, $ticketType, $admin] = $this->issuanceFixture();
         $ticketType->forceFill([
@@ -129,16 +131,11 @@ class GoshenAdminTicketIssuanceTest extends TestCase
                 'issuance_reason' => 'Family desk registration',
                 'payment_method' => 'voucher',
             ])
-            ->assertSchemaComponentVisible('attendee_quantity')
-            ->assertSchemaComponentVisible('attendees')
-            ->assertSet('data.attendee_quantity', 1)
-            ->assertSet('data.attendees', fn (array $attendees): bool => count($attendees) === 1
-                && ($attendees[0]['email'] ?? null) === $member->email)
-            ->set('data.attendee_quantity', 4)
-            ->assertSet('data.attendees', fn (array $attendees): bool => count($attendees) === 4)
-            ->assertSee('Family attendees')
-            ->assertSee('First name')
-            ->assertSee('Phone');
+            ->assertSchemaComponentHidden('attendee_quantity')
+            ->assertSchemaComponentHidden('attendees')
+            ->assertSchemaComponentVisible('family.name')
+            ->assertSee("Father's details")
+            ->assertSee("Children's details");
     }
 
     public function test_admin_family_ticket_quantity_reveals_and_saves_each_attendee_detail(): void
@@ -153,7 +150,7 @@ class GoshenAdminTicketIssuanceTest extends TestCase
         $voucher = app(GoshenVoucherService::class)->createVoucher([
             'event_id' => $ticketType->event_id,
             'currency' => $ticketType->currency,
-            'amount' => 450,
+            'amount' => 300,
             'max_uses' => 1,
         ], adminActor: $admin);
 
@@ -163,33 +160,17 @@ class GoshenAdminTicketIssuanceTest extends TestCase
                 'customer_id' => $member->id,
                 'event_id' => $ticketType->event_id,
                 'ticket_type_id' => $ticketType->id,
-                'attendee_quantity' => 3,
-                'attendees' => [
-                    [
-                        'first_name' => 'Ada',
-                        'last_name' => 'Lovelace',
-                        'email' => 'ada-family@example.test',
-                        'phone' => '+447700900001',
-                    ],
-                    [
-                        'first_name' => 'Grace',
-                        'last_name' => 'Lovelace',
-                        'email' => 'grace-family@example.test',
-                        'phone' => '+447700900002',
-                    ],
-                    [
-                        'first_name' => 'Faith',
-                        'last_name' => 'Lovelace',
-                        'email' => 'faith-family@example.test',
-                        'phone' => '+447700900003',
-                    ],
+                'family' => [
+                    'name' => 'Lovelace Family',
+                    'father' => ['included' => true, 'first_name' => 'Ada', 'last_name' => 'Lovelace'],
+                    'mother' => ['included' => true, 'first_name' => 'Grace', 'last_name' => 'Lovelace'],
+                    'children' => [['first_name' => 'Faith', 'last_name' => 'Lovelace', 'date_of_birth' => now()->subYears(10)->toDateString()]],
                 ],
                 'issuance_reason' => 'Family desk registration',
                 'payment_method' => 'voucher',
                 'voucher_code' => $voucher['code'],
             ])
-            ->assertSchemaComponentVisible('attendee_quantity')
-            ->assertSchemaComponentVisible('attendees')
+            ->assertSchemaComponentVisible('family.name')
             ->call('create')
             ->assertHasNoFormErrors();
 
@@ -199,14 +180,12 @@ class GoshenAdminTicketIssuanceTest extends TestCase
         $this->assertCount(3, $attendees);
         $this->assertCount(3, $booking->tickets);
         $this->assertSame(['Ada', 'Grace', 'Faith'], $attendees->pluck('first_name')->all());
-        $this->assertSame([
-            'ada-family@example.test',
-            'grace-family@example.test',
-            'faith-family@example.test',
-        ], $attendees->pluck('email')->all());
-        $this->assertSame(['+447700900001', '+447700900002', '+447700900003'], $attendees->pluck('phone')->all());
+        $this->assertSame('', (string) $attendees->last()->email);
+        $this->assertSame('', (string) $attendees->last()->phone);
         $this->assertSame('3', (string) $booking->metadata['attendee_quantity']);
-        $this->assertSame('450.00', $booking->total);
+        $this->assertSame('300.00', $booking->total);
+        $this->assertSame(0.0, (float) $booking->tickets()->latest('id')->value('metadata->amount_paid'));
+        $this->assertTrue(GoshenFamily::query()->where('booking_id', $booking->id)->exists());
     }
 
     public function test_filament_voucher_submission_creates_a_normal_paid_ticket(): void
@@ -645,6 +624,12 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             'voucher',
             $voucher['code'],
             attendeeQuantity: 3,
+            family: [
+                'name' => 'Front Desk Family',
+                'father' => ['included' => true, 'first_name' => 'Father', 'last_name' => 'Desk'],
+                'mother' => ['included' => true, 'first_name' => 'Mother', 'last_name' => 'Desk'],
+                'children' => [['first_name' => 'Adult', 'last_name' => 'Desk', 'date_of_birth' => now()->subYears(16)->toDateString()]],
+            ],
         );
 
         $booking = $ticket->booking()->with(['lines', 'attendees', 'tickets', 'installments.transactions'])->firstOrFail();
