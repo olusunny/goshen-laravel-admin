@@ -36,6 +36,14 @@ Do not use or modify older `C:\ScriptsDev\CovenantofmercyAPP...` workspaces unle
 
 Never print private key contents.
 
+### Runtime and Composer baseline
+
+- Target production runtime: PHP `8.4.22` at `/opt/cpanel/ea-php84/root/usr/bin/php`.
+- Require Redis extension `6.1+` for dependencies such as `symfony/cache`.
+- Do not use the default PHP 8.3 CLI or Redis 5.3.7 for Composer or Laravel release commands.
+- The account Composer wrapper is pinned to PHP 8.3. For deployments, use `/home/goshenretreat/apps/portal/shared/tools/composer-php84` or invoke the Composer PHAR with PHP 8.4.
+- Write and validate new Composer dependencies against PHP 8.4 and Redis 6.1+.
+
 Previous security hardening commits:
 
 - `06d293c Harden portal after malware incident`
