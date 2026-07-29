@@ -58,6 +58,7 @@
                     'branding' => ['Branding', 'Logo and app identity', 'heroicon-o-photo'],
                     'social' => ['Social links', 'Public contact channels', 'heroicon-o-share'],
                     'features' => ['Activation', 'Mobile app feature switches', 'heroicon-o-adjustments-horizontal'],
+                    'performance' => ['Performance', 'Application cache control', 'heroicon-o-bolt'],
                     'payments' => ['Giving & payments', 'PayPal and Stripe setup', 'heroicon-o-credit-card'],
                     'support' => ['Support', 'Accommodation support contact', 'heroicon-o-lifebuoy'],
                     'integrations' => ['Integrations', 'Gateways and credentials', 'heroicon-o-squares-plus'],
@@ -175,6 +176,22 @@
                                 </span>
                             </label>
                         @endforeach
+                    </div>
+                </section>
+
+                <section class="ash-panel" x-show="tab === 'performance'" x-cloak>
+                    <div class="ash-panel-head">
+                        <h2 class="ash-h2">Cache performance</h2>
+                        <p class="ash-muted">Redis cache is opt-in. Control where the application stores temporary cached data without changing member data or financial records.</p>
+                    </div>
+                    <div class="ash-checks">
+                        <label class="ash-check ash-field-full">
+                            <input type="checkbox" wire:model.live="redisCacheEnabled">
+                            <span>
+                                <strong>Use Redis for application cache</strong>
+                                <span>Redis is used for cache only. When it is turned off or unavailable, the database cache remains the fallback. Sessions, queues, payments, wallet balances, tickets, and audit records are unchanged.</span>
+                            </span>
+                        </label>
                     </div>
                 </section>
 

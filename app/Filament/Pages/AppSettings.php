@@ -107,6 +107,8 @@ class AppSettings extends Page
 
     public bool $mobilePhoneOtpLoginEnabled = true;
 
+    public bool $redisCacheEnabled = false;
+
     public string $accommodationSupportName = '';
 
     public string $accommodationSupportEmail = '';
@@ -181,6 +183,7 @@ class AppSettings extends Page
         $this->goshenWalletAdminTopupEnabled = filter_var(AppSetting::value('goshen_wallet_admin_topup_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         $this->branchesEnabled = filter_var(AppSetting::value('branches_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         $this->mobilePhoneOtpLoginEnabled = filter_var(AppSetting::value('mobile_phone_otp_login_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+        $this->redisCacheEnabled = filter_var(AppSetting::value('redis_cache_enabled', '0'), FILTER_VALIDATE_BOOLEAN);
 
         $this->accommodationSupportName = (string) AppSetting::value('accommodation_booking_support_name', '');
         $this->accommodationSupportEmail = (string) AppSetting::value('accommodation_booking_support_email', '');
@@ -346,6 +349,7 @@ class AppSettings extends Page
             'goshen_wallet_admin_topup_enabled' => ['required', 'boolean'],
             'branches_enabled' => ['required', 'boolean'],
             'mobile_phone_otp_login_enabled' => ['required', 'boolean'],
+            'redis_cache_enabled' => ['required', 'boolean'],
             'accommodation_booking_support_name' => ['nullable', 'string', 'max:120'],
             'accommodation_booking_support_email' => ['nullable', 'email', 'max:190'],
             'accommodation_booking_support_phone' => ['nullable', 'string', 'max:80'],
@@ -409,6 +413,7 @@ class AppSettings extends Page
             'goshen_wallet_admin_topup_enabled' => $this->goshenWalletAdminTopupEnabled,
             'branches_enabled' => $this->branchesEnabled,
             'mobile_phone_otp_login_enabled' => $this->mobilePhoneOtpLoginEnabled,
+            'redis_cache_enabled' => $this->redisCacheEnabled,
             'accommodation_booking_support_name' => $this->accommodationSupportName,
             'accommodation_booking_support_email' => $this->accommodationSupportEmail,
             'accommodation_booking_support_phone' => $this->accommodationSupportPhone,
@@ -461,6 +466,7 @@ class AppSettings extends Page
             ['features', 'goshen_wallet_admin_topup_enabled', $values['goshen_wallet_admin_topup_enabled'] ? '1' : '0', 'Allow authorized admins to add funds directly to member wallets from the admin panel.'],
             ['features', 'branches_enabled', $values['branches_enabled'] ? '1' : '0', 'Show Branches module in the mobile app.'],
             ['features', 'mobile_phone_otp_login_enabled', $values['mobile_phone_otp_login_enabled'] ? '1' : '0', 'Allow Firebase phone OTP sign-in in the mobile app.'],
+            ['performance', 'redis_cache_enabled', $values['redis_cache_enabled'] ? '1' : '0', 'Use Redis for application cache only. Database cache remains available as the fallback; sessions, queues, payments, and wallet records are unchanged.'],
             ['support', 'accommodation_booking_support_name', $values['accommodation_booking_support_name'] ?? '', 'Accommodation support contact name.'],
             ['support', 'accommodation_booking_support_email', $values['accommodation_booking_support_email'] ?? '', 'Accommodation support email address.'],
             ['support', 'accommodation_booking_support_phone', $values['accommodation_booking_support_phone'] ?? '', 'Accommodation support phone number.'],
@@ -608,6 +614,7 @@ class AppSettings extends Page
             'goshen_wallet_admin_topup_enabled',
             'branches_enabled',
             'mobile_phone_otp_login_enabled',
+            'redis_cache_enabled',
             'accommodation_booking_support_name',
             'accommodation_booking_support_email',
             'accommodation_booking_support_phone',
