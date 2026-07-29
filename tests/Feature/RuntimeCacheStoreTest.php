@@ -10,6 +10,7 @@ use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use PDO;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
@@ -76,22 +77,48 @@ class RuntimeCacheStoreTest extends TestCase
 
     public function test_config_cache_keeps_the_failover_definition_for_a_fresh_php_process(): void
     {
-        Artisan::call('config:cache');
+        $database = tempnam(sys_get_temp_dir(), 'goshen-redis-cache-');
+        $pdo = new PDO("sqlite:{$database}");
+        $pdo->exec('create table app_settings (id integer primary key, "group" varchar, key varchar, value varchar, is_secret integer, description varchar, created_at datetime, updated_at datetime)');
+        $pdo->exec("insert into app_settings (id, \"group\", key, value, is_secret) values (1, 'performance', 'redis_cache_enabled', '1', 0)");
+
+        $environment = [
+            'APP_ENV' => 'testing',
+            'DB_CONNECTION' => 'sqlite',
+            'DB_DATABASE' => $database,
+            'CACHE_STORE' => 'database',
+        ];
 
         try {
+            $configCache = new Process([PHP_BINARY, 'artisan', 'config:cache'], base_path(), $environment);
+            $configCache->run();
+            $this->assertTrue($configCache->isSuccessful(), $configCache->getErrorOutput());
+
             $cachedConfig = base_path('bootstrap/cache/config.php');
-            $process = new Process([
+            $definition = new Process([
                 PHP_BINARY,
                 '-r',
                 'echo (require $argv[1])["cache"]["stores"]["redis_failover"]["driver"];',
                 $cachedConfig,
             ]);
+            $definition->run();
+
+            $this->assertTrue($definition->isSuccessful(), $definition->getErrorOutput());
+            $this->assertSame('failover', $definition->getOutput());
+
+            $process = new Process([
+                PHP_BINARY,
+                'artisan',
+                'tinker',
+                '--execute=echo app("cache")->getDefaultDriver();',
+            ], base_path(), $environment);
             $process->run();
 
             $this->assertTrue($process->isSuccessful(), $process->getErrorOutput());
-            $this->assertSame('failover', $process->getOutput());
+            $this->assertSame('redis_failover', trim($process->getOutput()));
         } finally {
             Artisan::call('config:clear');
+            @unlink($database);
         }
     }
 
