@@ -893,6 +893,12 @@
             color: #fff;
             font-weight: 700;
         }
+        html.theme-dark .badge.accommodation-status-badge,
+        body.theme-dark .badge.accommodation-status-badge {
+            background: #6f4c00;
+            color: #fff;
+            font-weight: 900;
+        }
 
         .grid {
             display: grid;
@@ -2645,12 +2651,12 @@
             return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
         }
 
-        function statusBadge(value) {
+        function statusBadge(value, extraClass = '') {
             const status = `${value || 'pending'}`.replace(/_/g, ' ');
             const className = /paid|issued|active|ok|confirmed|completed/i.test(status)
                 ? 'ok'
                 : (/cancel|failed|refunded|expired/i.test(status) ? 'danger' : '');
-            return `<span class="badge ${className}">${escapeHtml(status)}</span>`;
+            return `<span class="badge ${className} ${escapeHtml(extraClass)}">${escapeHtml(status)}</span>`;
         }
 
         function currentPathSegment() {
@@ -3835,7 +3841,7 @@
                             <div class="record-title">
                                 <strong>${escapeHtml(allocation.attendee?.name || 'Registered attendee')}</strong>
                                 <span class="item-meta">${escapeHtml(allocation.event?.name || 'Goshen Retreat')}</span>
-                                ${statusBadge(allocation.status || 'assigned')}
+                                ${statusBadge(allocation.status || 'assigned', 'accommodation-status-badge')}
                             </div>
                         </article>
                     `).join('')}
@@ -3843,7 +3849,7 @@
             ` : `
                 <h3>Room allocation</h3>
                 <p class="muted accommodation-status-text">Your room allocation is being prepared. Once confirmed, your room status will appear here before check-in.</p>
-                ${statusBadge('Room allocation pending')}
+                ${statusBadge('Room allocation pending', 'accommodation-status-badge')}
             `;
 
             const family = memberData.family;
@@ -3875,7 +3881,7 @@
                                 <span class="item-meta">${escapeHtml(role)}</span>
                                 <div class="family-tree-meta">
                                     ${ticketDetails ? `<span class="item-meta family-tree-ticket">Ticket: ${escapeHtml(ticketDetails)}</span>` : ''}
-                                    <span class="family-tree-accommodation accommodation-status-text">${statusBadge(accommodationStatus)}</span>
+                                    <span class="family-tree-accommodation accommodation-status-text">${statusBadge(accommodationStatus, 'accommodation-status-badge')}</span>
                                     ${roomDetails ? `<span class="item-meta family-tree-accommodation accommodation-status-text">${escapeHtml(roomDetails)}</span>` : ''}
                                 </div>
                             </div>

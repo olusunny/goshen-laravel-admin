@@ -25,10 +25,11 @@ class MemberPortalAccommodationDashboardTest extends TestCase
         $this->assertStringContainsString('const allocations = memberData.accommodation_allocations || [];', $dashboard);
         $this->assertStringContainsString('const hasRoomAllocationStatus = allocations.length > 0 || tickets.length > 0;', $dashboard);
         $this->assertStringContainsString('Room allocation', $dashboard);
-        $this->assertStringContainsString("statusBadge('Room allocation pending')", $dashboard);
+        $this->assertStringContainsString("statusBadge('Room allocation pending', 'accommodation-status-badge')", $dashboard);
         $this->assertStringContainsString("allocation.attendee?.name || 'Registered attendee'", $dashboard);
-        $this->assertStringContainsString("statusBadge(allocation.status || 'assigned')", $dashboard);
+        $this->assertStringContainsString("statusBadge(allocation.status || 'assigned', 'accommodation-status-badge')", $dashboard);
         $this->assertStringContainsString('accommodation-status-text', $dashboard);
+        $this->assertStringContainsString('accommodation-status-badge', $dashboard);
         $darkAccommodationStyleStart = strpos($portal, 'html.theme-dark .accommodation-status-text');
         $darkAccommodationStyleEnd = strpos($portal, '}', $darkAccommodationStyleStart);
 
@@ -43,6 +44,8 @@ class MemberPortalAccommodationDashboardTest extends TestCase
 
         $this->assertStringContainsString('color: #fff;', $darkAccommodationStyles);
         $this->assertStringContainsString('font-weight: 700;', $darkAccommodationStyles);
+        $this->assertStringContainsString('html.theme-dark .badge.accommodation-status-badge', $portal);
+        $this->assertStringContainsString('color: #fff;', $portal);
         $this->assertStringNotContainsString('allocation.check_in_note', $dashboard);
         $this->assertStringContainsString('Your retreat details', $dashboard);
         $this->assertStringNotContainsString('Registration ready', $dashboard);
