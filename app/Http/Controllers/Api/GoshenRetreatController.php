@@ -967,11 +967,15 @@ class GoshenRetreatController extends Controller
         $bookingIds = $bookings->pluck('id');
         $membership = app(MembershipProfileService::class);
         $family = GoshenFamily::query()
-            ->with(['event', 'members.mobileUser'])
-            ->where(function ($query) use ($user): void {
-                $query->where('created_by_mobile_user_id', $user->id)
-                    ->orWhereHas('members', fn ($members) => $members->where('mobile_user_id', $user->id));
-            })
+            ->with([
+                'event',
+                'members.mobileUser',
+                'members.attendee.booking',
+                'members.attendee.ticket.ticketType',
+            ])
+            ->whereHas('members', fn ($members) => $members
+                ->where('mobile_user_id', $user->id)
+                ->whereIn('role', ['father', 'mother']))
             ->latest()
             ->first();
 
@@ -5092,22 +5096,59 @@ class GoshenRetreatController extends Controller
 
     private function familyDashboardPayload(GoshenFamily $family, MobileUser $user): array
     {
+        $members = $family->members
+            ->filter(fn (GoshenFamilyMember $member): bool => $member->attendee === null
+                || (int) $member->attendee->booking?->event_id === (int) $family->event_id)
+            ->sortBy(fn (GoshenFamilyMember $member): int => match ($member->role) {
+                'father' => 0,
+                'mother' => 1,
+                default => 2,
+            })
+            ->values();
+
+        $allocations = GoshenAccommodationAllocation::query()
+            ->where('event_id', $family->event_id)
+            ->where('status', '!=', 'removed')
+            ->whereIn('attendee_id', $members->pluck('attendee_id')->filter())
+            ->get()
+            ->keyBy('attendee_id');
+
         return [
             'name' => $family->name,
+            'event_public_id' => $family->event?->public_id,
             'event_name' => $family->event?->name,
-            'members' => $family->members
-                ->sortBy(fn (GoshenFamilyMember $member): int => match ($member->role) {
-                    'father' => 0,
-                    'mother' => 1,
-                    default => 2,
+            'members' => $members
+                ->map(function (GoshenFamilyMember $member) use ($allocations, $user): array {
+                    $attendee = $member->attendee;
+                    $ticket = $attendee?->ticket;
+                    $allocation = $attendee ? $allocations->get($attendee->id) : null;
+
+                    return [
+                        'name' => trim($member->first_name.' '.$member->last_name),
+                        'role' => $member->role,
+                        'age' => $member->role === 'child' ? $member->metadata['age'] ?? null : null,
+                        'avatar' => MediaUrl::resolve($member->mobileUser?->avatar) ?: null,
+                        'is_current_user' => (int) $member->mobile_user_id === (int) $user->id,
+                        'attendee' => $attendee ? [
+                            'public_id' => $attendee->public_id,
+                            'name' => trim(($attendee->first_name ?? '').' '.($attendee->last_name ?? '')),
+                        ] : null,
+                        'ticket' => $ticket ? [
+                            'public_id' => $ticket->public_id,
+                            'ticket_number' => $ticket->formatted_number ?: $ticket->ticket_number,
+                            'status' => $ticket->status?->value ?? $ticket->status,
+                            'ticket_type' => $ticket->ticketType?->name,
+                        ] : null,
+                        'accommodation' => [
+                            'status' => $allocation?->status ?? 'pending',
+                            'is_pending' => $allocation === null,
+                            'building' => $allocation?->building,
+                            'room' => $allocation?->room,
+                            'bed' => $allocation?->bed,
+                            'assigned_at' => $this->isoTimestamp($allocation?->assigned_at),
+                        ],
+                    ];
                 })
-                ->map(fn (GoshenFamilyMember $member): array => [
-                    'name' => trim($member->first_name.' '.$member->last_name),
-                    'role' => $member->role,
-                    'age' => $member->role === 'child' ? $member->metadata['age'] ?? null : null,
-                    'avatar' => MediaUrl::resolve($member->mobileUser?->avatar) ?: null,
-                    'is_current_user' => (int) $member->mobile_user_id === (int) $user->id,
-                ])
                 ->values(),
         ];
     }
