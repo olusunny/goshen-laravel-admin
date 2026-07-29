@@ -198,10 +198,45 @@ class GoshenTicketResource extends Resource
                         ->schema([
                             Forms\Components\TextInput::make('first_name')->required(),
                             Forms\Components\TextInput::make('last_name'),
-                            Forms\Components\DatePicker::make('date_of_birth')->native(false)->required(),
-                            Forms\Components\TextInput::make('email')->email()->label('Email (18+ only)'),
-                            Forms\Components\TextInput::make('phone')->tel()->label('Phone (18+ only)'),
-                            Forms\Components\Toggle::make('adult_confirmation')->label('I confirm this child is 18 or over.'),
+                            Forms\Components\TextInput::make('age')
+                                ->label('Age')
+                                ->numeric()
+                                ->inputMode('numeric')
+                                ->minValue(1)
+                                ->maxValue(120)
+                                ->step(1)
+                                ->live()
+                                ->afterStateUpdated(function (Set $set, mixed $state): void {
+                                    if (! static::childIsAdult($state)) {
+                                        $set('email', null);
+                                        $set('phone', null);
+                                        $set('adult_confirmation', false);
+                                    }
+                                })
+                                ->helperText('Enter the child\'s age. Children aged 1-14 receive complimentary tickets; children aged 15 and over need a paid ticket.')
+                                ->required(),
+                            Forms\Components\Select::make('gender')
+                                ->options(['male' => 'Male', 'female' => 'Female'])
+                                ->native(false)
+                                ->required(),
+                            Forms\Components\TextInput::make('email')
+                                ->email()
+                                ->label('Email (18+ only)')
+                                ->visible(fn (Get $get): bool => static::childIsAdult($get('age')))
+                                ->required(fn (Get $get): bool => static::childIsAdult($get('age')))
+                                ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('age'))),
+                            Forms\Components\TextInput::make('phone')
+                                ->tel()
+                                ->label('Phone (18+ only)')
+                                ->visible(fn (Get $get): bool => static::childIsAdult($get('age')))
+                                ->required(fn (Get $get): bool => static::childIsAdult($get('age')))
+                                ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('age'))),
+                            Forms\Components\Toggle::make('adult_confirmation')
+                                ->label('I confirm this child is 18 or over.')
+                                ->accepted()
+                                ->visible(fn (Get $get): bool => static::childIsAdult($get('age')))
+                                ->required(fn (Get $get): bool => static::childIsAdult($get('age')))
+                                ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('age'))),
                         ])
                         ->columns(2)
                         ->addActionLabel('Add child')
@@ -496,6 +531,15 @@ class GoshenTicketResource extends Resource
                         ->all())
                     ->searchable()
                     ->native(false),
+                Tables\Filters\TernaryFilter::make('family_linked')
+                    ->label('Family link')
+                    ->placeholder('All tickets')
+                    ->trueLabel('Linked to a family')
+                    ->falseLabel('Not linked to a family')
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->whereIn('attendee_id', GoshenFamilyMember::query()->select('attendee_id')->whereNotNull('attendee_id')),
+                        false: fn (Builder $query): Builder => $query->whereNotIn('attendee_id', GoshenFamilyMember::query()->select('attendee_id')->whereNotNull('attendee_id')),
+                    ),
                 Tables\Filters\SelectFilter::make('booking_status')
                     ->label('Booking status')
                     ->options(static::bookingStatusOptions())
@@ -770,10 +814,13 @@ class GoshenTicketResource extends Resource
                     Forms\Components\TextInput::make('child.last_name')
                         ->label('Last name')
                         ->maxLength(120),
-                    Forms\Components\DatePicker::make('child.date_of_birth')
-                        ->label('Date of birth')
-                        ->native(false)
-                        ->maxDate(now()->subYear())
+                    Forms\Components\TextInput::make('child.age')
+                        ->label('Age')
+                        ->numeric()
+                        ->inputMode('numeric')
+                        ->minValue(1)
+                        ->maxValue(120)
+                        ->step(1)
                         ->live()
                         ->afterStateUpdated(function (Set $set, mixed $state): void {
                             if (! static::childIsAdult($state)) {
@@ -797,28 +844,33 @@ class GoshenTicketResource extends Resource
                             $set('special_approval_note', null);
                             static::clearWalletAuthorization($set);
                         })
-                        ->helperText('Children aged 1-14 receive a complimentary ticket. Children aged 15 and over need a paid ticket.')
+                        ->helperText('Enter the child\'s age. Children aged 1-14 receive a complimentary ticket; children aged 15 and over need a paid ticket.')
+                        ->required(),
+                    Forms\Components\Select::make('child.gender')
+                        ->label('Gender')
+                        ->options(['male' => 'Male', 'female' => 'Female'])
+                        ->native(false)
                         ->required(),
                     Forms\Components\TextInput::make('child.email')
                         ->label('Email')
                         ->email()
                         ->maxLength(255)
-                        ->visible(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
-                        ->required(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
-                        ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth'))),
+                        ->visible(fn (Get $get): bool => static::childIsAdult($get('child.age')))
+                        ->required(fn (Get $get): bool => static::childIsAdult($get('child.age')))
+                        ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('child.age'))),
                     Forms\Components\TextInput::make('child.phone')
                         ->label('Phone')
                         ->tel()
                         ->maxLength(80)
-                        ->visible(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
-                        ->required(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
-                        ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth'))),
+                        ->visible(fn (Get $get): bool => static::childIsAdult($get('child.age')))
+                        ->required(fn (Get $get): bool => static::childIsAdult($get('child.age')))
+                        ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('child.age'))),
                     Forms\Components\Toggle::make('child.adult_confirmation')
                         ->label('I confirm this child is 18 or over and may have a Goshen profile created.')
                         ->accepted()
-                        ->visible(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
-                        ->required(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
-                        ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth'))),
+                        ->visible(fn (Get $get): bool => static::childIsAdult($get('child.age')))
+                        ->required(fn (Get $get): bool => static::childIsAdult($get('child.age')))
+                        ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('child.age'))),
                 ])
                 ->columns(2),
             Section::make('Paid child ticket')
@@ -839,8 +891,8 @@ class GoshenTicketResource extends Resource
                         ->searchable()
                         ->live()
                         ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
-                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')))
-                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth'))),
+                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.age')))
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.age'))),
                     Forms\Components\Placeholder::make('ticket_amount')
                         ->label('Ticket amount')
                         ->content(fn (Get $get): string => static::ticketAmountLabel($get('ticket_type_id'))),
@@ -851,14 +903,14 @@ class GoshenTicketResource extends Resource
                         ->live(onBlur: true)
                         ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
                         ->helperText('Saved in the booking and ticket audit history.')
-                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')))
-                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth'))),
+                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.age')))
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.age'))),
                     Forms\Components\Placeholder::make('payment_method_summary')
                         ->label('Payment method')
                         ->content('Voucher'),
                     Forms\Components\Hidden::make('payment_method')
                         ->default('voucher')
-                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth'))),
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.age'))),
                     Forms\Components\Toggle::make('use_special_approved_amount')
                         ->label('Use special approved amount')
                         ->default(false)
@@ -872,7 +924,7 @@ class GoshenTicketResource extends Resource
                             static::clearWalletAuthorization($set);
                         })
                         ->helperText('Use only when leadership/admin has approved a lower amount for this child ticket.')
-                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth'))),
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.age'))),
                     Forms\Components\TextInput::make('special_approved_amount')
                         ->label('Special approved amount')
                         ->numeric()
@@ -880,16 +932,16 @@ class GoshenTicketResource extends Resource
                         ->minValue(0.01)
                         ->step(0.01)
                         ->prefix(fn (Get $get): string => strtoupper((string) (EventTicketType::query()->find($get('ticket_type_id'))?->currency ?: 'GBP')))
-                        ->visible(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount'))
-                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount'))
-                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount')),
+                        ->visible(fn (Get $get): bool => static::childRequiresPayment($get('child.age')) && (bool) $get('use_special_approved_amount'))
+                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.age')) && (bool) $get('use_special_approved_amount'))
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.age')) && (bool) $get('use_special_approved_amount')),
                     Forms\Components\Textarea::make('special_approval_note')
                         ->label('Special approval note')
                         ->rows(3)
                         ->maxLength(500)
-                        ->visible(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount'))
-                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount'))
-                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount')),
+                        ->visible(fn (Get $get): bool => static::childRequiresPayment($get('child.age')) && (bool) $get('use_special_approved_amount'))
+                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.age')) && (bool) $get('use_special_approved_amount'))
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.age')) && (bool) $get('use_special_approved_amount')),
                     Forms\Components\Placeholder::make('payable_amount')
                         ->label('Amount to settle now')
                         ->content(fn (Get $get): string => static::payableAmountLabel(
@@ -901,12 +953,12 @@ class GoshenTicketResource extends Resource
                     Forms\Components\TextInput::make('voucher_code')
                         ->label('Goshen voucher code')
                         ->maxLength(80)
-                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')))
-                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')))
+                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.age')))
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.age')))
                         ->helperText('The code is verified securely and is never stored in plaintext.'),
                 ])
                 ->columns(2)
-                ->visible(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth'))),
+                ->visible(fn (Get $get): bool => static::childRequiresPayment($get('child.age'))),
         ];
     }
 
@@ -938,29 +990,25 @@ class GoshenTicketResource extends Resource
             ?->family;
     }
 
-    private static function childRequiresPayment(mixed $dateOfBirth): bool
+    private static function childRequiresPayment(mixed $age): bool
     {
-        return (static::childAge($dateOfBirth) ?? 0) >= 15;
+        return (static::childAge($age) ?? 0) >= 15;
     }
 
-    private static function childIsAdult(mixed $dateOfBirth): bool
+    private static function childIsAdult(mixed $age): bool
     {
-        return (static::childAge($dateOfBirth) ?? 0) >= 18;
+        return (static::childAge($age) ?? 0) >= 18;
     }
 
-    private static function childAge(mixed $dateOfBirth): ?int
+    private static function childAge(mixed $age): ?int
     {
-        if (! filled($dateOfBirth)) {
+        if (! filled($age) || filter_var($age, FILTER_VALIDATE_INT) === false) {
             return null;
         }
 
-        try {
-            $birthday = \Carbon\CarbonImmutable::parse((string) $dateOfBirth);
+        $age = (int) $age;
 
-            return $birthday->isFuture() ? null : $birthday->age;
-        } catch (Throwable) {
-            return null;
-        }
+        return $age >= 1 && $age <= 120 ? $age : null;
     }
 
     private static function qrPreviewHtml(Ticket $record): HtmlString
