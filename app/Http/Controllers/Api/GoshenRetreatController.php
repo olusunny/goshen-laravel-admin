@@ -4063,7 +4063,7 @@ class GoshenRetreatController extends Controller
             'currency' => $currency,
             'amount_paid' => $paidAmount,
             'paid_amount' => $paidAmount,
-            'amount_paid_label' => trim($currency.' '.number_format($paidAmount, 2)),
+            'amount_paid_label' => $this->ticketAmountPaidLabel($metadata, $paidAmount, $currency),
             'family' => array_filter([
                 'name' => $metadata['family_name'] ?? null,
                 'role' => $metadata['family_role'] ?? null,
@@ -4100,6 +4100,18 @@ class GoshenRetreatController extends Controller
         $paidTotal = max((float) $booking->paid_total, $computedPaidTotal);
 
         return round($paidTotal, 2);
+    }
+
+    private function ticketAmountPaidLabel(array $metadata, float $paidAmount, string $currency): string
+    {
+        if (
+            ($metadata['family_role'] ?? null) === 'child'
+            && ($metadata['payment_exempt'] ?? false) === true
+        ) {
+            return 'Children Complementary Ticket';
+        }
+
+        return trim($currency.' '.number_format($paidAmount, 2));
     }
 
     private function generateTicketDocument(TicketDocumentService $documents, Ticket $ticket, string $type): TicketDocument

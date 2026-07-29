@@ -534,6 +534,11 @@ HTML,
     {
         $ticket->loadMissing('booking.installments');
         $metadata = is_array($ticket->metadata) ? $ticket->metadata : [];
+
+        if ($this->isPaymentExemptFamilyChild($metadata)) {
+            return 'Children Complementary Ticket';
+        }
+
         $amount = $metadata['amount_paid'] ?? $metadata['historical_paid_amount'] ?? null;
         if (! is_numeric($amount) || (float) $amount <= 0) {
             $booking = $ticket->booking;
@@ -547,6 +552,12 @@ HTML,
         return (float) $amount > 0
             ? trim($currency.' '.number_format((float) $amount, 2))
             : 'Not recorded';
+    }
+
+    private function isPaymentExemptFamilyChild(array $metadata): bool
+    {
+        return ($metadata['family_role'] ?? null) === 'child'
+            && ($metadata['payment_exempt'] ?? false) === true;
     }
 
     private function escapeIcs(string $value): string
