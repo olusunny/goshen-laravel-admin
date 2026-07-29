@@ -46,6 +46,20 @@ class GoshenRegistrationAvailabilityTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
+    public function test_existing_customer_reservation_remains_blocked_without_the_family_child_exception(): void
+    {
+        [$member, $ticketType] = $this->fixture(capacity: 3);
+        $this->reservation($member, $ticketType, 1, BookingStatus::Paid);
+
+        try {
+            app(GoshenRegistrationAvailabilityService::class)
+                ->lockAndAssertAvailable($member, $ticketType);
+            $this->fail('Expected duplicate registration validation failure.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('customer_id', $exception->errors());
+        }
+    }
+
     private function fixture(int $capacity): array
     {
         $member = MobileUser::query()->create([

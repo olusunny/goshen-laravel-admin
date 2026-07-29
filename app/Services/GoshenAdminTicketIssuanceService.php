@@ -88,9 +88,63 @@ class GoshenAdminTicketIssuanceService
         ?array $memberWalletAuthorization = null,
         ?array $family = null,
     ): Ticket {
+        return $this->issueInternal(
+            $member, $ticketType, $admin, $reason, $paymentMethod, $voucherCode, $challenge, $walletCode,
+            $ip, $userAgent, $paymentAmount, $extraMetadata, $attendeeQuantity, $attendeeDetails,
+            $memberWalletAuthorization, $family,
+        );
+    }
+
+    /** @param array<string, mixed> $child */
+    public function issueForExistingFamilyChild(
+        GoshenFamily $existingFamily,
+        MobileUser $member,
+        EventTicketType $ticketType,
+        User $admin,
+        string $reason,
+        string $paymentMethod,
+        array $child,
+        ?string $voucherCode = null,
+        ?WebWalletVerificationChallenge $challenge = null,
+        ?string $walletCode = null,
+        ?string $ip = null,
+        ?string $userAgent = null,
+        ?float $paymentAmount = null,
+        array $extraMetadata = [],
+        array $attendeeDetails = [],
+    ): Ticket {
+        if (($child['role'] ?? null) !== 'child' || ! ($child['is_payable'] ?? false) || (int) ($child['age'] ?? 0) < 15) {
+            throw ValidationException::withMessages(['child' => 'Only a paid child can be issued through an existing family.']);
+        }
+
+        return $this->issueInternal(
+            $member, $ticketType, $admin, $reason, $paymentMethod, $voucherCode, $challenge, $walletCode,
+            $ip, $userAgent, $paymentAmount, $extraMetadata, 1, $attendeeDetails, null, null, $existingFamily,
+        );
+    }
+
+    private function issueInternal(
+        MobileUser $member,
+        EventTicketType $ticketType,
+        User $admin,
+        string $reason,
+        string $paymentMethod,
+        ?string $voucherCode = null,
+        ?WebWalletVerificationChallenge $challenge = null,
+        ?string $walletCode = null,
+        ?string $ip = null,
+        ?string $userAgent = null,
+        ?float $paymentAmount = null,
+        array $extraMetadata = [],
+        int $attendeeQuantity = 1,
+        array $attendeeDetails = [],
+        ?array $memberWalletAuthorization = null,
+        ?array $family = null,
+        ?GoshenFamily $existingFamily = null,
+    ): Ticket {
         if (app(GoshenFamilyRegistrationService::class)->isFamilyTicket((string) $ticketType->name)
             && DB::transactionLevel() === 0) {
-            return DB::transaction(fn (): Ticket => $this->issue(
+            return DB::transaction(fn (): Ticket => $this->issueInternal(
                 $member,
                 $ticketType,
                 $admin,
@@ -107,6 +161,7 @@ class GoshenAdminTicketIssuanceService
                 $attendeeDetails,
                 $memberWalletAuthorization,
                 $family,
+                $existingFamily,
             ));
         }
 
@@ -170,8 +225,12 @@ class GoshenAdminTicketIssuanceService
             : null;
 
         if ($paymentMethod === 'wallet') {
-            [$preflightMember, $preflightTicketType] = $this->availability
-                ->lockAndAssertAvailable($member, $ticketType, $attendeeQuantity);
+            [$preflightMember, $preflightTicketType] = $this->lockAndAssertAvailable(
+                $member,
+                $ticketType,
+                $attendeeQuantity,
+                $existingFamily,
+            );
             $this->assertPositiveListPrice($preflightTicketType);
             $preflightPaymentTotal = $this->paymentTotal($preflightTicketType, $attendeeQuantity, $paymentAmount);
             if ($preflightPaymentTotal <= 0) {
@@ -221,13 +280,18 @@ class GoshenAdminTicketIssuanceService
                 $memberWalletAuthorization,
                 $familyRegistration,
                 $payableQuantity,
+                $existingFamily,
             ): Ticket {
                 if ($paymentMethod === 'wallet') {
                     $admin = User::query()->whereKey($admin->id)->lockForUpdate()->firstOrFail();
                 }
 
-                [$member, $ticketType] = $this->availability
-                    ->lockAndAssertAvailable($member, $ticketType, $attendeeQuantity);
+                [$member, $ticketType] = $this->lockAndAssertAvailable(
+                    $member,
+                    $ticketType,
+                    $attendeeQuantity,
+                    $existingFamily,
+                );
                 $this->assertPositiveListPrice($ticketType);
 
                 if ($paymentMethod === 'wallet') {
@@ -503,6 +567,18 @@ class GoshenAdminTicketIssuanceService
 
             throw ValidationException::withMessages([$field => $exception->getMessage()]);
         }
+    }
+
+    /** @return array{MobileUser, EventTicketType} */
+    private function lockAndAssertAvailable(
+        MobileUser $member,
+        EventTicketType $ticketType,
+        int $quantity,
+        ?GoshenFamily $existingFamily,
+    ): array {
+        return $existingFamily
+            ? $this->availability->lockAndAssertAvailableForFamilyChild($existingFamily, $member, $ticketType, $quantity)
+            : $this->availability->lockAndAssertAvailable($member, $ticketType, $quantity);
     }
 
     private function assertPositiveListPrice(EventTicketType $ticketType): void

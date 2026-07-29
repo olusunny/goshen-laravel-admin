@@ -177,12 +177,14 @@ class GoshenExistingFamilyChildAdditionService
         }
         $paymentAmount = $this->approvedPaymentAmount($ticketType, $payment);
 
-        return $this->ticketIssuance->issue(
+        return $this->ticketIssuance->issueForExistingFamilyChild(
+            $family,
             $billingParent,
             $ticketType,
             $admin,
             $reason,
             $method,
+            $child,
             $payment['voucher_code'] ?? null,
             $payment['wallet_challenge'] ?? null,
             $payment['wallet_code'] ?? null,
@@ -202,16 +204,14 @@ class GoshenExistingFamilyChildAdditionService
                 'special_approved_listed_total' => $paymentAmount === null ? null : round((float) $ticketType->price, 2),
                 'special_approved_discount_amount' => $paymentAmount === null ? null : max(0, round((float) $ticketType->price - $paymentAmount, 2)),
             ],
-            1,
             $attendeeDetails,
-            null,
         );
     }
 
     /** @param array<string, mixed> $child @param array<int, array<string, mixed>> $attendeeDetails */
     private function complimentaryChildTicket(GoshenFamily $family, MobileUser $billingParent, EventTicketType $ticketType, array $child, array $attendeeDetails): Ticket
     {
-        [$billingParent, $ticketType] = $this->availability->lockAndAssertAvailable($billingParent, $ticketType, 1);
+        [$billingParent, $ticketType] = $this->availability->lockAndAssertAvailableForFamilyChild($family, $billingParent, $ticketType);
         $booking = Booking::query()->create([
             'event_id' => $family->event_id,
             'customer_id' => $billingParent->id,

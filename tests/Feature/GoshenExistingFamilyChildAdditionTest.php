@@ -116,7 +116,7 @@ class GoshenExistingFamilyChildAdditionTest extends TestCase
             'member_type' => 'church_member', 'is_verified' => true, 'is_blocked' => false, 'is_deleted' => false,
         ]);
         $family = GoshenFamily::query()->create(['event_id' => $event->id, 'name' => "Adeola's Family"]);
-        $father = $this->paidTicket($event, $ticketType, 'David', 'Adeola', 'david@example.test', '447700000001');
+        $father = $this->paidTicket($event, $ticketType, 'David', 'Adeola', 'david@example.test', '447700000001', $parent->id);
         $mother = $this->paidTicket($event, $ticketType, 'Grace', 'Adeola', 'grace@example.test', '447700000002');
         foreach ([['father', $father, $parent->id], ['mother', $mother, null]] as [$role, $ticket, $mobileUserId]) {
             GoshenFamilyMember::query()->create([
@@ -139,10 +139,10 @@ class GoshenExistingFamilyChildAdditionTest extends TestCase
         return EventTicketType::query()->create(['event_id' => $event->id, 'name' => 'Goshen Individual', 'currency' => 'GBP', 'price' => 300, 'is_active' => true]);
     }
 
-    private function paidTicket(Event $event, EventTicketType $ticketType, string $firstName, string $lastName, string $email, string $phone): Ticket
+    private function paidTicket(Event $event, EventTicketType $ticketType, string $firstName, string $lastName, string $email, string $phone, ?int $customerId = null): Ticket
     {
         $booking = Booking::query()->create([
-            'event_id' => $event->id, 'customer_name' => "{$firstName} {$lastName}", 'customer_email' => $email, 'customer_phone' => $phone,
+            'event_id' => $event->id, 'customer_id' => $customerId, 'customer_name' => "{$firstName} {$lastName}", 'customer_email' => $email, 'customer_phone' => $phone,
             'currency' => 'GBP', 'subtotal' => 300, 'total' => 300, 'paid_total' => 300, 'status' => BookingStatus::Paid,
         ]);
         $attendee = Attendee::query()->create(['booking_id' => $booking->id, 'ticket_type_id' => $ticketType->id, 'first_name' => $firstName, 'last_name' => $lastName, 'email' => $email, 'phone' => $phone]);
