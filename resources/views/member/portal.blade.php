@@ -883,6 +883,16 @@
             min-width: 0;
         }
         .card h3 { font-size: 22px; margin-bottom: 8px; }
+        .accommodation-status-text {
+            color: var(--muted);
+            font-weight: 500;
+            line-height: 1.6;
+        }
+        html.theme-dark .accommodation-status-text,
+        body.theme-dark .accommodation-status-text {
+            color: #fff;
+            font-weight: 700;
+        }
 
         .grid {
             display: grid;
@@ -3818,7 +3828,7 @@
             accommodation.hidden = !hasRoomAllocationStatus;
             accommodation.innerHTML = allocations.length ? `
                 <h3>Room allocation</h3>
-                <p class="muted">Your allocation status will be updated here by the retreat team.</p>
+                <p class="muted accommodation-status-text">Your allocation status will be updated here by the retreat team.</p>
                 <div class="record-list">
                     ${allocations.map((allocation) => `
                         <article class="record">
@@ -3832,7 +3842,7 @@
                 </div>
             ` : `
                 <h3>Room allocation</h3>
-                <p class="muted">Your room allocation is being prepared. Once confirmed, your room status will appear here before check-in.</p>
+                <p class="muted accommodation-status-text">Your room allocation is being prepared. Once confirmed, your room status will appear here before check-in.</p>
                 ${statusBadge('Room allocation pending')}
             `;
 
@@ -3865,8 +3875,8 @@
                                 <span class="item-meta">${escapeHtml(role)}</span>
                                 <div class="family-tree-meta">
                                     ${ticketDetails ? `<span class="item-meta family-tree-ticket">Ticket: ${escapeHtml(ticketDetails)}</span>` : ''}
-                                    <span class="family-tree-accommodation">${statusBadge(accommodationStatus)}</span>
-                                    ${roomDetails ? `<span class="item-meta family-tree-accommodation">${escapeHtml(roomDetails)}</span>` : ''}
+                                    <span class="family-tree-accommodation accommodation-status-text">${statusBadge(accommodationStatus)}</span>
+                                    ${roomDetails ? `<span class="item-meta family-tree-accommodation accommodation-status-text">${escapeHtml(roomDetails)}</span>` : ''}
                                 </div>
                             </div>
                         </div>`;

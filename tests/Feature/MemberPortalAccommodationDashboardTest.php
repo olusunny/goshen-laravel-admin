@@ -28,6 +28,21 @@ class MemberPortalAccommodationDashboardTest extends TestCase
         $this->assertStringContainsString("statusBadge('Room allocation pending')", $dashboard);
         $this->assertStringContainsString("allocation.attendee?.name || 'Registered attendee'", $dashboard);
         $this->assertStringContainsString("statusBadge(allocation.status || 'assigned')", $dashboard);
+        $this->assertStringContainsString('accommodation-status-text', $dashboard);
+        $darkAccommodationStyleStart = strpos($portal, 'html.theme-dark .accommodation-status-text');
+        $darkAccommodationStyleEnd = strpos($portal, '}', $darkAccommodationStyleStart);
+
+        $this->assertNotFalse($darkAccommodationStyleStart);
+        $this->assertNotFalse($darkAccommodationStyleEnd);
+
+        $darkAccommodationStyles = substr(
+            $portal,
+            $darkAccommodationStyleStart,
+            $darkAccommodationStyleEnd - $darkAccommodationStyleStart
+        );
+
+        $this->assertStringContainsString('color: #fff;', $darkAccommodationStyles);
+        $this->assertStringContainsString('font-weight: 700;', $darkAccommodationStyles);
         $this->assertStringNotContainsString('allocation.check_in_note', $dashboard);
         $this->assertStringContainsString('Your retreat details', $dashboard);
         $this->assertStringNotContainsString('Registration ready', $dashboard);
