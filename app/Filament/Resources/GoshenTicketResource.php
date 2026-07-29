@@ -535,6 +535,7 @@ class GoshenTicketResource extends Resource
             ->recordUrl(fn (Model $record): string => static::getUrl('view', ['record' => $record]))
             ->recordActions([
                 Actions\ViewAction::make()->label('View details'),
+                static::addChildToExistingFamilyAction(),
                 static::unlinkExistingFamilyAction(),
                 static::sendTicketEmailAction(),
             ])
@@ -727,6 +728,188 @@ class GoshenTicketResource extends Resource
             });
     }
 
+    public static function addChildToExistingFamilyAction(): Actions\Action
+    {
+        return Actions\Action::make('addChildToExistingFamily')
+            ->label('Add child to family')
+            ->icon('heroicon-o-user-plus')
+            ->color('warning')
+            ->visible(fn (Ticket $record): bool => static::canLinkExistingFamilies() && static::familyForTicket($record) !== null)
+            ->form(function (Ticket $record): array {
+                $family = static::familyForTicket($record);
+
+                return $family ? static::existingFamilyChildForm($family) : [];
+            })
+            ->modalHeading('Add child to existing Goshen family')
+            ->modalDescription('This adds only a new child ticket to the linked family. The existing father and mother tickets, payments, QR codes, Triumphant IDs, and accommodation records are retained.')
+            ->modalSubmitActionLabel('Add child ticket')
+            ->action(function (Ticket $record, array $data, GoshenExistingFamilyLinkService $families): void {
+                $admin = Auth::user();
+                $family = static::familyForTicket($record);
+
+                if (! $admin instanceof User || ! static::canLinkExistingFamilies() || $family === null) {
+                    abort(403);
+                }
+
+                $families->addChild($admin, $family, $data);
+                Notification::make()->success()->title('Child added to Goshen family')->send();
+            });
+    }
+
+    /** @return array<int, Forms\Components\Component> */
+    public static function existingFamilyChildForm(GoshenFamily $family): array
+    {
+        return [
+            Section::make('Child details')
+                ->description('Add one new child to '.$family->name.'. Parent tickets are retained exactly as they are.')
+                ->schema([
+                    Forms\Components\TextInput::make('child.first_name')
+                        ->label('First name')
+                        ->maxLength(120)
+                        ->required(),
+                    Forms\Components\TextInput::make('child.last_name')
+                        ->label('Last name')
+                        ->maxLength(120),
+                    Forms\Components\DatePicker::make('child.date_of_birth')
+                        ->label('Date of birth')
+                        ->native(false)
+                        ->maxDate(now()->subYear())
+                        ->live()
+                        ->afterStateUpdated(function (Set $set, mixed $state): void {
+                            if (! static::childIsAdult($state)) {
+                                $set('child.email', null);
+                                $set('child.phone', null);
+                                $set('child.adult_confirmation', false);
+                            }
+
+                            if (static::childRequiresPayment($state)) {
+                                $set('payment_method', 'voucher');
+
+                                return;
+                            }
+
+                            $set('ticket_type_id', null);
+                            $set('payment_method', null);
+                            $set('voucher_code', null);
+                            $set('issuance_reason', null);
+                            $set('use_special_approved_amount', false);
+                            $set('special_approved_amount', null);
+                            $set('special_approval_note', null);
+                            static::clearWalletAuthorization($set);
+                        })
+                        ->helperText('Children aged 1-14 receive a complimentary ticket. Children aged 15 and over need a paid ticket.')
+                        ->required(),
+                    Forms\Components\TextInput::make('child.email')
+                        ->label('Email')
+                        ->email()
+                        ->maxLength(255)
+                        ->visible(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
+                        ->required(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
+                        ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth'))),
+                    Forms\Components\TextInput::make('child.phone')
+                        ->label('Phone')
+                        ->tel()
+                        ->maxLength(80)
+                        ->visible(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
+                        ->required(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
+                        ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth'))),
+                    Forms\Components\Toggle::make('child.adult_confirmation')
+                        ->label('I confirm this child is 18 or over and may have a Goshen profile created.')
+                        ->accepted()
+                        ->visible(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
+                        ->required(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth')))
+                        ->dehydrated(fn (Get $get): bool => static::childIsAdult($get('child.date_of_birth'))),
+                ])
+                ->columns(2),
+            Section::make('Paid child ticket')
+                ->description('This child is 15 or over and needs a paid individual Goshen ticket. Parent tickets are not reissued or charged again.')
+                ->schema([
+                    Forms\Components\Select::make('ticket_type_id')
+                        ->label('Ticket type')
+                        ->options(fn (): array => EventTicketType::query()
+                            ->where('event_id', $family->event_id)
+                            ->where('is_active', true)
+                            ->orderBy('name')
+                            ->get()
+                            ->reject(fn (EventTicketType $type): bool => str_contains(strtolower((string) $type->name), 'family'))
+                            ->mapWithKeys(fn (EventTicketType $type): array => [
+                                $type->id => sprintf('%s · %s %s', $type->name, strtoupper((string) $type->currency), number_format((float) $type->price, 2)),
+                            ])
+                            ->all())
+                        ->searchable()
+                        ->live()
+                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
+                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')))
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth'))),
+                    Forms\Components\Placeholder::make('ticket_amount')
+                        ->label('Ticket amount')
+                        ->content(fn (Get $get): string => static::ticketAmountLabel($get('ticket_type_id'))),
+                    Forms\Components\Textarea::make('issuance_reason')
+                        ->label('Reason for issuing ticket')
+                        ->maxLength(500)
+                        ->rows(3)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
+                        ->helperText('Saved in the booking and ticket audit history.')
+                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')))
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth'))),
+                    Forms\Components\Placeholder::make('payment_method_summary')
+                        ->label('Payment method')
+                        ->content('Voucher'),
+                    Forms\Components\Hidden::make('payment_method')
+                        ->default('voucher')
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth'))),
+                    Forms\Components\Toggle::make('use_special_approved_amount')
+                        ->label('Use special approved amount')
+                        ->default(false)
+                        ->live()
+                        ->afterStateUpdated(function (Set $set, mixed $state): void {
+                            if (! (bool) $state) {
+                                $set('special_approved_amount', null);
+                                $set('special_approval_note', null);
+                            }
+
+                            static::clearWalletAuthorization($set);
+                        })
+                        ->helperText('Use only when leadership/admin has approved a lower amount for this child ticket.')
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth'))),
+                    Forms\Components\TextInput::make('special_approved_amount')
+                        ->label('Special approved amount')
+                        ->numeric()
+                        ->inputMode('decimal')
+                        ->minValue(0.01)
+                        ->step(0.01)
+                        ->prefix(fn (Get $get): string => strtoupper((string) (EventTicketType::query()->find($get('ticket_type_id'))?->currency ?: 'GBP')))
+                        ->visible(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount'))
+                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount'))
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount')),
+                    Forms\Components\Textarea::make('special_approval_note')
+                        ->label('Special approval note')
+                        ->rows(3)
+                        ->maxLength(500)
+                        ->visible(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount'))
+                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount'))
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')) && (bool) $get('use_special_approved_amount')),
+                    Forms\Components\Placeholder::make('payable_amount')
+                        ->label('Amount to settle now')
+                        ->content(fn (Get $get): string => static::payableAmountLabel(
+                            $get('ticket_type_id'),
+                            1,
+                            (bool) $get('use_special_approved_amount'),
+                            $get('special_approved_amount'),
+                        )),
+                    Forms\Components\TextInput::make('voucher_code')
+                        ->label('Goshen voucher code')
+                        ->maxLength(80)
+                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')))
+                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth')))
+                        ->helperText('The code is verified securely and is never stored in plaintext.'),
+                ])
+                ->columns(2)
+                ->visible(fn (Get $get): bool => static::childRequiresPayment($get('child.date_of_birth'))),
+        ];
+    }
+
     /** @return array<int, string> */
     private static function linkableTicketOptions(mixed $eventId): array
     {
@@ -753,6 +936,31 @@ class GoshenTicketResource extends Resource
             ->with('family')
             ->first()
             ?->family;
+    }
+
+    private static function childRequiresPayment(mixed $dateOfBirth): bool
+    {
+        return (static::childAge($dateOfBirth) ?? 0) >= 15;
+    }
+
+    private static function childIsAdult(mixed $dateOfBirth): bool
+    {
+        return (static::childAge($dateOfBirth) ?? 0) >= 18;
+    }
+
+    private static function childAge(mixed $dateOfBirth): ?int
+    {
+        if (! filled($dateOfBirth)) {
+            return null;
+        }
+
+        try {
+            $birthday = \Carbon\CarbonImmutable::parse((string) $dateOfBirth);
+
+            return $birthday->isFuture() ? null : $birthday->age;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private static function qrPreviewHtml(Ticket $record): HtmlString
