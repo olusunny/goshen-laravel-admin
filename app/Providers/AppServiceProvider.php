@@ -16,6 +16,7 @@ use App\Services\LinkedMobileAccountService;
 use App\Services\MergedAccountCredentialService;
 use App\Services\StripePaymentSettings;
 use App\Services\TriumphantIdService;
+use App\Support\RuntimeCacheStore;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
@@ -38,6 +39,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        app(RuntimeCacheStore::class)->configure();
+
         Auth::provider('merged_eloquent', function ($app, array $config): MergedEmailUserProvider {
             return new MergedEmailUserProvider($app['hash'], $config['model']);
         });
