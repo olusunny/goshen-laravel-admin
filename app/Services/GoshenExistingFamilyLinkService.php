@@ -6,6 +6,7 @@ use App\Models\GoshenFamily;
 use App\Models\GoshenFamilyMember;
 use App\Models\MobileUser;
 use App\Models\User;
+use App\Models\WebWalletVerificationChallenge;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Personal\EventInstallments\Enums\BookingStatus;
@@ -13,10 +14,60 @@ use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Models\Attendee;
 use Personal\EventInstallments\Models\Event;
 use Personal\EventInstallments\Models\EventAuditLog;
+use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\Ticket;
 
 class GoshenExistingFamilyLinkService
 {
+    /**
+     * UI contract for adding one new child to an already linked family.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function addChild(User $admin, GoshenFamily $family, array $data): Ticket
+    {
+        $family->loadMissing('members');
+        $billingParentId = $family->members
+            ->whereIn('role', ['father', 'mother'])
+            ->pluck('mobile_user_id')
+            ->filter()
+            ->first();
+        $billingParent = $billingParentId ? MobileUser::query()->find($billingParentId) : null;
+        if (! $billingParent instanceof MobileUser) {
+            throw ValidationException::withMessages(['family' => 'Link a verified parent profile to this family before adding a child ticket.']);
+        }
+
+        $dateOfBirth = data_get($data, 'child.date_of_birth');
+        $age = $this->childAge($dateOfBirth);
+        if ($age === null) {
+            throw ValidationException::withMessages(['child.date_of_birth' => 'Enter a valid child date of birth.']);
+        }
+
+        $ticketType = $this->childTicketType($family, $data, $age);
+        $payment = [
+            'method' => $data['payment_method'] ?? null,
+            'voucher_code' => $data['voucher_code'] ?? null,
+            'wallet_challenge' => filled($data['wallet_challenge_id'] ?? null)
+                ? WebWalletVerificationChallenge::query()->find($data['wallet_challenge_id'])
+                : null,
+            'wallet_code' => $data['wallet_otp'] ?? null,
+            'approved_amount' => (bool) ($data['use_special_approved_amount'] ?? false) ? ($data['special_approved_amount'] ?? null) : null,
+            'approval_note' => $data['special_approval_note'] ?? null,
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+        ];
+
+        return app(GoshenExistingFamilyChildAdditionService::class)->add(
+            $admin,
+            $family,
+            $billingParent,
+            $ticketType,
+            (string) ($data['issuance_reason'] ?? 'Church office added a complimentary child ticket.'),
+            is_array($data['child'] ?? null) ? $data['child'] : [],
+            $payment,
+        );
+    }
+
     /**
      * @param  array{father_ticket_id: int|string, mother_ticket_id: int|string, children?: array<int, array{ticket_id: int|string}>}  $data
      */
@@ -176,5 +227,39 @@ class GoshenExistingFamilyLinkService
             ->get();
 
         return $matches->count() === 1 ? $matches->first() : null;
+    }
+
+    /** @param array<string, mixed> $data */
+    private function childTicketType(GoshenFamily $family, array $data, int $age): EventTicketType
+    {
+        $ticketTypeId = $data['ticket_type_id'] ?? null;
+        if ($age < 15 && ! filled($ticketTypeId)) {
+            $ticketTypeId = Ticket::query()
+                ->where('event_id', $family->event_id)
+                ->whereIn('attendee_id', $family->members->whereIn('role', ['father', 'mother'])->pluck('attendee_id')->filter())
+                ->value('ticket_type_id');
+        }
+
+        $ticketType = EventTicketType::query()
+            ->whereKey($ticketTypeId)
+            ->where('event_id', $family->event_id)
+            ->where('is_active', true)
+            ->first();
+        if (! $ticketType || app(GoshenFamilyRegistrationService::class)->isFamilyTicket((string) $ticketType->name)) {
+            throw ValidationException::withMessages(['ticket_type_id' => 'Select an active individual ticket type from this retreat edition.']);
+        }
+
+        return $ticketType;
+    }
+
+    private function childAge(mixed $dateOfBirth): ?int
+    {
+        try {
+            $date = \Carbon\CarbonImmutable::parse((string) $dateOfBirth)->startOfDay();
+
+            return $date->isFuture() || $date->age < 1 ? null : $date->age;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }
