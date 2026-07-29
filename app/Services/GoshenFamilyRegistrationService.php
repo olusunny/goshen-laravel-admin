@@ -236,7 +236,9 @@ class GoshenFamilyRegistrationService
 
     public function childAge(mixed $value, string $field = 'child.age'): int
     {
-        $age = is_int($value) || is_string($value) && ctype_digit($value) ? (int) $value : 0;
+        $age = is_numeric($value) && (float) $value === floor((float) $value)
+            ? (int) $value
+            : 0;
         if ($age < 1 || $age > 120) {
             throw ValidationException::withMessages([$field => 'Enter a whole child age from 1 to 120.']);
         }

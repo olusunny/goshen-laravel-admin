@@ -165,7 +165,7 @@ class GoshenAdminTicketIssuanceTest extends TestCase
                     'name' => 'Lovelace Family',
                     'father' => ['included' => true, 'first_name' => 'Ada', 'last_name' => 'Lovelace'],
                     'mother' => ['included' => true, 'first_name' => 'Grace', 'last_name' => 'Lovelace'],
-                    'children' => [['first_name' => 'Faith', 'last_name' => 'Lovelace', 'date_of_birth' => now()->subYears(10)->toDateString()]],
+                    'children' => [['first_name' => 'Faith', 'last_name' => 'Lovelace', 'age' => 10, 'gender' => 'female']],
                 ],
                 'issuance_reason' => 'Family desk registration',
                 'payment_method' => 'voucher',

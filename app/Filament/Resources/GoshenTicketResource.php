@@ -207,8 +207,6 @@ class GoshenTicketResource extends Resource
                                 ->step(1)
                                 ->live()
                                 ->afterStateUpdated(function (Set $set, mixed $state): void {
-                                    $set('date_of_birth', static::ageToDateOfBirth($state));
-
                                     if (! static::childIsAdult($state)) {
                                         $set('email', null);
                                         $set('phone', null);
@@ -217,7 +215,6 @@ class GoshenTicketResource extends Resource
                                 })
                                 ->helperText('Enter the child\'s age. Children aged 1-14 receive complimentary tickets; children aged 15 and over need a paid ticket.')
                                 ->required(),
-                            Forms\Components\Hidden::make('date_of_birth'),
                             Forms\Components\Select::make('gender')
                                 ->options(['male' => 'Male', 'female' => 'Female'])
                                 ->native(false)
@@ -826,8 +823,6 @@ class GoshenTicketResource extends Resource
                         ->step(1)
                         ->live()
                         ->afterStateUpdated(function (Set $set, mixed $state): void {
-                            $set('child.date_of_birth', static::ageToDateOfBirth($state));
-
                             if (! static::childIsAdult($state)) {
                                 $set('child.email', null);
                                 $set('child.phone', null);
@@ -851,7 +846,6 @@ class GoshenTicketResource extends Resource
                         })
                         ->helperText('Enter the child\'s age. Children aged 1-14 receive a complimentary ticket; children aged 15 and over need a paid ticket.')
                         ->required(),
-                    Forms\Components\Hidden::make('child.date_of_birth'),
                     Forms\Components\Select::make('child.gender')
                         ->label('Gender')
                         ->options(['male' => 'Male', 'female' => 'Female'])
@@ -1015,13 +1009,6 @@ class GoshenTicketResource extends Resource
         $age = (int) $age;
 
         return $age >= 1 && $age <= 120 ? $age : null;
-    }
-
-    private static function ageToDateOfBirth(mixed $age): ?string
-    {
-        $age = static::childAge($age);
-
-        return $age === null ? null : now()->subYears($age)->toDateString();
     }
 
     private static function qrPreviewHtml(Ticket $record): HtmlString

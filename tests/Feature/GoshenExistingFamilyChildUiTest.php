@@ -23,14 +23,11 @@ class GoshenExistingFamilyChildUiTest extends TestCase
         foreach ([
             "TextInput::make('age')",
             "TextInput::make('child.age')",
-            "Hidden::make('date_of_birth')",
-            "Hidden::make('child.date_of_birth')",
             "Select::make('gender')",
             "Select::make('child.gender')",
             "->label('Age')",
             "->minValue(1)",
             "->maxValue(120)",
-            'static::ageToDateOfBirth($state)',
             "TextInput::make('child.email')",
             "TextInput::make('child.phone')",
             "Toggle::make('child.adult_confirmation')",
@@ -45,6 +42,9 @@ class GoshenExistingFamilyChildUiTest extends TestCase
 
         $this->assertStringNotContainsString("DatePicker::make('child.date_of_birth')", $source);
         $this->assertStringNotContainsString("DatePicker::make('date_of_birth')", $source);
+        $this->assertStringNotContainsString("Hidden::make('child.date_of_birth')", $source);
+        $this->assertStringNotContainsString("Hidden::make('date_of_birth')", $source);
+        $this->assertStringNotContainsString('static::ageToDateOfBirth($state)', $source);
 
         $start = strpos($source, 'public static function existingFamilyChildForm');
         $end = strpos($source, 'private static function linkableTicketOptions', $start);
