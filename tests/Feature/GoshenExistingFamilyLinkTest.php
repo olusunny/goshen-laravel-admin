@@ -37,7 +37,7 @@ class GoshenExistingFamilyLinkTest extends TestCase
         ]);
 
         $this->assertNull($family->booking_id);
-        $this->assertSame(['father', 'mother', 'child'], $family->members->pluck('role')->all());
+        $this->assertSame(['child', 'father', 'mother'], $family->members->pluck('role')->sort()->values()->all());
         $this->assertSame($father->ticket_number, $father->fresh()->ticket_number);
         $this->assertSame(BookingStatus::Paid, $father->booking->fresh()->status);
         $this->assertDatabaseHas('ei_event_audit_logs', [

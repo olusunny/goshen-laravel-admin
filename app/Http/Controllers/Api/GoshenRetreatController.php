@@ -973,9 +973,7 @@ class GoshenRetreatController extends Controller
                 'members.attendee.booking',
                 'members.attendee.ticket.ticketType',
             ])
-            ->whereHas('members', fn ($members) => $members
-                ->where('mobile_user_id', $user->id)
-                ->whereIn('role', ['father', 'mother']))
+            ->whereHas('members', fn ($members) => $members->where('mobile_user_id', $user->id))
             ->latest()
             ->first();
 

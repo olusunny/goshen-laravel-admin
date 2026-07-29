@@ -3849,10 +3849,15 @@
                             ? `Child${member.age ? `, age ${member.age}` : ''}`
                             : `${member.role || 'Family member'}`.replace(/\b\w/g, (letter) => letter.toUpperCase());
                         const ticket = member.ticket || {};
-                        const ticketDetails = [ticket.label, ticket.number].filter(Boolean).join(' - ');
+                        const ticketDetails = [ticket.label || ticket.ticket_type, ticket.number || ticket.ticket_number].filter(Boolean).join(' - ');
                         const accommodationStatus = member.accommodation?.status
                             ? `Room allocation: ${`${member.accommodation.status}`.replace(/_/g, ' ')}`
                             : 'Room allocation pending';
+                        const roomDetails = [
+                            member.accommodation?.building,
+                            member.accommodation?.room ? `Room ${member.accommodation.room}` : '',
+                            member.accommodation?.bed ? `Bed ${member.accommodation.bed}` : '',
+                        ].filter(Boolean).join(' - ');
                         return `<div class="family-tree-member">
                             <span class="family-tree-avatar">${member.avatar ? `<img src="${escapeHtml(member.avatar)}" alt="${escapeHtml(member.name)} profile photo">` : escapeHtml(initials)}</span>
                             <div class="family-tree-details">
@@ -3861,6 +3866,7 @@
                                 <div class="family-tree-meta">
                                     ${ticketDetails ? `<span class="item-meta family-tree-ticket">Ticket: ${escapeHtml(ticketDetails)}</span>` : ''}
                                     <span class="family-tree-accommodation">${statusBadge(accommodationStatus)}</span>
+                                    ${roomDetails ? `<span class="item-meta family-tree-accommodation">${escapeHtml(roomDetails)}</span>` : ''}
                                 </div>
                             </div>
                         </div>`;

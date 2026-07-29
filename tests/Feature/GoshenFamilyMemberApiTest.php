@@ -100,7 +100,7 @@ class GoshenFamilyMemberApiTest extends TestCase
         }
     }
 
-    public function test_linked_child_does_not_receive_the_family_summary(): void
+    public function test_linked_child_with_a_profile_receives_the_family_summary(): void
     {
         AppSetting::query()->updateOrCreate(
             ['key' => 'goshen_retreat_enabled'],
@@ -128,7 +128,9 @@ class GoshenFamilyMemberApiTest extends TestCase
             'data' => ['api_token' => $child->issueApiToken()],
         ])
             ->assertOk()
-            ->assertJsonPath('data.family', null);
+            ->assertJsonPath('data.family.name', 'Adeola Family')
+            ->assertJsonCount(1, 'data.family.members')
+            ->assertJsonPath('data.family.members.0.role', 'child');
     }
 
     private function member(string $email, string $name, string $phone): MobileUser

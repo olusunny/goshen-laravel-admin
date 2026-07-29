@@ -10,7 +10,7 @@ class MemberPortalAccommodationDashboardTest extends TestCase
     {
         $portal = file_get_contents(resource_path('views/member/portal.blade.php'));
         $start = strpos($portal, 'function renderHome()');
-        $end = strpos('function walletAmount', $start);
+        $end = strpos($portal, 'function walletAmount', $start);
 
         $this->assertNotFalse($start);
         $this->assertNotFalse($end);
