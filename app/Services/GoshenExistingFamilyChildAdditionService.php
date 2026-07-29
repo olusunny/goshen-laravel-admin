@@ -62,19 +62,7 @@ class GoshenExistingFamilyChildAdditionService
                 throw ValidationException::withMessages(['billing_parent_id' => 'Choose a parent already linked to this family.']);
             }
 
-            $prepared = $this->familyRegistration->prepare([
-                'name' => $family->name,
-                'father' => [
-                    'included' => true,
-                    'first_name' => $billingParent->first_name ?: $billingParent->name,
-                    'last_name' => $billingParent->last_name,
-                    'email' => $billingParent->email,
-                    'phone' => $billingParent->phone,
-                ],
-                'mother' => ['included' => false],
-                'children' => [$child],
-            ], $billingParent, true);
-            $child = collect($prepared['members'])->firstWhere('role', 'child');
+            $child = $this->familyRegistration->prepareChild($child);
 
             if (! is_array($child) || $this->isDuplicateChild($family, $child)) {
                 throw ValidationException::withMessages(['child' => 'This child is already attached to the family.']);
@@ -93,6 +81,7 @@ class GoshenExistingFamilyChildAdditionService
                     'family_name' => $family->name,
                     'family_role' => 'child',
                     'family_age' => $child['age'],
+                    'gender' => $child['gender'],
                     'family_parent_names' => $parentNames,
                     'ticket_amount' => $child['is_payable'] ? (float) $ticketType->price : 0,
                     'payment_exempt' => ! $child['is_payable'],
@@ -115,6 +104,7 @@ class GoshenExistingFamilyChildAdditionService
                 'phone' => $child['phone'],
                 'metadata' => [
                     'age' => $child['age'],
+                    'gender' => $child['gender'],
                     'is_payable' => $child['is_payable'],
                     'profile_status' => $child['profile_status'],
                     'source' => 'admin_existing_family_child_addition',
@@ -162,7 +152,8 @@ class GoshenExistingFamilyChildAdditionService
                     $query
                         ->whereRaw('LOWER(first_name) = ?', [strtolower((string) $child['first_name'])])
                         ->whereRaw("LOWER(COALESCE(last_name, '')) = ?", [strtolower((string) $child['last_name'])])
-                        ->whereDate('date_of_birth', $child['date_of_birth']);
+                        ->where('metadata->age', $child['age'])
+                        ->where('metadata->gender', $child['gender']);
                 });
             })
             ->exists();

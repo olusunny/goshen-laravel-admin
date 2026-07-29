@@ -32,7 +32,8 @@ class GoshenExistingFamilyChildAdditionTest extends TestCase
             'child' => [
                 'first_name' => 'Hope',
                 'last_name' => 'Adeola',
-                'date_of_birth' => now()->subYears(10)->toDateString(),
+                'age' => 10,
+                'gender' => 'female',
             ],
         ]);
 
@@ -47,6 +48,9 @@ class GoshenExistingFamilyChildAdditionTest extends TestCase
         $this->assertSame($parentTickets['mother']->booking_id, $parentTickets['mother']->fresh()->booking_id);
         $this->assertSame(3, $family->fresh()->members()->count());
         $this->assertDatabaseHas('goshen_family_members', ['goshen_family_id' => $family->id, 'attendee_id' => $ticket->attendee_id, 'role' => 'child']);
+        $this->assertNull(GoshenFamilyMember::query()->where('attendee_id', $ticket->attendee_id)->value('date_of_birth'));
+        $this->assertSame('female', $ticket->attendee->custom_fields['gender']);
+        $this->assertSame('female', GoshenFamilyMember::query()->where('attendee_id', $ticket->attendee_id)->sole()->metadata['gender']);
         $this->assertDatabaseHas('ei_event_audit_logs', ['event_id' => $family->event_id, 'actor_id' => $admin->id, 'action' => 'goshen_existing_family_child_added']);
     }
 
@@ -68,7 +72,8 @@ class GoshenExistingFamilyChildAdditionTest extends TestCase
             'child' => [
                 'first_name' => 'Peace',
                 'last_name' => 'Adeola',
-                'date_of_birth' => now()->subYears(18)->toDateString(),
+                'age' => 18,
+                'gender' => 'female',
                 'email' => 'peace.adeola@example.test',
                 'phone' => '+447700000999',
                 'adult_confirmation' => true,
@@ -78,6 +83,7 @@ class GoshenExistingFamilyChildAdditionTest extends TestCase
         $member = MobileUser::query()->where('email', 'peace.adeola@example.test')->sole();
         $this->assertSame(BookingStatus::Paid, $ticket->booking->status);
         $this->assertSame('300.00', $ticket->booking->total);
+        $this->assertSame('female', $member->gender);
         $this->assertSame($member->id, GoshenFamilyMember::query()->where('attendee_id', $ticket->attendee_id)->value('mobile_user_id'));
         $this->assertSame(1, $ticket->booking->installments()->firstOrFail()->transactions()->where('gateway', 'voucher')->count());
     }
@@ -86,7 +92,7 @@ class GoshenExistingFamilyChildAdditionTest extends TestCase
     {
         [$admin, $family, $parent, $ticketType] = $this->familyFixture();
         $service = app(GoshenExistingFamilyLinkService::class);
-        $child = ['first_name' => 'Faith', 'last_name' => 'Adeola', 'date_of_birth' => now()->subYears(8)->toDateString()];
+        $child = ['first_name' => 'Faith', 'last_name' => 'Adeola', 'age' => 8, 'gender' => 'female'];
 
         try {
             $service->addChild($admin, $family, ['ticket_type_id' => $this->ticketType($this->event('other'))->id, 'child' => $child]);
@@ -102,6 +108,42 @@ class GoshenExistingFamilyChildAdditionTest extends TestCase
             $this->fail('Expected duplicate-child validation.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('child', $exception->errors());
+        }
+    }
+
+    public function test_it_uses_manual_age_bands_and_rejects_invalid_child_details(): void
+    {
+        [$admin, $family, $parent, $ticketType] = $this->familyFixture();
+        $voucher = app(GoshenVoucherService::class)->createVoucher([
+            'event_id' => $family->event_id,
+            'currency' => 'GBP',
+            'amount' => 300,
+            'max_uses' => 1,
+        ], adminActor: $admin);
+        $service = app(GoshenExistingFamilyLinkService::class);
+
+        $ticket = $service->addChild($admin, $family, [
+            'ticket_type_id' => $ticketType->id,
+            'issuance_reason' => 'Church office verified the teenage child details.',
+            'payment_method' => 'voucher',
+            'voucher_code' => $voucher['code'],
+            'child' => ['first_name' => 'Teen', 'last_name' => 'Adeola', 'age' => 15, 'gender' => 'male'],
+        ]);
+
+        $this->assertSame('300.00', $ticket->booking->total);
+        $this->assertNull(GoshenFamilyMember::query()->where('attendee_id', $ticket->attendee_id)->value('mobile_user_id'));
+
+        foreach ([
+            ['age' => 0, 'gender' => 'female', 'field' => 'child.age'],
+            ['age' => 121, 'gender' => 'female', 'field' => 'child.age'],
+            ['age' => 10, 'gender' => '', 'field' => 'child.gender'],
+        ] as $invalid) {
+            try {
+                $service->addChild($admin, $family, ['child' => ['first_name' => 'Invalid', 'last_name' => 'Adeola', ...$invalid]]);
+                $this->fail('Expected child validation.');
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey($invalid['field'], $exception->errors());
+            }
         }
     }
 

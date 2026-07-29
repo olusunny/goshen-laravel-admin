@@ -188,6 +188,7 @@ class GoshenAdminTicketIssuanceService
                         'family_name' => $familyRegistration['family_name'],
                         'family_role' => $familyMember['role'],
                         'family_age' => $familyMember['age'],
+                        'gender' => $familyMember['gender'] ?? null,
                         'family_parent_names' => $familyMember['role'] === 'child' ? $familyRegistration['parent_names'] : [],
                         'ticket_amount' => $familyMember['is_payable'] ? (float) $ticketType->price : 0,
                         'payment_exempt' => ! $familyMember['is_payable'],
@@ -440,6 +441,7 @@ class GoshenAdminTicketIssuanceService
                             'phone' => $familyMember['phone'],
                             'metadata' => [
                                 'age' => $familyMember['age'],
+                                'gender' => $familyMember['gender'] ?? null,
                                 'is_payable' => $familyMember['is_payable'],
                                 'profile_status' => $familyMember['profile_status'],
                             ],

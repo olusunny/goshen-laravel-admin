@@ -9,6 +9,7 @@ use App\Filament\Resources\GoshenTicketResource\Pages\CreateGoshenTicket;
 use App\Filament\Resources\GoshenTicketResource\Pages\ViewGoshenTicket;
 use App\Models\GoshenWallet;
 use App\Models\GoshenFamily;
+use App\Models\GoshenFamilyMember;
 use App\Models\MobileUser;
 use App\Models\SmtpSetting;
 use App\Models\User;
@@ -628,7 +629,7 @@ class GoshenAdminTicketIssuanceTest extends TestCase
                 'name' => 'Front Desk Family',
                 'father' => ['included' => true, 'first_name' => 'Father', 'last_name' => 'Desk'],
                 'mother' => ['included' => true, 'first_name' => 'Mother', 'last_name' => 'Desk'],
-                'children' => [['first_name' => 'Adult', 'last_name' => 'Desk', 'date_of_birth' => now()->subYears(16)->toDateString()]],
+                'children' => [['first_name' => 'Adult', 'last_name' => 'Desk', 'age' => 16, 'gender' => 'male']],
             ],
         );
 
@@ -647,6 +648,9 @@ class GoshenAdminTicketIssuanceTest extends TestCase
             [1, 2, 3],
             $booking->attendees->pluck('custom_fields.attendee_index')->all(),
         );
+        $childAttendee = $booking->attendees->firstWhere('first_name', 'Adult');
+        $this->assertSame('male', $childAttendee->custom_fields['gender']);
+        $this->assertSame('male', GoshenFamilyMember::query()->where('attendee_id', $childAttendee->id)->sole()->metadata['gender']);
     }
 
     public function test_admin_ticket_issuance_rejects_a_zero_price_without_creating_financial_records(): void

@@ -63,7 +63,7 @@ class GoshenFamilyMemberApiTest extends TestCase
         ]);
         $this->familyMember($family, $fatherAttendee, $father, 'father', 'David', 'Adeola');
         $this->familyMember($family, $motherAttendee, $mother, 'mother', 'Grace', 'Adeola');
-        $this->familyMember($family, $childAttendee, $child, 'child', 'Hope', 'Adeola', ['age' => 10]);
+        $this->familyMember($family, $childAttendee, $child, 'child', 'Hope', 'Adeola', ['age' => 10, 'gender' => 'female']);
 
         GoshenAccommodationAllocation::query()->create([
             'event_id' => $event->id,
@@ -93,6 +93,7 @@ class GoshenFamilyMemberApiTest extends TestCase
                 ->assertJsonPath('data.family.members.1.accommodation.status', 'assigned')
                 ->assertJsonPath('data.family.members.1.accommodation.room', 'M-12')
                 ->assertJsonPath('data.family.members.2.role', 'child')
+                ->assertJsonPath('data.family.members.2.gender', 'female')
                 ->assertJsonPath('data.family.members.2.accommodation.status', 'pending')
                 ->assertJsonMissingPath('data.family.members.1.email')
                 ->assertJsonMissingPath('data.family.members.1.phone')

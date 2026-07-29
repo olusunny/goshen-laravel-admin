@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\MobileUser;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -61,6 +60,12 @@ class GoshenFamilyRegistrationService
         ];
     }
 
+    /** @return array<string, mixed> */
+    public function prepareChild(array $input): array
+    {
+        return $this->child($input, 0, 'child');
+    }
+
     /** @return array<string, mixed>|null */
     private function parent(mixed $input, string $role, MobileUser $registrant): ?array
     {
@@ -95,16 +100,17 @@ class GoshenFamilyRegistrationService
     }
 
     /** @return array<string, mixed> */
-    private function child(array $input, int $index): array
+    private function child(array $input, int $index, ?string $fieldPrefix = null): array
     {
+        $fieldPrefix ??= "family.children.{$index}";
         $firstName = trim((string) ($input['first_name'] ?? ''));
         $lastName = trim((string) ($input['last_name'] ?? ''));
         if ($firstName === '') {
-            throw ValidationException::withMessages(["family.children.{$index}.first_name" => 'Enter the child\'s first name.']);
+            throw ValidationException::withMessages(["{$fieldPrefix}.first_name" => 'Enter the child\'s first name.']);
         }
 
-        $dateOfBirth = $this->dateOfBirth($input['date_of_birth'] ?? null, $index);
-        $age = $dateOfBirth->age;
+        $age = $this->childAge($input['age'] ?? null, "{$fieldPrefix}.age");
+        $gender = $this->childGender($input['gender'] ?? null, "{$fieldPrefix}.gender");
         $email = $this->email($input['email'] ?? null);
         $phone = $this->phone($input['phone'] ?? null);
         $member = null;
@@ -112,12 +118,12 @@ class GoshenFamilyRegistrationService
 
         if ($age >= 18) {
             if ($email === null || $phone === null) {
-                throw ValidationException::withMessages(["family.children.{$index}" => 'Children aged 18 or over need an email address and phone number.']);
+                throw ValidationException::withMessages([$fieldPrefix => 'Children aged 18 or over need an email address and phone number.']);
             }
             if (! filter_var($input['adult_confirmation'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
-                throw ValidationException::withMessages(["family.children.{$index}.adult_confirmation" => 'Confirm that this child is 18 or over.']);
+                throw ValidationException::withMessages(["{$fieldPrefix}.adult_confirmation" => 'Confirm that this child is 18 or over.']);
             }
-            $member = $this->findOrCreateAdult($firstName, $lastName, $email, $phone);
+            $member = $this->findOrCreateAdult($firstName, $lastName, $email, $phone, $gender);
             $profileStatus = $member->is_verified ? 'linked' : 'activation_pending';
         }
 
@@ -128,15 +134,16 @@ class GoshenFamilyRegistrationService
             'name' => trim("{$firstName} {$lastName}"),
             'email' => $email,
             'phone' => $phone,
-            'date_of_birth' => $dateOfBirth->toDateString(),
+            'date_of_birth' => null,
             'age' => $age,
+            'gender' => $gender,
             'is_payable' => $age >= 15,
             'mobile_user_id' => $member?->id,
             'profile_status' => $profileStatus,
         ];
     }
 
-    private function findOrCreateAdult(string $firstName, string $lastName, string $email, string $phone): MobileUser
+    private function findOrCreateAdult(string $firstName, string $lastName, string $email, string $phone, string $gender): MobileUser
     {
         $matches = $this->matchingMembers($email, $phone);
 
@@ -150,6 +157,13 @@ class GoshenFamilyRegistrationService
                 throw ValidationException::withMessages(['family.children' => 'The adult child email and phone must match the same existing profile.']);
             }
 
+            if (filled($member->gender) && strtolower((string) $member->gender) !== $gender) {
+                throw ValidationException::withMessages(['family.children' => 'The adult child gender must match the existing profile.']);
+            }
+            if (! filled($member->gender)) {
+                $member->forceFill(['gender' => $gender])->save();
+            }
+
             return $member;
         }
 
@@ -159,6 +173,7 @@ class GoshenFamilyRegistrationService
             'last_name' => $lastName ?: null,
             'email' => strtolower($email),
             'phone' => $phone,
+            'gender' => $gender,
             'member_type' => 'church_member',
             'login_type' => 'family_registration',
             'is_verified' => false,
@@ -219,19 +234,24 @@ class GoshenFamilyRegistrationService
             ->get();
     }
 
-    private function dateOfBirth(mixed $value, int $index): CarbonImmutable
+    public function childAge(mixed $value, string $field = 'child.age'): int
     {
-        try {
-            $date = CarbonImmutable::parse((string) $value)->startOfDay();
-        } catch (\Throwable) {
-            throw ValidationException::withMessages(["family.children.{$index}.date_of_birth" => 'Enter a valid child date of birth.']);
+        $age = is_int($value) || is_string($value) && ctype_digit($value) ? (int) $value : 0;
+        if ($age < 1 || $age > 120) {
+            throw ValidationException::withMessages([$field => 'Enter a whole child age from 1 to 120.']);
         }
 
-        if ($date->isFuture() || $date->age < 1) {
-            throw ValidationException::withMessages(["family.children.{$index}.date_of_birth" => 'The child must be at least one year old.']);
+        return $age;
+    }
+
+    private function childGender(mixed $value, string $field): string
+    {
+        $gender = strtolower(trim((string) $value));
+        if (! in_array($gender, ['male', 'female'], true)) {
+            throw ValidationException::withMessages([$field => 'Select male or female for the child.']);
         }
 
-        return $date;
+        return $gender;
     }
 
     private function email(mixed $value): ?string

@@ -37,11 +37,7 @@ class GoshenExistingFamilyLinkService
             throw ValidationException::withMessages(['family' => 'Link a verified parent profile to this family before adding a child ticket.']);
         }
 
-        $dateOfBirth = data_get($data, 'child.date_of_birth');
-        $age = $this->childAge($dateOfBirth);
-        if ($age === null) {
-            throw ValidationException::withMessages(['child.date_of_birth' => 'Enter a valid child date of birth.']);
-        }
+        $age = app(GoshenFamilyRegistrationService::class)->childAge(data_get($data, 'child.age'));
 
         $ticketType = $this->childTicketType($family, $data, $age);
         $payment = [
@@ -252,14 +248,4 @@ class GoshenExistingFamilyLinkService
         return $ticketType;
     }
 
-    private function childAge(mixed $dateOfBirth): ?int
-    {
-        try {
-            $date = \Carbon\CarbonImmutable::parse((string) $dateOfBirth)->startOfDay();
-
-            return $date->isFuture() || $date->age < 1 ? null : $date->age;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
 }

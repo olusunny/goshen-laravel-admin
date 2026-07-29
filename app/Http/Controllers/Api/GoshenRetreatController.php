@@ -1209,6 +1209,7 @@ class GoshenRetreatController extends Controller
                                 'family_name' => $familyRegistration['family_name'],
                                 'family_role' => $member['role'],
                                 'family_age' => $member['age'],
+                                'gender' => $member['gender'] ?? null,
                                 'family_parent_names' => $member['role'] === 'child' ? $familyRegistration['parent_names'] : [],
                                 'ticket_amount' => $member['is_payable'] ? (float) $ticketType->price : 0,
                                 'payment_exempt' => ! $member['is_payable'],
@@ -1569,6 +1570,7 @@ class GoshenRetreatController extends Controller
                             'phone' => $member['phone'],
                             'metadata' => [
                                 'age' => $member['age'],
+                                'gender' => $member['gender'] ?? null,
                                 'is_payable' => $member['is_payable'],
                                 'profile_status' => $member['profile_status'],
                             ],
@@ -5125,6 +5127,7 @@ class GoshenRetreatController extends Controller
                         'name' => trim($member->first_name.' '.$member->last_name),
                         'role' => $member->role,
                         'age' => $member->role === 'child' ? $member->metadata['age'] ?? null : null,
+                        'gender' => $member->role === 'child' ? $member->metadata['gender'] ?? null : null,
                         'avatar' => MediaUrl::resolve($member->mobileUser?->avatar) ?: null,
                         'is_current_user' => (int) $member->mobile_user_id === (int) $user->id,
                         'attendee' => $attendee ? [
