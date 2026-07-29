@@ -18,6 +18,7 @@ class ListGoshenTickets extends ListRecords
             Actions\CreateAction::make()
                 ->label('Issue ticket')
                 ->icon('heroicon-o-ticket'),
+            GoshenTicketResource::linkExistingFamilyAction(),
             Actions\Action::make('exportTicketsCsv')
                 ->label('Export tickets CSV')
                 ->icon('heroicon-o-arrow-down-tray')

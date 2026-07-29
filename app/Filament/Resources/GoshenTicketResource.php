@@ -5,6 +5,10 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\GoshenTicketResource\Pages;
 use App\Models\MobileUser;
+use App\Models\GoshenFamily;
+use App\Models\GoshenFamilyMember;
+use App\Models\User;
+use App\Services\GoshenExistingFamilyLinkService;
 use App\Services\GoshenBookingExportService;
 use App\Support\AdminPermissions;
 use BackedEnum;
@@ -531,6 +535,7 @@ class GoshenTicketResource extends Resource
             ->recordUrl(fn (Model $record): string => static::getUrl('view', ['record' => $record]))
             ->recordActions([
                 Actions\ViewAction::make()->label('View details'),
+                static::unlinkExistingFamilyAction(),
                 static::sendTicketEmailAction(),
             ])
             ->toolbarActions([
@@ -609,6 +614,145 @@ class GoshenTicketResource extends Resource
 
         return static::adminCanManageResource()
             || ($user && $user->can(AdminPermissions::GOSHEN_TICKET_ISSUE));
+    }
+
+    public static function canLinkExistingFamilies(): bool
+    {
+        $user = Auth::user();
+
+        return $user instanceof User
+            && ($user->hasRole('super_admin') || $user->can(AdminPermissions::GOSHEN_FAMILY_LINK));
+    }
+
+    /** @return array<int, Forms\Components\Component> */
+    public static function existingFamilyLinkForm(): array
+    {
+        return [
+            Forms\Components\Select::make('event_id')
+                ->label('Retreat edition')
+                ->options(fn (): array => Event::query()
+                    ->where(fn (Builder $query): Builder => GoshenBookingExportService::applyGoshenEventScope($query))
+                    ->orderByDesc('id')
+                    ->pluck('name', 'id')
+                    ->all())
+                ->live()
+                ->required(),
+            Forms\Components\TextInput::make('family_name')
+                ->label('Family name')
+                ->placeholder("Adeola's Family")
+                ->maxLength(120)
+                ->required(),
+            Forms\Components\Select::make('father_ticket_id')
+                ->label("Father's existing ticket")
+                ->options(fn (Get $get): array => static::linkableTicketOptions($get('event_id')))
+                ->searchable()
+                ->required(),
+            Forms\Components\Select::make('mother_ticket_id')
+                ->label("Mother's existing ticket")
+                ->options(fn (Get $get): array => static::linkableTicketOptions($get('event_id')))
+                ->searchable()
+                ->required(),
+            Forms\Components\Repeater::make('children')
+                ->label("Children's existing tickets")
+                ->schema([
+                    Forms\Components\Select::make('ticket_id')
+                        ->label('Existing ticket')
+                        ->options(fn (Get $get): array => static::linkableTicketOptions($get('../../event_id')))
+                        ->searchable()
+                        ->required(),
+                ])
+                ->addActionLabel('Add child')
+                ->defaultItems(0)
+                ->columns(1),
+            Forms\Components\Textarea::make('reason')
+                ->label('Audit reason')
+                ->helperText('Explain why these historical tickets are being linked. Tickets, payments, QR codes, and Triumphant IDs are not changed.')
+                ->minLength(12)
+                ->maxLength(1000)
+                ->rows(3)
+                ->required(),
+        ];
+    }
+
+    public static function linkExistingFamilyAction(): Actions\Action
+    {
+        return Actions\Action::make('linkExistingFamily')
+            ->label('Link existing Goshen family')
+            ->icon('heroicon-o-user-group')
+            ->color('warning')
+            ->visible(fn (): bool => static::canLinkExistingFamilies())
+            ->form(static::existingFamilyLinkForm())
+            ->modalHeading('Link existing Goshen family')
+            ->modalDescription('This links already-paid tickets for a shared family view. It does not reissue or change any ticket, payment, booking, QR code, or Triumphant ID.')
+            ->modalSubmitActionLabel('Link family')
+            ->action(function (array $data, GoshenExistingFamilyLinkService $families): void {
+                $admin = Auth::user();
+                if (! $admin instanceof User || ! static::canLinkExistingFamilies()) {
+                    abort(403);
+                }
+
+                $families->link($admin, Event::query()->findOrFail($data['event_id']), $data['family_name'], $data['reason'], $data);
+                Notification::make()->success()->title('Existing Goshen family linked')->send();
+            });
+    }
+
+    public static function unlinkExistingFamilyAction(): Actions\Action
+    {
+        return Actions\Action::make('unlinkExistingFamily')
+            ->label('Unlink family')
+            ->icon('heroicon-o-link-slash')
+            ->color('danger')
+            ->visible(fn (Ticket $record): bool => static::canLinkExistingFamilies() && static::familyForTicket($record) !== null)
+            ->requiresConfirmation()
+            ->form([
+                Forms\Components\Textarea::make('reason')
+                    ->label('Correction reason')
+                    ->minLength(12)
+                    ->maxLength(1000)
+                    ->rows(3)
+                    ->required(),
+            ])
+            ->modalHeading('Unlink existing Goshen family')
+            ->modalDescription('This removes only the family link. All historical tickets, payments, QR codes, and profile data remain unchanged.')
+            ->modalSubmitActionLabel('Unlink family')
+            ->action(function (Ticket $record, array $data, GoshenExistingFamilyLinkService $families): void {
+                $admin = Auth::user();
+                $family = static::familyForTicket($record);
+                if (! $admin instanceof User || ! static::canLinkExistingFamilies() || $family === null) {
+                    abort(403);
+                }
+
+                $families->unlink($admin, $family, $data['reason']);
+                Notification::make()->success()->title('Existing Goshen family unlinked')->send();
+            });
+    }
+
+    /** @return array<int, string> */
+    private static function linkableTicketOptions(mixed $eventId): array
+    {
+        if (! filled($eventId)) {
+            return [];
+        }
+
+        return Ticket::query()
+            ->with(['attendee', 'booking'])
+            ->where('event_id', (int) $eventId)
+            ->whereIn('status', [TicketStatus::NotCheckedIn->value, TicketStatus::CheckedIn->value])
+            ->whereHas('booking', fn (Builder $query): Builder => $query->where('status', BookingStatus::Paid->value))
+            ->whereNotIn('attendee_id', GoshenFamilyMember::query()->select('attendee_id')->whereNotNull('attendee_id'))
+            ->orderByDesc('issued_at')
+            ->get()
+            ->mapWithKeys(fn (Ticket $ticket): array => [$ticket->id => sprintf('%s - %s %s (%s)', $ticket->formatted_number ?: $ticket->ticket_number, $ticket->attendee?->first_name, $ticket->attendee?->last_name, $ticket->booking?->public_id ?: 'paid')])
+            ->all();
+    }
+
+    private static function familyForTicket(Ticket $ticket): ?GoshenFamily
+    {
+        return GoshenFamilyMember::query()
+            ->where('attendee_id', $ticket->attendee_id)
+            ->with('family')
+            ->first()
+            ?->family;
     }
 
     private static function qrPreviewHtml(Ticket $record): HtmlString
