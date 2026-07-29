@@ -27,7 +27,7 @@ return [
     | same cache driver to group types of items stored in your caches.
     |
     | Supported drivers: "array", "database", "file", "memcached",
-    |                    "redis", "dynamodb", "octane", "null"
+    |                    "redis", "failover", "dynamodb", "octane", "null"
     |
     */
 
@@ -75,6 +75,11 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_CACHE_CONNECTION', 'cache'),
             'lock_connection' => env('REDIS_CACHE_LOCK_CONNECTION', 'default'),
+        ],
+
+        'redis_failover' => [
+            'driver' => 'failover',
+            'stores' => ['redis', 'database'],
         ],
 
         'dynamodb' => [
