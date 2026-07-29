@@ -1364,7 +1364,7 @@
         }
         .family-tree-member {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 11px;
             min-width: 0;
         }
@@ -1382,6 +1382,22 @@
             font-weight: 900;
         }
         .family-tree-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .family-tree-details {
+            display: grid;
+            gap: 5px;
+            min-width: 0;
+            flex: 1;
+        }
+        .family-tree-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 8px;
+            align-items: center;
+        }
+        .family-tree-ticket,
+        .family-tree-accommodation {
+            overflow-wrap: anywhere;
+        }
         .record {
             border: 1px solid var(--line);
             background: var(--field);
@@ -3829,9 +3845,24 @@
                 <div class="family-tree-members">
                     ${family.members.map((member) => {
                         const initials = `${member.name || ''}`.split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || '?';
+                        const role = member.role === 'child'
+                            ? `Child${member.age ? `, age ${member.age}` : ''}`
+                            : `${member.role || 'Family member'}`.replace(/\b\w/g, (letter) => letter.toUpperCase());
+                        const ticket = member.ticket || {};
+                        const ticketDetails = [ticket.label, ticket.number].filter(Boolean).join(' - ');
+                        const accommodationStatus = member.accommodation?.status
+                            ? `Room allocation: ${`${member.accommodation.status}`.replace(/_/g, ' ')}`
+                            : 'Room allocation pending';
                         return `<div class="family-tree-member">
                             <span class="family-tree-avatar">${member.avatar ? `<img src="${escapeHtml(member.avatar)}" alt="${escapeHtml(member.name)} profile photo">` : escapeHtml(initials)}</span>
-                            <div class="record-title"><strong>${escapeHtml(member.name)}${member.is_current_user ? ' (You)' : ''}</strong><span class="item-meta">${escapeHtml(member.role === 'child' ? `Child${member.age ? `, age ${member.age}` : ''}` : member.role)}</span></div>
+                            <div class="family-tree-details">
+                                <strong>${escapeHtml(member.name)}${member.is_current_user ? ' (You)' : ''}</strong>
+                                <span class="item-meta">${escapeHtml(role)}</span>
+                                <div class="family-tree-meta">
+                                    ${ticketDetails ? `<span class="item-meta family-tree-ticket">Ticket: ${escapeHtml(ticketDetails)}</span>` : ''}
+                                    <span class="family-tree-accommodation">${statusBadge(accommodationStatus)}</span>
+                                </div>
+                            </div>
                         </div>`;
                     }).join('')}
                 </div>
