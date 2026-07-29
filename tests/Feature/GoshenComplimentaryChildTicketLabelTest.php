@@ -30,6 +30,12 @@ class GoshenComplimentaryChildTicketLabelTest extends TestCase
     {
         $ticket = $this->ticketFixture([
             'family_role' => 'child',
+            'family_age' => 12,
+            'gender' => 'female',
+            'family_parent_names' => [
+                'father' => 'David Adeola',
+                'mother' => 'Grace Adeola',
+            ],
             'payment_exempt' => true,
         ]);
 
@@ -47,6 +53,16 @@ class GoshenComplimentaryChildTicketLabelTest extends TestCase
         $payload = $this->invokePrivateMethod(app(GoshenRetreatController::class), 'ticketPayload', $ticket);
 
         $this->assertSame('Children Complementary Ticket', $payload['amount_paid_label']);
+        $this->assertSame([
+            'role' => 'child',
+            'age' => 12,
+            'gender' => 'female',
+            'parent_names' => [
+                'father' => 'David Adeola',
+                'mother' => 'Grace Adeola',
+            ],
+            'payment_exempt' => true,
+        ], $payload['family']);
     }
 
     public function test_unpaid_ticket_that_is_not_payment_exempt_keeps_its_existing_labels(): void

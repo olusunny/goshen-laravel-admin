@@ -4067,7 +4067,10 @@ class GoshenRetreatController extends Controller
             'family' => array_filter([
                 'name' => $metadata['family_name'] ?? null,
                 'role' => $metadata['family_role'] ?? null,
+                'age' => $metadata['family_age'] ?? null,
+                'gender' => $metadata['gender'] ?? null,
                 'parent_names' => $metadata['family_parent_names'] ?? null,
+                'payment_exempt' => $metadata['payment_exempt'] ?? null,
             ], fn (mixed $value): bool => $value !== null && $value !== []),
             'qr_payload' => $payload,
             'qr_encoded' => $encoded,
