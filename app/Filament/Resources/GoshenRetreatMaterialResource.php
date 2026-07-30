@@ -13,6 +13,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class GoshenRetreatMaterialResource extends Resource
@@ -36,7 +37,18 @@ class GoshenRetreatMaterialResource extends Resource
                 ->columns(2)
                 ->schema([
                     Forms\Components\Select::make('event_id')
-                        ->relationship('event', 'name')
+                        ->relationship(
+                            name: 'event',
+                            titleAttribute: 'name',
+                            modifyQueryUsing: fn (Builder $query): Builder => $query->where(function (Builder $query): void {
+                                $query
+                                    ->where('settings->module', 'goshen_retreat')
+                                    ->orWhere('settings->module', 'goshen-retreat')
+                                    ->orWhere('settings->app_module', 'goshen_retreat')
+                                    ->orWhere('slug', 'like', 'goshen-%')
+                                    ->orWhere('name', 'like', '%Goshen Retreat%');
+                            }),
+                        )
                         ->searchable()
                         ->preload()
                         ->required(),

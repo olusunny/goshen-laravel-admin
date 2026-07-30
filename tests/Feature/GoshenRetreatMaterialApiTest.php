@@ -8,6 +8,7 @@ use App\Models\MobileUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\EventType;
 use Personal\EventInstallments\Enums\TicketStatus;
@@ -95,6 +96,58 @@ class GoshenRetreatMaterialApiTest extends TestCase
 
         Storage::disk('local')->assertMissing($material->file_path);
         $this->assertDatabaseMissing('goshen_retreat_materials', ['id' => $material->id]);
+    }
+
+    public function test_material_model_hydrates_metadata_and_removes_replaced_private_file(): void
+    {
+        Storage::fake('local');
+        $event = $this->event();
+        Storage::disk('local')->put('goshen/retreat/materials/old.pdf', 'old file');
+
+        $material = GoshenRetreatMaterial::query()->create([
+            'event_id' => $event->id,
+            'label' => 'Old guide',
+            'file_path' => 'goshen/retreat/materials/old.pdf',
+            'filename' => 'old.pdf',
+            'is_published' => true,
+        ]);
+
+        $this->assertSame(8, $material->file_size);
+        $this->assertNotEmpty($material->mime_type);
+
+        Storage::disk('local')->put('goshen/retreat/materials/new.pdf', 'new material');
+        $material->forceFill([
+            'file_path' => 'goshen/retreat/materials/new.pdf',
+            'filename' => 'new.pdf',
+        ])->save();
+
+        $this->assertSame(12, $material->file_size);
+        Storage::disk('local')->assertMissing('goshen/retreat/materials/old.pdf');
+        Storage::disk('local')->assertExists('goshen/retreat/materials/new.pdf');
+    }
+
+    public function test_material_cannot_attach_to_a_non_goshen_event(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('goshen/retreat/materials/guide.pdf', 'guide');
+        $event = Event::query()->create([
+            'name' => 'Church Conference',
+            'slug' => 'church-conference',
+            'type' => EventType::Sequential,
+            'timezone' => 'Africa/Lagos',
+            'status' => 'published',
+            'settings' => [],
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        GoshenRetreatMaterial::query()->create([
+            'event_id' => $event->id,
+            'label' => 'Guide',
+            'file_path' => 'goshen/retreat/materials/guide.pdf',
+            'filename' => 'guide.pdf',
+            'is_published' => true,
+        ]);
     }
 
     private function member(string $email): MobileUser
