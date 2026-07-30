@@ -379,10 +379,12 @@ class MobileUserResource extends Resource
                 ->schema([
                     ImageEntry::make('avatar')
                         ->label('Profile image')
+                        ->disk('public')
+                        ->visibility('public')
                         ->circular()
                         ->height(140)
                         ->width(140)
-                        ->getStateUsing(fn (MobileUser $record): string => self::avatarUrl($record))
+                        ->defaultImageUrl(fn (MobileUser $record): string => 'https://ui-avatars.com/api/?name='.urlencode($record->name ?: 'User').'&background=0c2230&color=fff')
                         ->columnSpan(1),
                     TextEntry::make('name')->label('Name')->placeholder('No name'),
                     TextEntry::make('triumphant_id')->label('Triumphant ID')->badge()->copyable()->placeholder('Not assigned'),
@@ -422,17 +424,4 @@ class MobileUserResource extends Resource
         ];
     }
 
-    private static function avatarUrl(MobileUser $record): string
-    {
-        $avatar = trim((string) $record->avatar);
-        if ($avatar !== '') {
-            if (str_starts_with($avatar, 'http://') || str_starts_with($avatar, 'https://')) {
-                return $avatar;
-            }
-
-            return Storage::disk('public')->url($avatar);
-        }
-
-        return 'https://ui-avatars.com/api/?name='.urlencode($record->name ?: 'User').'&background=0c2230&color=fff';
-    }
 }
