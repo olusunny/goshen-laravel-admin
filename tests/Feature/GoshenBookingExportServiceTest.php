@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\GoshenBookingResource;
+use App\Models\GoshenFamily;
+use App\Models\GoshenFamilyMember;
 use App\Services\GoshenBookingExportService;
 use App\Services\GoshenTicketExportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -123,6 +125,26 @@ class GoshenBookingExportServiceTest extends TestCase
             'issued_at' => now(),
         ]);
 
+        $family = GoshenFamily::query()->create([
+            'event_id' => $event->id,
+            'booking_id' => $booking->id,
+            'name' => 'Buyer Family',
+        ]);
+        GoshenFamilyMember::query()->create([
+            'goshen_family_id' => $family->id,
+            'attendee_id' => $attendee->id,
+            'role' => 'mother',
+            'first_name' => 'Grace',
+            'last_name' => 'Buyer',
+        ]);
+        GoshenFamilyMember::query()->create([
+            'goshen_family_id' => $family->id,
+            'role' => 'child',
+            'first_name' => 'Hope',
+            'last_name' => 'Buyer',
+            'metadata' => ['age' => 10],
+        ]);
+
         $exporter = app(GoshenBookingExportService::class);
         $registrationFields = $exporter->registrationFields();
         $headings = $exporter->headings($registrationFields);
@@ -140,6 +162,10 @@ class GoshenBookingExportServiceTest extends TestCase
         $this->assertSame('GOSHEN-2-000123', $combined['Ticket number']);
         $this->assertSame('Female', $combined['Registration: Gender']);
         $this->assertSame('Morning', $combined['Registration: Arrival window']);
+        $this->assertSame('Yes', $combined['Family linked']);
+        $this->assertSame('Buyer Family', $combined['Family name']);
+        $this->assertSame('Mother', $combined['Family role']);
+        $this->assertSame(2, $combined['Family member count']);
         $this->assertStringContainsString('room_note', $combined['Additional custom fields']);
     }
 
@@ -304,6 +330,20 @@ class GoshenBookingExportServiceTest extends TestCase
             'generated_at' => now(),
         ]);
 
+        $family = GoshenFamily::query()->create([
+            'event_id' => $event->id,
+            'booking_id' => $booking->id,
+            'name' => 'Buyer Family',
+        ]);
+        GoshenFamilyMember::query()->create([
+            'goshen_family_id' => $family->id,
+            'attendee_id' => $attendee->id,
+            'role' => 'child',
+            'first_name' => 'Grace',
+            'last_name' => 'Buyer',
+            'metadata' => ['age' => 16],
+        ]);
+
         $exporter = app(GoshenTicketExportService::class);
         $registrationFields = app(GoshenBookingExportService::class)->registrationFields();
         $headings = $exporter->headings($registrationFields);
@@ -316,6 +356,10 @@ class GoshenBookingExportServiceTest extends TestCase
         $this->assertSame('Female', $combined['Registration: Gender']);
         $this->assertSame('sent', $combined['Last ticket email status']);
         $this->assertSame('checked_in', $combined['Last check-in status']);
+        $this->assertSame('Yes', $combined['Family linked']);
+        $this->assertSame('Buyer Family', $combined['Family name']);
+        $this->assertSame('Child', $combined['Family role']);
+        $this->assertSame(1, $combined['Family member count']);
         $this->assertStringContainsString('seat_note', $combined['Additional attendee custom fields']);
         $this->assertStringEndsWith($ticket->public_id.'.pdf', $combined['PDF document path']);
     }
@@ -378,5 +422,18 @@ class GoshenBookingExportServiceTest extends TestCase
         GoshenBookingResource::applyAttendeeFieldFilter($query, 'gender', ['female']);
 
         $this->assertSame([$femaleBooking->id], $query->pluck('id')->all());
+    }
+
+    public function test_goshen_list_exports_offer_csv_only(): void
+    {
+        $bookingListSource = file_get_contents(app_path('Filament/Resources/GoshenBookingResource/Pages/ListGoshenBookings.php'));
+        $ticketListSource = file_get_contents(app_path('Filament/Resources/GoshenTicketResource/Pages/ListGoshenTickets.php'));
+
+        $this->assertStringContainsString("Action::make('exportBookingsCsv')", $bookingListSource);
+        $this->assertStringNotContainsString('exportBookingsExcel', $bookingListSource);
+        $this->assertStringNotContainsString("'xls'", $bookingListSource);
+        $this->assertStringContainsString("Action::make('exportTicketsCsv')", $ticketListSource);
+        $this->assertStringNotContainsString('exportTicketsExcel', $ticketListSource);
+        $this->assertStringNotContainsString("'xls'", $ticketListSource);
     }
 }

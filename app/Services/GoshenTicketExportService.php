@@ -12,6 +12,7 @@ class GoshenTicketExportService
 {
     public function __construct(
         private readonly GoshenBookingExportService $bookingExporter,
+        private readonly GoshenFamilyExportService $familyExporter,
     ) {}
 
     /**
@@ -58,6 +59,10 @@ class GoshenTicketExportService
             'Attendee phone',
             'Attendee company',
             'Attendee designation',
+            'Family linked',
+            'Family name',
+            'Family role',
+            'Family member count',
         ], $registrationFields
             ->map(fn (EventAttendeeField $field): string => 'Registration: '.$this->fieldLabel($field))
             ->all(), [
@@ -78,7 +83,7 @@ class GoshenTicketExportService
     /**
      * @return array<int, mixed>
      */
-    public function rowForTicket(Ticket $ticket, ?Collection $registrationFields = null): array
+    public function rowForTicket(Ticket $ticket, ?Collection $registrationFields = null, ?array $family = null): array
     {
         $registrationFields ??= $this->bookingExporter->registrationFields();
 
@@ -103,6 +108,7 @@ class GoshenTicketExportService
         $lastCheckIn = $ticket->checkIns->sortByDesc('id')->first();
         $lastEmail = $ticket->emailLogs->sortByDesc('id')->first();
         $pdfDocument = $ticket->documents->firstWhere('type', 'pdf');
+        $family ??= $this->familyExporter->forAttendees((int) $ticket->event_id, [$ticket->attendee_id])[$ticket->attendee_id] ?? null;
 
         $registeredFieldValues = $registrationFields
             ->map(function (EventAttendeeField $field) use ($attendee, $eventFields): string {
@@ -163,6 +169,10 @@ class GoshenTicketExportService
             $attendee?->phone,
             $attendee?->company,
             $attendee?->designation,
+            $family['linked'] ?? 'No',
+            $family['name'] ?? '',
+            $family['role'] ?? '',
+            $family['member_count'] ?? '',
         ], $registeredFieldValues, [
             $additionalCustomFields === [] ? '' : $this->jsonValue($additionalCustomFields),
             $ticket->checkIns->count(),
@@ -195,12 +205,18 @@ class GoshenTicketExportService
                 'documents',
             ])
             ->chunk(200, function (Collection $tickets) use ($output, $registrationFields): void {
+                $familiesByAttendee = [];
+
+                $tickets->groupBy('event_id')->each(function (Collection $eventTickets, int|string $eventId) use (&$familiesByAttendee): void {
+                    $familiesByAttendee += $this->familyExporter->forAttendees((int) $eventId, $eventTickets->pluck('attendee_id'));
+                });
+
                 foreach ($tickets as $ticket) {
                     if (! $ticket instanceof Ticket) {
                         continue;
                     }
 
-                    fputcsv($output, $this->rowForTicket($ticket, $registrationFields));
+                    fputcsv($output, $this->rowForTicket($ticket, $registrationFields, $familiesByAttendee[$ticket->attendee_id] ?? null));
                 }
             });
     }

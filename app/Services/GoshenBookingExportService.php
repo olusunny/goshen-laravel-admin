@@ -14,6 +14,7 @@ class GoshenBookingExportService
 {
     public function __construct(
         private readonly GoshenRegistrationFieldService $registrationFields,
+        private readonly GoshenFamilyExportService $familyExporter,
     ) {}
 
     /**
@@ -68,6 +69,10 @@ class GoshenBookingExportService
             'Attendee phone',
             'Company',
             'Designation',
+            'Family linked',
+            'Family name',
+            'Family role',
+            'Family member count',
         ], $registrationFields
             ->map(fn (EventAttendeeField $field): string => 'Registration: '.$this->fieldLabel($field))
             ->all(), [
@@ -78,7 +83,7 @@ class GoshenBookingExportService
     /**
      * @return array<int, array<int, mixed>>
      */
-    public function rowsForBooking(Booking $booking, ?Collection $registrationFields = null): array
+    public function rowsForBooking(Booking $booking, ?Collection $registrationFields = null, array $familiesByAttendee = [], ?array $directBookingFamily = null): array
     {
         $registrationFields ??= $this->registrationFields();
 
@@ -89,12 +94,20 @@ class GoshenBookingExportService
         ]);
 
         if ($booking->attendees->isEmpty()) {
-            return [$this->rowFor($booking, null, 0, $registrationFields)];
+            $directBookingFamily ??= $this->familyExporter->directlyForBookings((int) $booking->event_id, [$booking->id])[$booking->id] ?? null;
+
+            return [$this->rowFor($booking, null, 0, $registrationFields, $directBookingFamily)];
         }
 
         return $booking->attendees
             ->values()
-            ->map(fn (Attendee $attendee, int $index): array => $this->rowFor($booking, $attendee, $index, $registrationFields))
+            ->map(function (Attendee $attendee, int $index) use ($booking, $registrationFields, $familiesByAttendee, $directBookingFamily): array {
+                $family = $familiesByAttendee[$attendee->id] ?? null;
+                $family ??= $this->familyExporter->forAttendees((int) $booking->event_id, [$attendee->id])[$attendee->id] ?? null;
+                $family ??= $directBookingFamily;
+
+                return $this->rowFor($booking, $attendee, $index, $registrationFields, $family);
+            })
             ->all();
     }
 
@@ -111,12 +124,23 @@ class GoshenBookingExportService
                 'attendees.ticketType',
             ])
             ->chunk(200, function (Collection $bookings) use ($output, $registrationFields): void {
+                $familiesByAttendee = [];
+                $familiesByBooking = [];
+
+                $bookings->groupBy('event_id')->each(function (Collection $eventBookings, int|string $eventId) use (&$familiesByAttendee, &$familiesByBooking): void {
+                    $familiesByAttendee += $this->familyExporter->forAttendees(
+                        (int) $eventId,
+                        $eventBookings->flatMap(fn (Booking $booking): Collection => $booking->attendees->pluck('id')),
+                    );
+                    $familiesByBooking += $this->familyExporter->directlyForBookings((int) $eventId, $eventBookings->pluck('id'));
+                });
+
                 foreach ($bookings as $booking) {
                     if (! $booking instanceof Booking) {
                         continue;
                     }
 
-                    foreach ($this->rowsForBooking($booking, $registrationFields) as $row) {
+                    foreach ($this->rowsForBooking($booking, $registrationFields, $familiesByAttendee, $familiesByBooking[$booking->id] ?? null) as $row) {
                         fputcsv($output, $row);
                     }
                 }
@@ -161,7 +185,7 @@ class GoshenBookingExportService
         return is_scalar($raw) ? (string) $raw : json_encode($raw, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
-    private function rowFor(Booking $booking, ?Attendee $attendee, int $index, Collection $registrationFields): array
+    private function rowFor(Booking $booking, ?Attendee $attendee, int $index, Collection $registrationFields, ?array $family = null): array
     {
         $ticket = $attendee?->ticket;
         $ticketStatus = $ticket?->status instanceof BackedEnum ? $ticket->status->value : $ticket?->status;
@@ -214,6 +238,10 @@ class GoshenBookingExportService
             $attendee?->phone,
             $attendee?->company,
             $attendee?->designation,
+            $family['linked'] ?? 'No',
+            $family['name'] ?? '',
+            $family['role'] ?? '',
+            $family['member_count'] ?? '',
         ], $registeredFieldValues, [
             $additionalCustomFields === [] ? '' : json_encode($additionalCustomFields, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ]);

@@ -22,19 +22,13 @@ class ListGoshenTickets extends ListRecords
             Actions\Action::make('exportTicketsCsv')
                 ->label('Export tickets CSV')
                 ->icon('heroicon-o-arrow-down-tray')
-                ->action(fn (): StreamedResponse => $this->exportTickets('csv')),
-            Actions\Action::make('exportTicketsExcel')
-                ->label('Export tickets Excel')
-                ->icon('heroicon-o-table-cells')
-                ->action(fn (): StreamedResponse => $this->exportTickets('xls')),
+                ->action(fn (): StreamedResponse => $this->exportTickets()),
         ];
     }
 
-    private function exportTickets(string $format): StreamedResponse
+    private function exportTickets(): StreamedResponse
     {
-        $extension = $format === 'xls' ? 'xls' : 'csv';
-        $filename = 'goshen-tickets-'.now()->format('Ymd-His').'.'.$extension;
-        $contentType = $format === 'xls' ? 'application/vnd.ms-excel' : 'text/csv';
+        $filename = 'goshen-tickets-'.now()->format('Ymd-His').'.csv';
         $query = $this->getTableQueryForExport();
 
         return response()->streamDownload(function () use ($query): void {
@@ -43,6 +37,6 @@ class ListGoshenTickets extends ListRecords
             app(GoshenTicketExportService::class)->writeCsv($query, $output);
 
             fclose($output);
-        }, $filename, ['Content-Type' => $contentType]);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 }

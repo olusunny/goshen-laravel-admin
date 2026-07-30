@@ -18,19 +18,13 @@ class ListGoshenBookings extends ListRecords
             Actions\Action::make('exportBookingsCsv')
                 ->label('Export bookings CSV')
                 ->icon('heroicon-o-arrow-down-tray')
-                ->action(fn (): StreamedResponse => $this->exportBookings('csv')),
-            Actions\Action::make('exportBookingsExcel')
-                ->label('Export bookings Excel')
-                ->icon('heroicon-o-table-cells')
-                ->action(fn (): StreamedResponse => $this->exportBookings('xls')),
+                ->action(fn (): StreamedResponse => $this->exportBookings()),
         ];
     }
 
-    private function exportBookings(string $format): StreamedResponse
+    private function exportBookings(): StreamedResponse
     {
-        $extension = $format === 'xls' ? 'xls' : 'csv';
-        $filename = 'goshen-bookings-with-attendees-'.now()->format('Ymd-His').'.'.$extension;
-        $contentType = $format === 'xls' ? 'application/vnd.ms-excel' : 'text/csv';
+        $filename = 'goshen-bookings-with-attendees-'.now()->format('Ymd-His').'.csv';
         $query = $this->getTableQueryForExport();
 
         return response()->streamDownload(function () use ($query): void {
@@ -42,6 +36,6 @@ class ListGoshenBookings extends ListRecords
             );
 
             fclose($output);
-        }, $filename, ['Content-Type' => $contentType]);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 }
