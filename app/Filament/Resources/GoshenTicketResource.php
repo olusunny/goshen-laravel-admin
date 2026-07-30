@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\GoshenTicketResource\Pages;
+use App\Models\GoshenAccommodationAllocation;
 use App\Models\MobileUser;
 use App\Models\GoshenFamily;
 use App\Models\GoshenFamilyMember;
@@ -390,6 +391,24 @@ class GoshenTicketResource extends Resource
                     TextEntry::make('attendee.phone')->label('Phone')->copyable()->placeholder('No phone'),
                     TextEntry::make('attendee.company')->label('Company')->placeholder('No company'),
                     TextEntry::make('attendee.designation')->label('Designation')->placeholder('No designation'),
+                ]),
+            Section::make('Linked Goshen family')
+                ->description('This attendee is linked to this Goshen family. Tickets and accommodation remain managed per person.')
+                ->visible(fn (Ticket $record): bool => static::familyViewData($record) !== null)
+                ->columns(2)
+                ->schema([
+                    TextEntry::make('linked_family_name')
+                        ->label('Family')
+                        ->state(fn (Ticket $record): ?string => static::familyViewData($record)['name'] ?? null)
+                        ->copyable(),
+                    TextEntry::make('linked_family_role')
+                        ->label('This attendee')
+                        ->state(fn (Ticket $record): ?string => static::familyViewData($record)['current_member'] ?? null),
+                    TextEntry::make('linked_family_members')
+                        ->label('Family members and accommodation')
+                        ->state(fn (Ticket $record): array => static::familyViewData($record)['members'] ?? [])
+                        ->listWithLineBreaks()
+                        ->columnSpanFull(),
                 ]),
             Section::make('Check-in history')
                 ->schema([
@@ -985,9 +1004,88 @@ class GoshenTicketResource extends Resource
     {
         return GoshenFamilyMember::query()
             ->where('attendee_id', $ticket->attendee_id)
-            ->with('family')
+            ->whereHas('family', fn (Builder $query): Builder => $query->where('event_id', $ticket->event_id))
+            ->with(['family.members.attendee.ticket'])
             ->first()
             ?->family;
+    }
+
+    /**
+     * @return array{name: string, current_member: string, members: array<int, string>}|null
+     */
+    private static function familyViewData(Ticket $ticket): ?array
+    {
+        static $cache = [];
+
+        $cacheKey = (string) $ticket->getKey();
+
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        $family = static::familyForTicket($ticket);
+
+        if (! $family) {
+            return $cache[$cacheKey] = null;
+        }
+
+        $members = $family->members
+            ->sortBy(fn (GoshenFamilyMember $member): int => match ($member->role) {
+                'father' => 1,
+                'mother' => 2,
+                default => 3,
+            })
+            ->values();
+        $allocations = GoshenAccommodationAllocation::query()
+            ->where('event_id', $ticket->event_id)
+            ->whereIn('attendee_id', $members->pluck('attendee_id')->filter())
+            ->where('status', '!=', 'removed')
+            ->get()
+            ->keyBy('attendee_id');
+        $currentMember = $members->firstWhere('attendee_id', $ticket->attendee_id);
+
+        return $cache[$cacheKey] = [
+            'name' => (string) $family->name,
+            'current_member' => $currentMember ? static::familyRoleLabel($currentMember) : 'Linked family attendee',
+            'members' => $members->map(function (GoshenFamilyMember $member) use ($allocations): string {
+                $name = trim("{$member->first_name} {$member->last_name}") ?: 'Unnamed member';
+                $ticketNumber = $member->attendee?->ticket?->formatted_number
+                    ?: $member->attendee?->ticket?->ticket_number
+                    ?: 'Pending';
+                $allocation = $member->attendee_id ? $allocations->get($member->attendee_id) : null;
+
+                return implode(' · ', [
+                    $name,
+                    static::familyRoleLabel($member),
+                    "Ticket {$ticketNumber}",
+                    static::familyAccommodationLabel($allocation),
+                ]);
+            })->all(),
+        ];
+    }
+
+    private static function familyRoleLabel(GoshenFamilyMember $member): string
+    {
+        $role = str((string) $member->role)->headline()->toString();
+        $age = $member->role === 'child' ? data_get($member->metadata, 'age') : null;
+
+        return filled($age) ? "{$role}, age {$age}" : $role;
+    }
+
+    private static function familyAccommodationLabel(?GoshenAccommodationAllocation $allocation): string
+    {
+        if (! $allocation) {
+            return 'Room allocation pending';
+        }
+
+        $location = collect([
+            $allocation->building,
+            filled($allocation->room) ? "Room {$allocation->room}" : null,
+            filled($allocation->bed) ? "Bed {$allocation->bed}" : null,
+        ])->filter()->implode(', ');
+        $status = str((string) $allocation->status)->headline()->toString();
+
+        return $location === '' ? "Room {$status}" : "Room {$status}: {$location}";
     }
 
     private static function childRequiresPayment(mixed $age): bool
