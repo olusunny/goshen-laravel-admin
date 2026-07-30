@@ -116,6 +116,9 @@ Route::controller(GoshenRetreatController::class)
         Route::post('events/{event}/setup/registration-fields', 'saveRetreatSetupRegistrationField');
         Route::post('events/{event}/setup/registration-fields/{field}/delete', 'deleteRetreatSetupRegistrationField')->whereNumber('field');
         Route::post('events/{event}/accommodation-management', 'accommodationManagement');
+        Route::post('events/{event}/materials', 'materialsManagement');
+        Route::post('events/{event}/materials/save', 'saveMaterial');
+        Route::post('events/{event}/materials/{material}/delete', 'deleteMaterial')->whereNumber('material');
         Route::post('accommodation-allocations', 'storeAccommodationAllocation');
         Route::post('accommodation-allocations/{allocation}', 'updateAccommodationAllocation')->whereNumber('allocation');
         Route::post('members/search', 'searchManagedMembers')->middleware('throttle:20,1');
@@ -128,6 +131,8 @@ Route::controller(GoshenRetreatController::class)
         Route::post('vouchers/verify', 'verifyVoucher')->middleware('throttle:20,1');
         Route::post('vouchers/generate', 'generateVouchers')->middleware('throttle:10,1');
         Route::post('vouchers/usages', 'voucherUsages')->middleware('throttle:20,1');
+        Route::post('materials', 'materials');
+        Route::post('materials/{material}/download', 'downloadMaterial')->whereNumber('material');
         Route::match(['get', 'post'], 'referrals/summary', 'referralSummary');
         Route::post('referrals/convert', 'convertReferralPoints')->middleware('throttle:6,1');
         Route::get('tickets/{ticket}/qr.svg', 'ticketQrSvg');

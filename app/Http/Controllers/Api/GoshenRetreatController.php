@@ -6,6 +6,7 @@ use App\Models\AppSetting;
 use App\Models\GoshenAccommodationAllocation;
 use App\Models\GoshenFamily;
 use App\Models\GoshenFamilyMember;
+use App\Models\GoshenRetreatMaterial;
 use App\Models\GoshenVoucher;
 use App\Models\GoshenVoucherUsage;
 use App\Models\GoshenWallet;
@@ -1040,6 +1041,125 @@ class GoshenRetreatController extends Controller
                 'referral' => $referrals->summaryFor($user),
             ],
         ]);
+    }
+
+    public function materials(Request $request): JsonResponse
+    {
+        if (! $this->enabled()) {
+            return response()->json(['status' => 'error', 'message' => 'Goshen Retreat is not currently available.'], 404);
+        }
+
+        $user = $this->mobileUserFromToken($request);
+        if (! $user) {
+            return response()->json(['status' => 'error', 'message' => 'Please sign in to view retreat materials.'], 401);
+        }
+
+        return response()->json([
+            'status' => 'ok',
+            'data' => [
+                'materials' => GoshenRetreatMaterial::query()
+                    ->where('is_published', true)
+                    ->whereIn('event_id', $this->eligibleMaterialEventIds($user))
+                    ->latest()
+                    ->get()
+                    ->map(fn (GoshenRetreatMaterial $material): array => $this->materialPayload($material))
+                    ->values(),
+            ],
+        ]);
+    }
+
+    public function downloadMaterial(Request $request, GoshenRetreatMaterial $material): Response|JsonResponse|StreamedResponse
+    {
+        if (! $this->enabled()) {
+            return response()->json(['status' => 'error', 'message' => 'Goshen Retreat is not currently available.'], 404);
+        }
+
+        $user = $this->mobileUserFromToken($request);
+        if (! $user) {
+            return response()->json(['status' => 'error', 'message' => 'Please sign in to download retreat materials.'], 401);
+        }
+
+        $material->loadMissing('event');
+        if (! $material->is_published || ! $material->event || ! $this->isGoshenEvent($material->event)
+            || ! in_array($material->event_id, $this->eligibleMaterialEventIds($user), true)
+            || ! Storage::disk('local')->exists($material->file_path)) {
+            return response()->json(['status' => 'error', 'message' => 'This retreat material is not available to your account.'], 404);
+        }
+
+        $response = Storage::disk('local')->download($material->file_path, $material->filename);
+        $response->headers->set('Cache-Control', 'no-store, private');
+
+        return $response;
+    }
+
+    public function materialsManagement(Request $request, string $event): JsonResponse
+    {
+        if ($response = $this->registrationManagerAccessError($request)) {
+            return $response;
+        }
+
+        $event = $this->eventFromKey($event);
+        abort_unless($event && $this->isGoshenEvent($event), 404);
+
+        return response()->json([
+            'status' => 'ok',
+            'data' => [
+                'event' => $this->eventPayload($event, true),
+                'materials' => GoshenRetreatMaterial::query()->where('event_id', $event->id)->latest()->get()
+                    ->map(fn (GoshenRetreatMaterial $material): array => $this->materialPayload($material, true))->values(),
+            ],
+        ]);
+    }
+
+    public function saveMaterial(Request $request, string $event): JsonResponse
+    {
+        if ($response = $this->registrationManagerAccessError($request)) {
+            return $response;
+        }
+
+        $event = $this->eventFromKey($event);
+        abort_unless($event && $this->isGoshenEvent($event), 404);
+
+        $data = $this->payload($request);
+        $data['file'] = $request->file('file');
+        $validated = Validator::make($data, [
+            'id' => ['nullable', 'integer'],
+            'label' => ['required', 'string', 'max:255'],
+            'is_published' => ['nullable', 'boolean'],
+            'file' => ['required_without:id', 'nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:15360'],
+        ])->validate();
+
+        $material = filled($validated['id'] ?? null)
+            ? GoshenRetreatMaterial::query()->where('event_id', $event->id)->findOrFail($validated['id'])
+            : new GoshenRetreatMaterial(['event_id' => $event->id]);
+        $material->label = $validated['label'];
+        $material->is_published = array_key_exists('is_published', $validated)
+            ? filter_var($validated['is_published'], FILTER_VALIDATE_BOOLEAN)
+            : ($material->exists ? $material->is_published : true);
+
+        if ($validated['file'] ?? null) {
+            $file = $validated['file'];
+            $material->file_path = $file->store('goshen/retreat/materials/'.$event->id, 'local');
+            $material->filename = basename(str_replace('\\', '/', (string) $file->getClientOriginalName()));
+            $material->mime_type = $file->getMimeType() ?: 'application/octet-stream';
+            $material->file_size = $file->getSize() ?: 0;
+        }
+        $material->save();
+
+        return response()->json(['status' => 'ok', 'message' => 'Retreat material has been saved.', 'data' => ['material' => $this->materialPayload($material, true)]]);
+    }
+
+    public function deleteMaterial(Request $request, string $event, int $material): JsonResponse
+    {
+        if ($response = $this->registrationManagerAccessError($request)) {
+            return $response;
+        }
+
+        $event = $this->eventFromKey($event);
+        abort_unless($event && $this->isGoshenEvent($event), 404);
+        GoshenRetreatMaterial::query()->where('event_id', $event->id)->findOrFail($material)->delete();
+
+        return response()->json(['status' => 'ok', 'message' => 'Retreat material has been deleted.']);
     }
 
     public function storeBooking(
@@ -3664,6 +3784,49 @@ class GoshenRetreatController extends Controller
         return $ticket->event
             && $ticket->event->status === 'published'
             && $this->isGoshenEvent($ticket->event);
+    }
+
+    /** @return array<int, int> */
+    private function eligibleMaterialEventIds(MobileUser $user): array
+    {
+        $familyAttendeeIds = GoshenFamilyMember::query()
+            ->where('mobile_user_id', $user->id)
+            ->whereNotNull('attendee_id')
+            ->pluck('attendee_id');
+
+        return Ticket::query()
+            ->whereIn('status', [TicketStatus::NotCheckedIn->value, TicketStatus::CheckedIn->value, TicketStatus::Provisional->value])
+            ->where(function ($query) use ($user, $familyAttendeeIds): void {
+                $query->whereHas('booking', fn ($booking) => $booking->where('customer_id', $user->id));
+                if ($familyAttendeeIds->isNotEmpty()) {
+                    $query->orWhereIn('attendee_id', $familyAttendeeIds);
+                }
+            })
+            ->distinct()
+            ->pluck('event_id')
+            ->map(fn (mixed $eventId): int => (int) $eventId)
+            ->all();
+    }
+
+    /** @return array<string, mixed> */
+    private function materialPayload(GoshenRetreatMaterial $material, bool $forManagement = false): array
+    {
+        $payload = [
+            'id' => $material->id,
+            'label' => $material->label,
+            'mime_type' => $material->mime_type,
+            'file_type' => $material->mime_type === 'application/pdf' ? 'pdf' : 'image',
+            'filename' => $material->filename,
+            'size' => $material->file_size,
+        ];
+
+        if ($forManagement) {
+            $payload['event_id'] = $material->event_id;
+            $payload['is_published'] = $material->is_published;
+            $payload['updated_at'] = $this->isoTimestamp($material->updated_at);
+        }
+
+        return $payload;
     }
 
     private function managementPaidTotal(Booking $booking): float
