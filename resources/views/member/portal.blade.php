@@ -3243,7 +3243,7 @@
             renderHome();
             try {
                 const payload = await apiPost('/api/goshen-retreat/materials', authPayload());
-                retreatMaterials = { status: 'ready', items: Array.isArray(payload.data) ? payload.data : [], error: '' };
+                retreatMaterials = { status: 'ready', items: Array.isArray(payload.data?.materials) ? payload.data.materials : [], error: '' };
             } catch (error) {
                 retreatMaterials = { status: 'error', items: [], error: error.message || 'Retreat materials could not be loaded.' };
             }
