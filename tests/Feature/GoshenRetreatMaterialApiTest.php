@@ -29,8 +29,10 @@ class GoshenRetreatMaterialApiTest extends TestCase
         Storage::fake('local');
         $holder = $this->member('holder@example.test');
         $otherMember = $this->member('other@example.test');
+        $provisionalMember = $this->member('provisional@example.test');
         $event = $this->event();
         $this->activeTicket($event, $holder);
+        $this->activeTicket($event, $provisionalMember, TicketStatus::Provisional);
 
         Storage::disk('local')->put('goshen/retreat/materials/guide.pdf', 'private material');
         $material = GoshenRetreatMaterial::query()->create([
@@ -59,6 +61,14 @@ class GoshenRetreatMaterialApiTest extends TestCase
 
         $this->post('/api/goshen-retreat/materials/'.$material->id.'/download', [
             'data' => ['api_token' => $otherMember->issueApiToken()],
+        ])->assertNotFound();
+
+        $this->postJson('/api/goshen-retreat/materials', [
+            'data' => ['api_token' => $provisionalMember->issueApiToken()],
+        ])->assertOk()->assertJsonCount(0, 'data.materials');
+
+        $this->post('/api/goshen-retreat/materials/'.$material->id.'/download', [
+            'data' => ['api_token' => $provisionalMember->issueApiToken()],
         ])->assertNotFound();
 
         $this->post('/api/goshen-retreat/materials/'.$material->id.'/download', [
@@ -150,6 +160,25 @@ class GoshenRetreatMaterialApiTest extends TestCase
         ]);
     }
 
+    public function test_force_deleting_retreat_event_removes_private_material_files_before_database_cascade(): void
+    {
+        Storage::fake('local');
+        $event = $this->event();
+        Storage::disk('local')->put('goshen/retreat/materials/event-guide.pdf', 'event guide');
+        $material = GoshenRetreatMaterial::query()->create([
+            'event_id' => $event->id,
+            'label' => 'Event guide',
+            'file_path' => 'goshen/retreat/materials/event-guide.pdf',
+            'filename' => 'event-guide.pdf',
+            'is_published' => true,
+        ]);
+
+        $event->forceDelete();
+
+        Storage::disk('local')->assertMissing('goshen/retreat/materials/event-guide.pdf');
+        $this->assertDatabaseMissing('goshen_retreat_materials', ['id' => $material->id]);
+    }
+
     private function member(string $email): MobileUser
     {
         AppSetting::query()->updateOrCreate(
@@ -188,7 +217,7 @@ class GoshenRetreatMaterialApiTest extends TestCase
         ]);
     }
 
-    private function activeTicket(Event $event, MobileUser $user): void
+    private function activeTicket(Event $event, MobileUser $user, TicketStatus $status = TicketStatus::NotCheckedIn): void
     {
         $ticketType = EventTicketType::query()->create([
             'event_id' => $event->id,
@@ -222,10 +251,10 @@ class GoshenRetreatMaterialApiTest extends TestCase
             'booking_id' => $booking->id,
             'attendee_id' => $attendee->id,
             'ticket_type_id' => $ticketType->id,
-            'ticket_number' => 'MATERIAL-001',
-            'formatted_number' => 'GOSHEN-MATERIAL-001',
+            'ticket_number' => 'MATERIAL-'.str()->random(12),
+            'formatted_number' => 'GOSHEN-MATERIAL-'.str()->random(12),
             'qr_hash' => 'materials-'.str()->random(20),
-            'status' => TicketStatus::NotCheckedIn,
+            'status' => $status,
             'issued_at' => now(),
         ]);
     }

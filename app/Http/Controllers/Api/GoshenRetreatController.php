@@ -3795,7 +3795,7 @@ class GoshenRetreatController extends Controller
             ->pluck('attendee_id');
 
         return Ticket::query()
-            ->whereIn('status', [TicketStatus::NotCheckedIn->value, TicketStatus::CheckedIn->value, TicketStatus::Provisional->value])
+            ->whereIn('status', [TicketStatus::NotCheckedIn->value, TicketStatus::CheckedIn->value])
             ->where(function ($query) use ($user, $familyAttendeeIds): void {
                 $query->whereHas('booking', fn ($booking) => $booking->where('customer_id', $user->id));
                 if ($familyAttendeeIds->isNotEmpty()) {

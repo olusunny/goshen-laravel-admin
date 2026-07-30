@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Auth\MergedEmailUserProvider;
 use App\Models\Donation;
 use App\Models\DynamicFormSubmission;
+use App\Models\GoshenRetreatMaterial;
 use App\Models\GoshenVoucherUsage;
 use App\Models\GoshenWalletLedgerEntry;
 use App\Models\MobileUser;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Personal\EventInstallments\Models\PaymentTransaction;
+use Personal\EventInstallments\Models\Event;
 use Sunny\Fundraising\Models\CampaignContribution;
 use Throwable;
 
@@ -124,6 +126,18 @@ class AppServiceProvider extends ServiceProvider
         DynamicFormSubmission::saved(fn (DynamicFormSubmission $submission): null => $this->syncTransactionEntry(
             fn () => app(GoshenTransactionEntrySyncService::class)->syncDynamicFormSubmission($submission),
         ));
+
+        Event::deleting(function (Event $event): void {
+            if (! $event->isForceDeleting()) {
+                return;
+            }
+
+            GoshenRetreatMaterial::query()
+                ->where('event_id', $event->id)
+                ->get()
+                ->each
+                ->delete();
+        });
 
         if (class_exists(CampaignContribution::class)) {
             CampaignContribution::saved(fn (CampaignContribution $contribution): null => $this->syncTransactionEntry(
