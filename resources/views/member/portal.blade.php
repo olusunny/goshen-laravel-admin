@@ -1443,6 +1443,46 @@
             gap: 8px;
         }
 
+        .retreat-materials-list {
+            display: grid;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .retreat-material {
+            display: grid;
+            grid-template-columns: 46px minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: var(--field);
+        }
+        .retreat-material-icon {
+            width: 46px;
+            height: 46px;
+            display: grid;
+            place-items: center;
+            border-radius: 14px;
+            background: var(--gold-2);
+            color: #6f4c00;
+        }
+        html.theme-dark .retreat-material-icon,
+        body.theme-dark .retreat-material-icon { color: #fff; }
+        .retreat-material-icon .nav-icon { width: 23px; height: 23px; }
+        .retreat-material-details {
+            display: grid;
+            gap: 3px;
+            min-width: 0;
+        }
+        .retreat-material-details strong,
+        .retreat-material-details span { overflow-wrap: anywhere; }
+        .retreat-material-download {
+            width: auto;
+            min-width: 44px;
+            padding: 0 12px;
+        }
+
         .wallet-balance-card {
             background: radial-gradient(circle at 84% 14%, rgba(248,181,34,.22), transparent 30%), linear-gradient(135deg, #0c2230, #0f4b3d);
             color: #fff;
@@ -1846,6 +1886,17 @@
             <circle cx="18" cy="19" r="2.5" fill="none" stroke="currentColor"/>
             <path d="m8.2 10.8 7.6-4.6M8.2 13.2l7.6 4.6" fill="none" stroke="currentColor" stroke-linecap="round"/>
         </symbol>
+        <symbol id="icon-document" viewBox="0 0 24 24">
+            <path d="M6 3h8l4 4v14H6zM14 3v5h5M9 13h6M9 17h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-image" viewBox="0 0 24 24">
+            <rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor"/>
+            <circle cx="8" cy="9" r="1.5" fill="none" stroke="currentColor"/>
+            <path d="m4 18 5.2-5.2a1.5 1.5 0 0 1 2.1 0L14 15.5l1.8-1.8a1.5 1.5 0 0 1 2.1 0L20 16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-download" viewBox="0 0 24 24">
+            <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 20h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
     </svg>
 
     <section id="authShell" class="auth-shell">
@@ -2109,6 +2160,7 @@
                 <div id="homeStats" class="stats-grid"></div>
                 <div id="homeAccommodation" class="card" hidden></div>
                 <div id="homeFamily" class="card" hidden></div>
+                <div id="homeMaterials" class="card" hidden aria-live="polite"></div>
                 <div id="homeNextAction" class="card"></div>
                 <div id="homeEventPreview" class="card"></div>
             </section>
@@ -2228,6 +2280,7 @@
         let currentUser = null;
         let eventsCache = [];
         let memberData = { registrations: [], payment_history: [], tickets: [], accommodation_allocations: [], family: null };
+        let retreatMaterials = { status: 'idle', items: [], error: '' };
         let walletData = null;
         let activePage = 'home';
         let activeWalletTab = localStorage.getItem(walletTabKey) || 'overview';
@@ -2847,6 +2900,7 @@
             showPage(pageTitles[requestedPage] ? requestedPage : 'home', false);
             loadEvents();
             loadMemberRetreatData();
+            loadRetreatMaterials();
             loadWallet();
             loadUpdates();
             handlePaymentReturnNotice();
@@ -3181,6 +3235,35 @@
                     document.getElementById(id).innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
                 });
             }
+        }
+
+        async function loadRetreatMaterials() {
+            if (!currentUser?.api_token) return;
+            retreatMaterials = { status: 'loading', items: [], error: '' };
+            renderHome();
+            try {
+                const payload = await apiPost('/api/goshen-retreat/materials', authPayload());
+                retreatMaterials = { status: 'ready', items: Array.isArray(payload.data) ? payload.data : [], error: '' };
+            } catch (error) {
+                retreatMaterials = { status: 'error', items: [], error: error.message || 'Retreat materials could not be loaded.' };
+            }
+            renderHome();
+        }
+
+        function materialFileName(material) {
+            return material.file_name || material.filename || material.original_name || material.label || material.title || 'retreat-material';
+        }
+
+        function materialFileSize(material) {
+            const bytes = Number(material.file_size ?? material.size ?? 0);
+            if (!Number.isFinite(bytes) || bytes <= 0) return '';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            const unit = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+            return `${(bytes / (1024 ** unit)).toFixed(unit ? 1 : 0)} ${units[unit]}`;
+        }
+
+        function materialIcon(material) {
+            return /^image\//i.test(material.mime_type || material.mime || '') ? 'image' : 'document';
         }
 
         async function loadWallet() {
@@ -3889,6 +3972,34 @@
                     }).join('')}
                 </div>
             ` : '';
+
+            const materialsCard = document.getElementById('homeMaterials');
+            materialsCard.hidden = !tickets.length;
+            if (!tickets.length) return;
+            if (retreatMaterials.status === 'loading' || retreatMaterials.status === 'idle') {
+                materialsCard.innerHTML = '<h3>Retreat materials</h3><p class="muted">Loading your retreat materials...</p>';
+            } else if (retreatMaterials.status === 'error') {
+                materialsCard.innerHTML = `<h3>Retreat materials</h3><p class="muted">${escapeHtml(retreatMaterials.error)}</p><button class="button small outline materials-retry" type="button">Try again</button>`;
+            } else if (!retreatMaterials.items.length) {
+                materialsCard.innerHTML = '<h3>Retreat materials</h3><p class="muted">Your retreat materials will appear here when they are ready.</p>';
+            } else {
+                materialsCard.innerHTML = `
+                    <h3>Retreat materials</h3>
+                    <p class="muted">Download your approved retreat resources whenever you need them.</p>
+                    <div class="retreat-materials-list">
+                        ${retreatMaterials.items.map((material) => {
+                            const id = material.id || material.public_id;
+                            const label = material.label || material.title || materialFileName(material);
+                            const details = [materialFileName(material), materialFileSize(material)].filter(Boolean).join(' · ');
+                            return `<article class="retreat-material">
+                                <span class="retreat-material-icon" aria-hidden="true"><svg class="nav-icon"><use href="#icon-${materialIcon(material)}"></use></svg></span>
+                                <div class="retreat-material-details"><strong>${escapeHtml(label)}</strong>${details ? `<span class="item-meta">${escapeHtml(details)}</span>` : ''}</div>
+                                <button class="button small outline retreat-material-download" type="button" data-material-download="${escapeHtml(id || '')}" data-filename="${escapeHtml(materialFileName(material))}" aria-label="Download ${escapeHtml(label)}" ${id ? '' : 'disabled'}><svg class="nav-icon" aria-hidden="true"><use href="#icon-download"></use></svg><span>Download</span></button>
+                            </article>`;
+                        }).join('')}
+                    </div>
+                `;
+            }
         }
 
         function walletAmount(amount, currency) {
@@ -5218,6 +5329,24 @@
                 } catch (error) {
                     notify(error.message, 'error');
                     cancelWithdrawal.disabled = false;
+                }
+                return;
+            }
+            const retryMaterials = event.target.closest('.materials-retry');
+            if (retryMaterials) {
+                retryMaterials.disabled = true;
+                await loadRetreatMaterials();
+                return;
+            }
+            const materialDownload = event.target.closest('.retreat-material-download');
+            if (materialDownload?.dataset.materialDownload) {
+                materialDownload.disabled = true;
+                try {
+                    await downloadAuthenticatedDocument(`/api/goshen-retreat/materials/${encodeURIComponent(materialDownload.dataset.materialDownload)}/download`, materialDownload.dataset.filename || 'retreat-material');
+                } catch (error) {
+                    notify(error.message, 'error');
+                } finally {
+                    materialDownload.disabled = false;
                 }
                 return;
             }
