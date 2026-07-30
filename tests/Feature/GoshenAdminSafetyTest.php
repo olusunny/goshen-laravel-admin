@@ -69,6 +69,13 @@ class GoshenAdminSafetyTest extends TestCase
         Queue::assertPushed(SendGoshenTicketEmail::class, fn (SendGoshenTicketEmail $job): bool => $job->ticketId === 42);
     }
 
+    public function test_database_queue_is_drained_by_the_scheduler(): void
+    {
+        $schedule = file_get_contents(base_path('routes/console.php'));
+
+        $this->assertStringContainsString("queue:work database --stop-when-empty --max-time=50 --tries=3", $schedule);
+    }
+
     private function member(string $email): MobileUser
     {
         return MobileUser::query()->create([
