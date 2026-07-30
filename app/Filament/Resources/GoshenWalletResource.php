@@ -8,6 +8,7 @@ use App\Models\AppSetting;
 use App\Models\GoshenWallet;
 use App\Models\User;
 use App\Services\GoshenAdminTicketIssuanceService;
+use App\Services\GoshenBookingExportService;
 use App\Services\GoshenVoucherService;
 use App\Services\GoshenWalletService;
 use App\Services\WalletSecurityResetService;
@@ -22,6 +23,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -92,6 +94,7 @@ class GoshenWalletResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('user'))
             ->columns([
                 Tables\Columns\TextColumn::make('user.name')->label('User')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('user.email')->label('Email')->searchable()->copyable(),
@@ -107,6 +110,16 @@ class GoshenWalletResource extends Resource
                 Tables\Columns\TextColumn::make('updated_at')->label('Updated')->dateTime()->sortable(),
             ])
             ->defaultSort('updated_at', 'desc')
+            ->filters([
+                Tables\Filters\SelectFilter::make('currency')
+                    ->options(fn (): array => GoshenWallet::query()->distinct()->orderBy('currency')->pluck('currency', 'currency')->all()),
+                Tables\Filters\TernaryFilter::make('security_reset')
+                    ->label('Security reset')
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->whereHas('user', fn (Builder $userQuery): Builder => $userQuery->where('wallet_security_reset_required', true)),
+                        false: fn (Builder $query): Builder => $query->whereHas('user', fn (Builder $userQuery): Builder => $userQuery->where('wallet_security_reset_required', false)),
+                    ),
+            ])
             ->recordUrl(fn (Model $record): string => static::getUrl('view', ['record' => $record]))
             ->recordActions([
                 Actions\ViewAction::make()->label('View wallet'),
@@ -577,7 +590,7 @@ class GoshenWalletResource extends Resource
         return EventTicketType::query()
             ->with('event:id,name')
             ->where('is_active', true)
-            ->whereHas('event', fn ($query) => $query->where('status', 'published'))
+            ->whereHas('event', fn (Builder $query): Builder => GoshenBookingExportService::applyGoshenEventScope($query)->where('status', 'published'))
             ->orderByDesc('event_id')
             ->orderBy('name')
             ->get()
@@ -599,7 +612,7 @@ class GoshenWalletResource extends Resource
             ->with('event')
             ->whereKey($ticketTypeId)
             ->where('is_active', true)
-            ->whereHas('event', fn ($query) => $query->where('status', 'published'))
+            ->whereHas('event', fn (Builder $query): Builder => GoshenBookingExportService::applyGoshenEventScope($query)->where('status', 'published'))
             ->first();
 
         if (! $ticketType) {

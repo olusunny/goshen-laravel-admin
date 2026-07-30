@@ -5,6 +5,7 @@ namespace Personal\EventInstallments\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Models\Concerns\HasPublicId;
 
@@ -70,5 +71,10 @@ class Ticket extends Model
     public function emailLogs(): HasMany
     {
         return $this->hasMany(TicketEmailLog::class);
+    }
+
+    public function latestEmailLog(): HasOne
+    {
+        return $this->hasOne(TicketEmailLog::class)->latestOfMany();
     }
 }

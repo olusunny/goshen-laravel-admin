@@ -24,7 +24,6 @@ class ViewGoshenBooking extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\EditAction::make()->label('Edit status'),
             Actions\Action::make('cancelPendingPayment')
                 ->label('Cancel pending payment')
                 ->icon('heroicon-o-x-circle')

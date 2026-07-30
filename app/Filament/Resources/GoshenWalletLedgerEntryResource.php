@@ -14,6 +14,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
@@ -122,6 +123,7 @@ class GoshenWalletLedgerEntryResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('wallet.user'))
             ->columns([
                 Tables\Columns\TextColumn::make('wallet.user.name')->label('User')->searchable(),
                 Tables\Columns\TextColumn::make('wallet.user.email')->label('Email')->searchable()->copyable(),
@@ -134,6 +136,11 @@ class GoshenWalletLedgerEntryResource extends Resource
                 Tables\Columns\TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->defaultSort('created_at', 'desc')
+            ->filters([
+                Tables\Filters\SelectFilter::make('type')->options(fn (): array => GoshenWalletLedgerEntry::query()->distinct()->orderBy('type')->pluck('type', 'type')->all()),
+                Tables\Filters\SelectFilter::make('status')->options(fn (): array => GoshenWalletLedgerEntry::query()->distinct()->orderBy('status')->pluck('status', 'status')->all()),
+                Tables\Filters\SelectFilter::make('currency')->options(fn (): array => GoshenWalletLedgerEntry::query()->distinct()->orderBy('currency')->pluck('currency', 'currency')->all()),
+            ])
             ->recordUrl(fn (Model $record): string => static::getUrl('view', ['record' => $record]))
             ->recordActions([
                 ViewAction::make()->label('View activity'),

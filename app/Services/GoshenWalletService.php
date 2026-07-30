@@ -450,6 +450,21 @@ class GoshenWalletService
             throw new RuntimeException('This withdrawal request is already closed.');
         }
 
+        if ($status === GoshenWalletWithdrawalRequest::STATUS_APPROVED
+            && $request->status !== GoshenWalletWithdrawalRequest::STATUS_PENDING) {
+            throw new RuntimeException('Only pending withdrawal requests can be approved.');
+        }
+
+        if ($status === GoshenWalletWithdrawalRequest::STATUS_PAID) {
+            if ($request->status !== GoshenWalletWithdrawalRequest::STATUS_APPROVED) {
+                throw new RuntimeException('Only approved withdrawal requests can be marked paid.');
+            }
+
+            if (blank(trim((string) ($data['payout_reference'] ?? '')))) {
+                throw new RuntimeException('A payout reference is required before marking a withdrawal request paid.');
+            }
+        }
+
         if ($status === GoshenWalletWithdrawalRequest::STATUS_REJECTED) {
             return $this->closeWithdrawalWithRefund(
                 $request,
@@ -471,6 +486,16 @@ class GoshenWalletService
                 GoshenWalletWithdrawalRequest::STATUS_CANCELLED,
             ], true)) {
                 throw new RuntimeException('This withdrawal request is already closed.');
+            }
+
+            if ($status === GoshenWalletWithdrawalRequest::STATUS_APPROVED
+                && $locked->status !== GoshenWalletWithdrawalRequest::STATUS_PENDING) {
+                throw new RuntimeException('Only pending withdrawal requests can be approved.');
+            }
+
+            if ($status === GoshenWalletWithdrawalRequest::STATUS_PAID
+                && $locked->status !== GoshenWalletWithdrawalRequest::STATUS_APPROVED) {
+                throw new RuntimeException('Only approved withdrawal requests can be marked paid.');
             }
 
             $updates = [

@@ -49,6 +49,11 @@ class GoshenBookingResource extends Resource
             });
     }
 
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
@@ -311,7 +316,6 @@ class GoshenBookingResource extends Resource
             ->recordUrl(fn (Model $record): string => static::getUrl('view', ['record' => $record]))
             ->recordActions([
                 Actions\ViewAction::make()->label('View details'),
-                Actions\EditAction::make()->label('Edit status'),
                 Actions\Action::make('cancelPendingPayment')
                     ->label('Cancel pending')
                     ->icon('heroicon-o-x-circle')
@@ -344,7 +348,7 @@ class GoshenBookingResource extends Resource
                             ->send();
                     }),
             ])
-            ->toolbarActions([Actions\BulkActionGroup::make([Actions\DeleteBulkAction::make()])]);
+            ->toolbarActions([]);
     }
 
     private static function familyForBooking(Booking $booking): ?GoshenFamily
@@ -633,7 +637,6 @@ class GoshenBookingResource extends Resource
         return [
             'index' => Pages\ListGoshenBookings::route('/'),
             'view' => Pages\ViewGoshenBooking::route('/{record}'),
-            'edit' => Pages\EditGoshenBooking::route('/{record}/edit'),
         ];
     }
 }

@@ -292,7 +292,23 @@ class MobileUserResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('member_type')
+                    ->label('Member status')
+                    ->options([
+                        'church_member' => 'Church member',
+                        'visitor' => 'Visitor',
+                    ]),
+                Tables\Filters\SelectFilter::make('group_id')
+                    ->label('Church group')
+                    ->relationship('churchGroup', 'name')
+                    ->searchable()
+                    ->preload(),
+                Tables\Filters\TernaryFilter::make('is_verified')
+                    ->label('Verification'),
+                Tables\Filters\TernaryFilter::make('is_blocked')
+                    ->label('Blocked'),
+                Tables\Filters\TernaryFilter::make('is_deleted')
+                    ->label('Cancelled / deleted'),
             ])
             ->recordActions([
                 Actions\ActionGroup::make([
@@ -326,11 +342,7 @@ class MobileUserResource extends Resource
                     ->tooltip('Actions')
                     ->dropdownPlacement('bottom-end'),
             ])
-            ->toolbarActions([
-                Actions\BulkActionGroup::make([
-                    Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->toolbarActions([]);
     }
 
     public static function registeredUsersTableSummary(): string

@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\GoshenTicketResource\Pages;
+use App\Jobs\SendGoshenTicketEmail;
 use App\Models\GoshenAccommodationAllocation;
 use App\Models\MobileUser;
 use App\Models\GoshenFamily;
@@ -449,6 +450,7 @@ class GoshenTicketResource extends Resource
                 'booking',
                 'attendee',
                 'ticketType',
+                'latestEmailLog',
             ]))
             ->columns([
                 Tables\Columns\TextColumn::make('formatted_number')
@@ -504,7 +506,7 @@ class GoshenTicketResource extends Resource
                 Tables\Columns\TextColumn::make('last_ticket_email_status')
                     ->label('Last email')
                     ->badge()
-                    ->state(fn (Ticket $record): string => (string) ($record->emailLogs()->latest('id')->value('status') ?: 'not_sent'))
+                    ->state(fn (Ticket $record): string => (string) ($record->latestEmailLog?->status ?: 'not_sent'))
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'sent' => 'Sent',
                         'failed' => 'Failed',
@@ -610,34 +612,16 @@ class GoshenTicketResource extends Resource
                         ->color('success')
                         ->requiresConfirmation()
                         ->modalHeading('Send selected Goshen tickets')
-                        ->modalDescription('Each selected ticket will be sent to its attendee or booking email with the generated ticket PDF attached.')
-                        ->modalSubmitActionLabel('Send ticket emails')
-                        ->action(function (Collection $records, TicketNotificationService $notifications): void {
-                            $sent = 0;
-                            $failed = 0;
-                            $skipped = 0;
+                        ->modalDescription('Each selected ticket is queued for delivery to its attendee or booking email with the generated ticket PDF attached. Previously delivered tickets may be resent.')
+                        ->modalSubmitActionLabel('Queue ticket emails')
+                        ->action(function (Collection $records): void {
+                            $records->each(fn (Ticket $ticket) => SendGoshenTicketEmail::dispatch((int) $ticket->id));
 
-                            $records->each(function (Ticket $ticket) use ($notifications, &$sent, &$failed, &$skipped): void {
-                                if (blank(static::defaultTicketEmailRecipient($ticket))) {
-                                    $skipped++;
-
-                                    return;
-                                }
-
-                                $log = $notifications->sendTicket($ticket);
-
-                                if ($log->status === 'sent') {
-                                    $sent++;
-                                } else {
-                                    $failed++;
-                                }
-                            });
-
-                            $notification = Notification::make()
-                                ->title("Ticket email resend complete: {$sent} sent, {$failed} failed")
-                                ->body($skipped > 0 ? "{$skipped} ticket(s) skipped because no recipient email was available." : null);
-
-                            ($failed > 0 || $skipped > 0 ? $notification->warning() : $notification->success())->send();
+                            Notification::make()
+                                ->title('Ticket email resend queued')
+                                ->body($records->count().' ticket email(s) will be delivered in the background. Any delivery problem is recorded on the ticket.')
+                                ->success()
+                                ->send();
                         }),
                 ]),
             ]);

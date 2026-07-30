@@ -120,6 +120,12 @@ class MobileUser extends Authenticatable
         static::updating(function (MobileUser $user): void {
             app(MembershipProfileService::class)->recordStatusChange($user);
         });
+
+        static::updated(function (MobileUser $user): void {
+            if ($user->wasChanged(['is_deleted', 'member_type'])) {
+                app(TriumphantIdService::class)->assignFor($user);
+            }
+        });
     }
 
     public function communityPrayerRequests(): HasMany

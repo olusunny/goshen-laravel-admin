@@ -141,6 +141,7 @@ class GoshenTransactionEntryResource extends Resource
         }
 
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('mobileUser'))
             ->defaultSort('occurred_at', 'desc')
             ->columns([
                 ...$columns,

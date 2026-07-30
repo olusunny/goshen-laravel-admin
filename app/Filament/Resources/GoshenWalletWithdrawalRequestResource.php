@@ -129,15 +129,18 @@ class GoshenWalletWithdrawalRequestResource extends Resource
             ->requiresConfirmation()
             ->form([
                 Forms\Components\Textarea::make('admin_note')
+                    ->required($status !== GoshenWalletWithdrawalRequest::STATUS_APPROVED)
                     ->rows(3),
                 Forms\Components\TextInput::make('payout_reference')
-                    ->visible($status === GoshenWalletWithdrawalRequest::STATUS_PAID),
+                    ->visible($status === GoshenWalletWithdrawalRequest::STATUS_PAID)
+                    ->required($status === GoshenWalletWithdrawalRequest::STATUS_PAID),
             ])
-            ->visible(fn (GoshenWalletWithdrawalRequest $record): bool => ! in_array($record->status, [
-                GoshenWalletWithdrawalRequest::STATUS_REJECTED,
-                GoshenWalletWithdrawalRequest::STATUS_PAID,
-                GoshenWalletWithdrawalRequest::STATUS_CANCELLED,
-            ], true))
+            ->visible(fn (GoshenWalletWithdrawalRequest $record): bool => match ($status) {
+                GoshenWalletWithdrawalRequest::STATUS_APPROVED => $record->status === GoshenWalletWithdrawalRequest::STATUS_PENDING,
+                GoshenWalletWithdrawalRequest::STATUS_PAID => $record->status === GoshenWalletWithdrawalRequest::STATUS_APPROVED,
+                GoshenWalletWithdrawalRequest::STATUS_REJECTED => in_array($record->status, [GoshenWalletWithdrawalRequest::STATUS_PENDING, GoshenWalletWithdrawalRequest::STATUS_APPROVED], true),
+                default => false,
+            })
             ->action(function (GoshenWalletWithdrawalRequest $record, array $data) use ($status): void {
                 try {
                     app(GoshenWalletService::class)->updateWithdrawalStatus($record, $status, [
