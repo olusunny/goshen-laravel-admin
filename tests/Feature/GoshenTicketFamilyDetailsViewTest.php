@@ -24,7 +24,7 @@ class GoshenTicketFamilyDetailsViewTest extends TestCase
         }
 
         $start = strpos($source, "Section::make('Linked Goshen family')");
-        $end = strpos("Section::make('Check-in history')", $start);
+        $end = strpos($source, "Section::make('Check-in history')", $start);
         $familySection = substr($source, $start, $end - $start);
 
         $this->assertStringNotContainsString('email', strtolower($familySection));

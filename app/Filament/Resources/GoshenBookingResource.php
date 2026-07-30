@@ -100,18 +100,35 @@ class GoshenBookingResource extends Resource
                     TextEntry::make('total')->money(fn (Booking $record): string => $record->currency ?: 'NGN'),
                     TextEntry::make('paid_total')->money(fn (Booking $record): string => $record->currency ?: 'NGN'),
                 ]),
-            Section::make('Family registration')
-                ->visible(fn (Booking $record): bool => GoshenFamily::query()->where('booking_id', $record->id)->exists())
+            Section::make('Linked Goshen family')
+                ->description('Related family tickets remain separate while the household is shown together for the retreat team.')
+                ->visible(fn (Booking $record): bool => self::familyForBooking($record) !== null)
+                ->columns(2)
                 ->schema([
                     TextEntry::make('family_name')
                         ->label('Family')
-                        ->state(fn (Booking $record): string => (string) GoshenFamily::query()->where('booking_id', $record->id)->value('name')),
+                        ->copyable()
+                        ->state(fn (Booking $record): string => (string) self::familyForBooking($record)?->name),
+                    TextEntry::make('family_member_count')
+                        ->label('Linked members')
+                        ->badge()
+                        ->state(fn (Booking $record): int => self::familyForBooking($record)?->members->count() ?? 0),
                     TextEntry::make('family_members')
                         ->label('Members')
                         ->state(function (Booking $record): array {
-                            $family = GoshenFamily::query()->with('members')->where('booking_id', $record->id)->first();
+                            $family = self::familyForBooking($record);
 
-                            return $family?->members->map(fn ($member): string => trim($member->first_name.' '.$member->last_name).' · '.str($member->role)->headline())->all() ?? [];
+                            return $family?->members->map(function ($member): string {
+                                $name = trim($member->first_name.' '.$member->last_name) ?: 'Unnamed member';
+                                $role = str($member->role)->headline()->toString();
+                                $age = $member->role === 'child' && filled($member->metadata['age'] ?? null)
+                                    ? ', age '.$member->metadata['age']
+                                    : '';
+                                $ticket = $member->attendee?->ticket;
+                                $ticketNumber = $ticket?->formatted_number ?: $ticket?->ticket_number;
+
+                                return "{$name} · {$role}{$age}".($ticketNumber ? " · {$ticketNumber}" : ' · Ticket pending');
+                            })->all() ?? [];
                         })
                         ->listWithLineBreaks()
                         ->columnSpanFull(),
@@ -328,6 +345,25 @@ class GoshenBookingResource extends Resource
                     }),
             ])
             ->toolbarActions([Actions\BulkActionGroup::make([Actions\DeleteBulkAction::make()])]);
+    }
+
+    private static function familyForBooking(Booking $booking): ?GoshenFamily
+    {
+        static $cache = [];
+
+        $cacheKey = (string) $booking->getKey();
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        return $cache[$cacheKey] = GoshenFamily::query()
+            ->with(['members.attendee.ticket'])
+            ->where('event_id', $booking->event_id)
+            ->where(function (Builder $query) use ($booking): void {
+                $query->where('booking_id', $booking->id)
+                    ->orWhereHas('members.attendee', fn (Builder $attendees): Builder => $attendees->where('booking_id', $booking->id));
+            })
+            ->first();
     }
 
     /**
