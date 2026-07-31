@@ -57,6 +57,7 @@ class AddonManifestValidator
         $this->validateOptionalRelativePath($manifest, 'migrations_path');
         $this->validateSeeders($manifest, $namespace);
         $this->validateActivateOnInstall($manifest);
+        $this->validateLifecycleHandler($manifest, $namespace);
         $this->validateCapabilities($manifest);
 
         $this->assertCompatible(
@@ -134,6 +135,22 @@ class AddonManifestValidator
 
         if (! is_bool($manifest['activate_on_install'])) {
             throw new RuntimeException('The manifest activate_on_install field must be a boolean.');
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     */
+    private function validateLifecycleHandler(array $manifest, string $namespace): void
+    {
+        $handler = $manifest['lifecycle_handler'] ?? null;
+
+        if ($handler === null || $handler === '') {
+            return;
+        }
+
+        if (! is_string($handler) || ! str_starts_with($handler, $namespace)) {
+            throw new RuntimeException('The manifest lifecycle_handler must be an add-on class inside its declared namespace.');
         }
     }
 

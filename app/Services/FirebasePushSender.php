@@ -48,6 +48,14 @@ class FirebasePushSender
         $toneUrl = $message->notification_tone_enabled
             ? (MediaUrl::resolve($message->notification_tone_path) ?: null)
             : null;
+        $pushAction = filled($message->push_action) ? (string) $message->push_action : 'inbox';
+        $pushData = collect($message->push_data ?? [])
+            ->filter(fn ($value, $key): bool => is_string($key) && (is_scalar($value) || $value === null))
+            ->map(fn ($value): string => (string) ($value ?? ''))
+            ->all();
+        $pushVisibility = in_array($message->push_visibility, ['PUBLIC', 'PRIVATE', 'SECRET'], true)
+            ? $message->push_visibility
+            : 'PUBLIC';
 
         foreach ($users as $user) {
             $userTokens = $tokensByEmail->get(strtolower((string) $user->email), collect());
@@ -70,7 +78,8 @@ class FirebasePushSender
                             $imageUrl,
                         ))
                         ->withData([
-                            'action' => 'inbox',
+                            ...$pushData,
+                            'action' => $pushAction,
                             'inbox_id' => (string) $message->id,
                             'title' => $title,
                             'message' => $plainMessage,
@@ -85,7 +94,7 @@ class FirebasePushSender
                             'notification' => [
                                 'channel_id' => 'churchapp',
                                 'notification_priority' => 'PRIORITY_HIGH',
-                                'visibility' => 'PUBLIC',
+                                'visibility' => $pushVisibility,
                                 'sound' => 'default',
                             ],
                         ]));

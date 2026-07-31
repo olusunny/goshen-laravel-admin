@@ -23,6 +23,7 @@ class InboxMessage extends Model
         'send_push' => 'boolean',
         'send_inbox' => 'boolean',
         'send_email' => 'boolean',
+        'push_data' => 'array',
         'is_published' => 'boolean',
         'schedule_enabled' => 'boolean',
         'notification_tone_enabled' => 'boolean',

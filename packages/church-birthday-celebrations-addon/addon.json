@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "package_key": "church_birthday_celebrations",
+  "composer_name": "church-tools/church-birthday-celebrations-addon",
+  "name": "Church Birthday Celebration",
+  "description": "Private, member-only birthday celebrations with automatic privacy retention.",
+  "version": "1.0.0",
+  "minimum_php": "8.2",
+  "minimum_laravel": "12.0",
+  "maximum_laravel": null,
+  "provider": "ChurchTools\\ChurchBirthdayCelebrations\\ChurchBirthdayCelebrationsServiceProvider",
+  "namespace": "ChurchTools\\ChurchBirthdayCelebrations\\",
+  "autoload_psr4": {
+    "ChurchTools\\ChurchBirthdayCelebrations\\": "src/"
+  },
+  "api_route_prefix": "api/v1/church-birthday-celebrations",
+  "admin_route_prefix": "admin/church-birthday-celebrations",
+  "config_key": "church-birthday-celebrations",
+  "migrations_path": "database/migrations",
+  "lifecycle_handler": "ChurchTools\\ChurchBirthdayCelebrations\\Services\\BirthdayAddonLifecycleHandler",
+  "permissions": [
+    "church_birthday_celebrations.manage",
+    "church_birthday_celebrations.moderate",
+    "church_birthday_celebrations.recover"
+  ],
+  "capabilities": {
+    "church_birthday_celebrations": {
+      "permissions": [
+        "church_birthday_celebrations.manage",
+        "church_birthday_celebrations.moderate",
+        "church_birthday_celebrations.recover"
+      ]
+    }
+  },
+  "activate_on_install": false,
+  "supports_disable": true,
+  "supports_uninstall": true,
+  "supports_update": true
+}

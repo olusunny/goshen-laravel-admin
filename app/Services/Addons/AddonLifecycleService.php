@@ -2,6 +2,7 @@
 
 namespace App\Services\Addons;
 
+use App\Contracts\Addons\AddonLifecycleHandler;
 use App\Models\Addon;
 use App\Models\AddonInstallLog;
 use App\Models\AddonUpdateBackup;
@@ -30,55 +31,64 @@ class AddonLifecycleService
         $version = (string) $manifest['version'];
         $stagingPath = storage_path('app/'.trim(config('addons.storage.staging_path'), '/').'/'.$packageKey.'-'.Str::ulid());
         $installPath = base_path(trim(config('addons.install_path'), '/').'/'.$packageKey);
+        $rollback = null;
 
-        return DB::transaction(function () use ($zipPath, $inspection, $manifest, $signature, $packageKey, $version, $stagingPath, $installPath, $admin): Addon {
-            $existing = Addon::query()->where('package_key', $packageKey)->lockForUpdate()->first();
-            if ($existing && ! in_array($existing->status, [Addon::STATUS_UNINSTALLED, Addon::STATUS_UPDATE_FAILED], true)) {
-                return $this->updateInstalledAddon($existing, $zipPath, $inspection, $manifest, $signature, $packageKey, $version, $stagingPath, $installPath, $admin);
+        try {
+            return DB::transaction(function () use ($zipPath, $inspection, $manifest, $signature, $packageKey, $version, $stagingPath, $installPath, $admin, &$rollback): Addon {
+                $existing = Addon::query()->where('package_key', $packageKey)->lockForUpdate()->first();
+                if ($existing && ! in_array($existing->status, [Addon::STATUS_UNINSTALLED, Addon::STATUS_UPDATE_FAILED], true)) {
+                    return $this->updateInstalledAddon($existing, $zipPath, $inspection, $manifest, $signature, $packageKey, $version, $stagingPath, $installPath, $admin, $rollback);
+                }
+
+                $this->log(null, $packageKey, 'validate', 'running', 'Validating add-on ZIP.', ['zip' => $zipPath], $admin);
+                $this->zips->extractToStaging($zipPath, $stagingPath);
+
+                $this->log(null, $packageKey, 'install', 'running', 'Installing add-on files.', ['staging' => $stagingPath], $admin);
+                File::ensureDirectoryExists(dirname($installPath));
+                if (File::exists($installPath)) {
+                    File::deleteDirectory($installPath);
+                }
+                File::moveDirectory($stagingPath, $installPath, true);
+
+                $addon = Addon::query()->updateOrCreate(
+                    ['package_key' => $packageKey],
+                    [
+                        'composer_name' => $manifest['composer_name'] ?? null,
+                        'name' => $manifest['name'],
+                        'description' => $manifest['description'] ?? null,
+                        'installed_version' => $version,
+                        'available_version' => null,
+                        'status' => Addon::STATUS_INSTALLED,
+                        'provider_class' => $manifest['provider'] ?? null,
+                        'namespace' => $manifest['namespace'] ?? null,
+                        'autoload_psr4' => $manifest['autoload_psr4'] ?? [],
+                        'manifest' => $manifest,
+                        'install_path' => $installPath,
+                        'uploaded_zip_path' => $zipPath,
+                        'checksum' => $inspection['checksum'],
+                        'signature_verified' => $signature['verified'],
+                        'installed_by' => $admin?->id,
+                        'installed_at' => now(),
+                        'uninstalled_at' => null,
+                    ],
+                );
+
+                if ($this->activateOnInstall($manifest)) {
+                    $this->activate($addon->fresh(), $admin);
+                } else {
+                    $this->runtimeLoader->refreshActiveAddonCache();
+                    $this->log($addon, $packageKey, 'install', 'successful', 'Add-on installed and awaiting explicit activation.', [], $admin);
+                }
+
+                return $addon->fresh();
+            });
+        } catch (Throwable $exception) {
+            if ($rollback !== null) {
+                $this->restoreFailedUpdate($rollback, $admin, $exception);
             }
 
-            $this->log(null, $packageKey, 'validate', 'running', 'Validating add-on ZIP.', ['zip' => $zipPath], $admin);
-            $this->zips->extractToStaging($zipPath, $stagingPath);
-
-            $this->log(null, $packageKey, 'install', 'running', 'Installing add-on files.', ['staging' => $stagingPath], $admin);
-            File::ensureDirectoryExists(dirname($installPath));
-            if (File::exists($installPath)) {
-                File::deleteDirectory($installPath);
-            }
-            File::moveDirectory($stagingPath, $installPath, true);
-
-            $addon = Addon::query()->updateOrCreate(
-                ['package_key' => $packageKey],
-                [
-                    'composer_name' => $manifest['composer_name'] ?? null,
-                    'name' => $manifest['name'],
-                    'description' => $manifest['description'] ?? null,
-                    'installed_version' => $version,
-                    'available_version' => null,
-                    'status' => Addon::STATUS_INSTALLED,
-                    'provider_class' => $manifest['provider'] ?? null,
-                    'namespace' => $manifest['namespace'] ?? null,
-                    'autoload_psr4' => $manifest['autoload_psr4'] ?? [],
-                    'manifest' => $manifest,
-                    'install_path' => $installPath,
-                    'uploaded_zip_path' => $zipPath,
-                    'checksum' => $inspection['checksum'],
-                    'signature_verified' => $signature['verified'],
-                    'installed_by' => $admin?->id,
-                    'installed_at' => now(),
-                    'uninstalled_at' => null,
-                ],
-            );
-
-            if ($this->activateOnInstall($manifest)) {
-                $this->activate($addon->fresh(), $admin);
-            } else {
-                $this->runtimeLoader->refreshActiveAddonCache();
-                $this->log($addon, $packageKey, 'install', 'successful', 'Add-on installed and awaiting explicit activation.', [], $admin);
-            }
-
-            return $addon->fresh();
-        });
+            throw $exception;
+        }
     }
 
     /**
@@ -97,6 +107,7 @@ class AddonLifecycleService
         string $stagingPath,
         string $installPath,
         ?User $admin,
+        ?array &$rollback,
     ): Addon {
         $currentVersion = (string) $addon->installed_version;
         if ($currentVersion !== '' && version_compare($version, $currentVersion, '<=')) {
@@ -106,13 +117,34 @@ class AddonLifecycleService
         $wasActive = $addon->status === Addon::STATUS_ACTIVE;
         $backupPath = storage_path('app/'.trim(config('addons.storage.backups_path'), '/').'/'.$packageKey.'-'.$currentVersion.'-to-'.$version.'-'.Str::ulid());
 
+        $rollback = [
+            'addon_id' => $addon->getKey(),
+            'attributes' => $this->snapshotAttributes($addon),
+            'backup_path' => $backupPath,
+            'install_path' => $installPath,
+            'staging_path' => $stagingPath,
+            'package_key' => $packageKey,
+            'from_version' => $currentVersion,
+            'to_version' => $version,
+            'backup_created' => false,
+            'runtime_gated' => false,
+        ];
+
         try {
             $this->log($addon, $packageKey, 'update', 'running', 'Validating add-on update ZIP.', ['zip' => $zipPath], $admin);
             $this->zips->extractToStaging($zipPath, $stagingPath);
 
+            // Remove the active release from discovery before its directory can move.
+            if ($wasActive) {
+                $addon->forceFill(['status' => Addon::STATUS_INSTALLED])->save();
+                $this->runtimeLoader->refreshActiveAddonCache();
+                $rollback['runtime_gated'] = true;
+            }
+
             if (File::exists($installPath)) {
                 File::ensureDirectoryExists(dirname($backupPath));
-                File::moveDirectory($installPath, $backupPath, true);
+                $this->moveDirectoryOrFail($installPath, $backupPath, true);
+                $rollback['backup_created'] = true;
 
                 AddonUpdateBackup::query()->create([
                     'addon_id' => $addon->id,
@@ -124,7 +156,7 @@ class AddonLifecycleService
             }
 
             File::ensureDirectoryExists(dirname($installPath));
-            File::moveDirectory($stagingPath, $installPath, true);
+            $this->moveDirectoryOrFail($stagingPath, $installPath, true);
 
             $addon->forceFill([
                 'composer_name' => $manifest['composer_name'] ?? null,
@@ -156,18 +188,160 @@ class AddonLifecycleService
 
             return $addon->fresh();
         } catch (Throwable $exception) {
-            if (! File::exists($installPath) && File::exists($backupPath)) {
-                try {
-                    File::moveDirectory($backupPath, $installPath, true);
-                } catch (Throwable) {
-                    // Preserve the original update failure; lifecycle logs include the backup path.
-                }
+            if (! $rollback['backup_created'] && ! $rollback['runtime_gated']) {
+                $rollback = null;
             }
 
-            $addon->forceFill(['status' => Addon::STATUS_UPDATE_FAILED])->save();
-            $this->log($addon, $packageKey, 'update', 'failed', $exception->getMessage(), ['backup_path' => $backupPath], $admin);
             throw $exception;
         }
+    }
+
+    /**
+     * @param array{addon_id: int, attributes: array<string, mixed>, backup_path: string, install_path: string, staging_path: string, package_key: string, from_version: string, to_version: string, backup_created: bool, runtime_gated: bool} $rollback
+     */
+    private function restoreFailedUpdate(array $rollback, ?User $admin, Throwable $updateFailure): void
+    {
+        try {
+            $installPath = $rollback['install_path'];
+            $quarantinePath = dirname($installPath).DIRECTORY_SEPARATOR.'.'.basename($installPath).'.failed-'.Str::ulid();
+
+            if ($rollback['backup_created']) {
+                if (File::isDirectory($installPath)) {
+                    $this->moveDirectoryOrFail($installPath, $quarantinePath);
+                }
+
+                if (File::exists($installPath)) {
+                    throw new RuntimeException('The failed add-on files could not be quarantined before rollback.');
+                }
+
+                $this->restoreBackupDirectory($rollback['backup_path'], $installPath);
+            }
+
+            $attributes = $rollback['attributes'];
+            unset($attributes['id']);
+
+            $restored = Addon::query()->whereKey($rollback['addon_id'])->first();
+            if (! $restored) {
+                throw new RuntimeException('The previous add-on metadata could not be found during rollback.');
+            }
+
+            Addon::query()->whereKey($restored->getKey())->update($attributes);
+            $restored->refresh();
+            $this->runtimeLoader->refreshActiveAddonCache();
+
+            if (File::isDirectory($rollback['staging_path']) && ! File::deleteDirectory($rollback['staging_path'])) {
+                throw new RuntimeException('The failed add-on staging directory could not be removed after rollback.');
+            }
+
+            if (File::isDirectory($quarantinePath) && ! File::deleteDirectory($quarantinePath)) {
+                throw new RuntimeException('The failed replacement files could not be removed after rollback.');
+            }
+
+            $this->log(
+                $restored,
+                $rollback['package_key'],
+                'rollback',
+                'successful',
+                "Add-on update to {$rollback['to_version']} was rolled back to {$rollback['from_version']}.",
+                [
+                    'backup_path' => $rollback['backup_path'],
+                    'quarantine_path' => $quarantinePath,
+                    'failed_version' => $rollback['to_version'],
+                    'failure' => $updateFailure->getMessage(),
+                ],
+                $admin,
+            );
+        } catch (Throwable $rollbackFailure) {
+            try {
+                Addon::query()
+                    ->whereKey($rollback['addon_id'])
+                    ->update(['status' => Addon::STATUS_INSTALLED]);
+                $this->runtimeLoader->refreshActiveAddonCache();
+            } catch (Throwable $gateFailure) {
+                $rollbackFailure = new RuntimeException(
+                    $rollbackFailure->getMessage().' Runtime gating also failed: '.$gateFailure->getMessage(),
+                    previous: $rollbackFailure,
+                );
+            }
+
+            $this->log(
+                null,
+                $rollback['package_key'],
+                'rollback',
+                'failed',
+                'Add-on update rollback failed: '.$rollbackFailure->getMessage(),
+                [
+                    'backup_path' => $rollback['backup_path'],
+                    'failed_version' => $rollback['to_version'],
+                    'update_failure' => $updateFailure->getMessage(),
+                ],
+                $admin,
+            );
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function snapshotAttributes(Addon $addon): array
+    {
+        return $addon->getAttributes();
+    }
+
+    protected function moveDirectoryOrFail(string $from, string $to, bool $overwrite = false): void
+    {
+        if (! File::moveDirectory($from, $to, $overwrite)) {
+            throw new RuntimeException("Unable to move add-on directory from [{$from}] to [{$to}].");
+        }
+    }
+
+    private function restoreBackupDirectory(string $backupPath, string $installPath): void
+    {
+        try {
+            $this->moveDirectoryOrFail($backupPath, $installPath);
+
+            return;
+        } catch (Throwable $moveFailure) {
+            if (! File::isDirectory($backupPath)) {
+                throw new RuntimeException('The add-on backup is unavailable for copy recovery.', previous: $moveFailure);
+            }
+
+            if (File::exists($installPath) && ! File::deleteDirectory($installPath)) {
+                throw new RuntimeException('The partial add-on restore could not be removed before copy recovery.', previous: $moveFailure);
+            }
+
+            try {
+                $this->copyDirectoryOrFail($backupPath, $installPath);
+            } catch (Throwable $copyFailure) {
+                throw new RuntimeException('The add-on backup could not be restored by move or copy.', previous: $copyFailure);
+            }
+        }
+    }
+
+    protected function copyDirectoryOrFail(string $from, string $to): void
+    {
+        if (! File::copyDirectory($from, $to) || $this->directoryHashes($from) !== $this->directoryHashes($to)) {
+            throw new RuntimeException("Unable to copy add-on directory from [{$from}] to [{$to}].");
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function directoryHashes(string $path): array
+    {
+        if (! File::isDirectory($path)) {
+            return [];
+        }
+
+        $hashes = [];
+        foreach (File::allFiles($path) as $file) {
+            $hashes[str_replace('\\', '/', $file->getRelativePathname())] = hash_file('sha256', $file->getPathname());
+        }
+
+        ksort($hashes);
+
+        return $hashes;
     }
 
     public function activate(Addon $addon, ?User $admin = null): Addon
@@ -208,6 +382,8 @@ class AddonLifecycleService
 
     public function deactivate(Addon $addon, ?User $admin = null): Addon
     {
+        $this->runLifecycleHook($addon, 'deactivate');
+
         $addon->forceFill([
             'status' => Addon::STATUS_INACTIVE,
             'deactivated_at' => now(),
@@ -223,6 +399,8 @@ class AddonLifecycleService
     public function uninstall(Addon $addon, ?User $admin = null, bool $removeFiles = true): Addon
     {
         try {
+            $this->runLifecycleHook($addon, 'uninstall');
+
             if ($removeFiles && $deletePath = $this->safeInstallPathForDeletion($addon)) {
                 File::deleteDirectory($deletePath);
             }
@@ -304,6 +482,37 @@ class AddonLifecycleService
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param 'deactivate'|'uninstall' $operation
+     */
+    private function runLifecycleHook(Addon $addon, string $operation): void
+    {
+        $manifest = is_array($addon->manifest) ? $addon->manifest : [];
+        $handler = $manifest['lifecycle_handler'] ?? null;
+
+        if (! is_string($handler) || $handler === '') {
+            return;
+        }
+
+        $namespace = $manifest['namespace'] ?? null;
+        if (! is_string($namespace) || ! str_starts_with($handler, $namespace)) {
+            throw new RuntimeException('The add-on lifecycle handler is not inside the declared add-on namespace.');
+        }
+
+        $installPath = $addon->install_path;
+        if (! is_string($installPath) || $installPath === '' || ! is_dir($installPath)) {
+            throw new RuntimeException('The add-on lifecycle handler cannot be loaded because package files are unavailable.');
+        }
+
+        $this->runtimeLoader->registerAddon($manifest, $installPath);
+
+        if (! class_exists($handler) || ! is_a($handler, AddonLifecycleHandler::class, true)) {
+            throw new RuntimeException('The add-on lifecycle handler must implement the host lifecycle contract.');
+        }
+
+        app($handler)->{$operation}();
     }
 
     private function safeInstallPathForDeletion(Addon $addon): ?string
