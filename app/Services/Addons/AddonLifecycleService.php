@@ -8,7 +8,6 @@ use App\Models\AddonInstallLog;
 use App\Models\AddonUpdateBackup;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -34,54 +33,53 @@ class AddonLifecycleService
         $rollback = null;
 
         try {
-            return DB::transaction(function () use ($zipPath, $inspection, $manifest, $signature, $packageKey, $version, $stagingPath, $installPath, $admin, &$rollback): Addon {
-                $existing = Addon::query()->where('package_key', $packageKey)->lockForUpdate()->first();
-                if ($existing && ! in_array($existing->status, [Addon::STATUS_UNINSTALLED, Addon::STATUS_UPDATE_FAILED], true)) {
-                    return $this->updateInstalledAddon($existing, $zipPath, $inspection, $manifest, $signature, $packageKey, $version, $stagingPath, $installPath, $admin, $rollback);
-                }
+            // Add-on migrations can execute DDL, which implicitly commits on MySQL.
+            $existing = Addon::query()->where('package_key', $packageKey)->first();
+            if ($existing && ! in_array($existing->status, [Addon::STATUS_UNINSTALLED, Addon::STATUS_UPDATE_FAILED], true)) {
+                return $this->updateInstalledAddon($existing, $zipPath, $inspection, $manifest, $signature, $packageKey, $version, $stagingPath, $installPath, $admin, $rollback);
+            }
 
-                $this->log(null, $packageKey, 'validate', 'running', 'Validating add-on ZIP.', ['zip' => $zipPath], $admin);
-                $this->zips->extractToStaging($zipPath, $stagingPath);
+            $this->log(null, $packageKey, 'validate', 'running', 'Validating add-on ZIP.', ['zip' => $zipPath], $admin);
+            $this->zips->extractToStaging($zipPath, $stagingPath);
 
-                $this->log(null, $packageKey, 'install', 'running', 'Installing add-on files.', ['staging' => $stagingPath], $admin);
-                File::ensureDirectoryExists(dirname($installPath));
-                if (File::exists($installPath)) {
-                    File::deleteDirectory($installPath);
-                }
-                File::moveDirectory($stagingPath, $installPath, true);
+            $this->log(null, $packageKey, 'install', 'running', 'Installing add-on files.', ['staging' => $stagingPath], $admin);
+            File::ensureDirectoryExists(dirname($installPath));
+            if (File::exists($installPath)) {
+                File::deleteDirectory($installPath);
+            }
+            File::moveDirectory($stagingPath, $installPath, true);
 
-                $addon = Addon::query()->updateOrCreate(
-                    ['package_key' => $packageKey],
-                    [
-                        'composer_name' => $manifest['composer_name'] ?? null,
-                        'name' => $manifest['name'],
-                        'description' => $manifest['description'] ?? null,
-                        'installed_version' => $version,
-                        'available_version' => null,
-                        'status' => Addon::STATUS_INSTALLED,
-                        'provider_class' => $manifest['provider'] ?? null,
-                        'namespace' => $manifest['namespace'] ?? null,
-                        'autoload_psr4' => $manifest['autoload_psr4'] ?? [],
-                        'manifest' => $manifest,
-                        'install_path' => $installPath,
-                        'uploaded_zip_path' => $zipPath,
-                        'checksum' => $inspection['checksum'],
-                        'signature_verified' => $signature['verified'],
-                        'installed_by' => $admin?->id,
-                        'installed_at' => now(),
-                        'uninstalled_at' => null,
-                    ],
-                );
+            $addon = Addon::query()->updateOrCreate(
+                ['package_key' => $packageKey],
+                [
+                    'composer_name' => $manifest['composer_name'] ?? null,
+                    'name' => $manifest['name'],
+                    'description' => $manifest['description'] ?? null,
+                    'installed_version' => $version,
+                    'available_version' => null,
+                    'status' => Addon::STATUS_INSTALLED,
+                    'provider_class' => $manifest['provider'] ?? null,
+                    'namespace' => $manifest['namespace'] ?? null,
+                    'autoload_psr4' => $manifest['autoload_psr4'] ?? [],
+                    'manifest' => $manifest,
+                    'install_path' => $installPath,
+                    'uploaded_zip_path' => $zipPath,
+                    'checksum' => $inspection['checksum'],
+                    'signature_verified' => $signature['verified'],
+                    'installed_by' => $admin?->id,
+                    'installed_at' => now(),
+                    'uninstalled_at' => null,
+                ],
+            );
 
-                if ($this->activateOnInstall($manifest)) {
-                    $this->activate($addon->fresh(), $admin);
-                } else {
-                    $this->runtimeLoader->refreshActiveAddonCache();
-                    $this->log($addon, $packageKey, 'install', 'successful', 'Add-on installed and awaiting explicit activation.', [], $admin);
-                }
+            if ($this->activateOnInstall($manifest)) {
+                $this->activate($addon->fresh(), $admin);
+            } else {
+                $this->runtimeLoader->refreshActiveAddonCache();
+                $this->log($addon, $packageKey, 'install', 'successful', 'Add-on installed and awaiting explicit activation.', [], $admin);
+            }
 
-                return $addon->fresh();
-            });
+            return $addon->fresh();
         } catch (Throwable $exception) {
             if ($rollback !== null) {
                 $this->restoreFailedUpdate($rollback, $admin, $exception);
