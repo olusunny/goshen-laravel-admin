@@ -47,6 +47,10 @@ class BirthdayAdminSurfaceTest extends TestCase
         app(AddonRuntimeLoader::class)->registerAddon($manifest, $this->installPath);
         Route::get('/testing/church-birthday-celebrations/moderation', fn () => null)
             ->name('filament.admin.resources.church-birthday-celebrations.moderation.index');
+        Route::get('/testing/church-birthday-celebrations/templates', fn () => null)
+            ->name('filament.admin.resources.church-birthday-celebrations.templates.index');
+        Route::get('/testing/church-birthday-celebrations/templates/{record}/edit', fn () => null)
+            ->name('filament.admin.resources.church-birthday-celebrations.templates.edit');
         $this->artisan('migrate', ['--path' => $this->installPath.'/database/migrations', '--realpath' => true, '--force' => true])->assertSuccessful();
     }
 
