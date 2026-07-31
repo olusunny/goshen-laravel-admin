@@ -116,12 +116,16 @@ class MembershipProfileService
         $availableAt = $this->statusChangeAvailableAt($user);
         $isLocked = $availableAt?->isFuture() ?? false;
         $isVisitor = $this->isVisitor($user);
+        $birthday = $this->birthday($user);
 
         return [
-            'birthday' => $this->birthday($user),
+            // Keep the legacy birthday key and the explicit profile-field key in sync.
+            'birthday' => $birthday,
+            'birthday_month_day' => $birthday,
             'birthday_month' => $user->birthday_month,
             'birthday_day' => $user->birthday_day,
             'is_adult_confirmed' => $user->adult_confirmed_at !== null,
+            'adult_confirmation' => $user->adult_confirmed_at !== null,
             'adult_confirmed_at' => $user->adult_confirmed_at?->toIso8601String(),
             'membership_status_change_locked' => $isLocked,
             'membership_status_change_available_at' => $availableAt?->toIso8601String(),
@@ -134,5 +138,43 @@ class MembershipProfileService
                     ? 'Your Triumphant ID is active.'
                     : 'Your Triumphant ID will be assigned after your Church member status is confirmed.'),
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function goshenProfileMissingFields(MobileUser $user): array
+    {
+        $required = [
+            'name' => 'full name',
+            'email' => 'email address',
+            'phone' => 'phone number',
+            'gender' => 'gender',
+            'member_type' => 'church member or visitor status',
+        ];
+
+        if (! $this->isVisitor($user)) {
+            $required = array_merge($required, [
+                'title' => 'title',
+                'marital_status' => 'marital status',
+                'country_of_residence' => 'country of residence',
+                'state_county_province' => 'state/county/province',
+                'address' => 'address',
+            ]);
+        }
+
+        $missing = collect($required)
+            ->filter(fn (string $label, string $field): bool => blank($user->{$field}))
+            ->values();
+
+        if (! $this->isVisitor($user) && ! $this->birthday($user)) {
+            $missing->push('birthday (month and day)');
+        }
+
+        if (! $user->adult_confirmed_at) {
+            $missing->push('18+ confirmation');
+        }
+
+        return $missing->all();
     }
 }

@@ -1850,25 +1850,7 @@ class CompatibilityController extends Controller
 
     private function profileNeedsUpdate(MobileUser $user): bool
     {
-        $required = [
-            'first_name',
-            'last_name',
-            'phone',
-            'gender',
-            'member_type',
-        ];
-
-        if (str($user->member_type)->trim()->lower()->toString() !== 'visitor') {
-            $required = array_merge($required, [
-                'title',
-                'marital_status',
-                'country_of_residence',
-                'state_county_province',
-                'address',
-            ]);
-        }
-
-        return collect($required)->contains(fn (string $field): bool => blank($user->{$field}));
+        return app(MembershipProfileService::class)->goshenProfileMissingFields($user) !== [];
     }
 
     private function mobileUserPayload(MobileUser $user, ?string $apiToken = null): array

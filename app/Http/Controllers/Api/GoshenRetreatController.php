@@ -5334,38 +5334,7 @@ class GoshenRetreatController extends Controller
 
     private function profileMissingFields(MobileUser $user): array
     {
-        $required = [
-            'name' => 'full name',
-            'email' => 'email address',
-            'phone' => 'phone number',
-            'gender' => 'gender',
-            'member_type' => 'church member or visitor status',
-        ];
-
-        $isVisitor = str($user->member_type)->trim()->lower()->toString() === 'visitor';
-        if (! $isVisitor) {
-            $required = array_merge($required, [
-                'title' => 'title',
-                'marital_status' => 'marital status',
-                'country_of_residence' => 'country of residence',
-                'state_county_province' => 'state/county/province',
-                'address' => 'address',
-            ]);
-        }
-
-        $missing = collect($required)
-            ->filter(fn (string $label, string $field): bool => blank($user->{$field}))
-            ->values();
-
-        if (! $isVisitor && (! $user->birthday_month || ! $user->birthday_day)) {
-            $missing->push('birthday (month and day)');
-        }
-
-        if (! $user->adult_confirmed_at) {
-            $missing->push('18+ confirmation');
-        }
-
-        return $missing->all();
+        return app(MembershipProfileService::class)->goshenProfileMissingFields($user);
     }
 
     private function profileCompletionRequiredResponse(MobileUser $user): ?JsonResponse
