@@ -2,7 +2,7 @@
 
 Base path: `/api/v1/church-birthday-celebrations`.
 
-All routes use the host API middleware, authenticated requester middleware, and add-on-active middleware. Send the host Bearer token and `Accept: application/json`. All successful JSON responses use:
+All routes use the host API middleware and add-on-active middleware. `GET /hub` is public so the homepage can show opted-in birthday highlights to guests; every other route requires the host Bearer token and `Accept: application/json`. All successful JSON responses use:
 
 ```json
 {"status":"ok","data":{}}
@@ -20,7 +20,7 @@ The active middleware returns `404 ADDON_INACTIVE` when the server capability is
 | --- | --- | --- | --- |
 | `GET /context` | Capability, eligibility, preferences, active templates, and active verses. | none | `capability`, `eligible`, `eligibility_code`, `preferences`, `templates`, `verses` |
 | `PUT /preferences` | Update visibility, greetings, presentation, template, or verse. | `visibility_enabled`, `greetings_enabled`, `use_profile_photo`, `preferred_name`, `template_id`, `verse_id` | refreshed context |
-| `GET /hub` | Today's published and upcoming preview-ready celebrations. | none | `today`, `upcoming` |
+| `GET /hub` | Public highlights for opted-in birthday celebrations. | none | `today`, `upcoming` |
 | `GET /celebrations/{publicId}` | Detail, reactions, visible greetings, thank-you, ownership, and interaction state. | none | detail |
 | `GET /celebrations/{publicId}/card?variant=square|portrait` | Private PNG card bytes. | optional `variant` | `image/png`, `private, no-store` |
 | `PUT /celebrations/{publicId}/reaction` | Set or clear caller's reaction. | optional `reaction` (`love`, `pray`, `celebrate`) | empty success data |

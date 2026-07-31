@@ -169,6 +169,34 @@ class ChurchBirthdayCelebrationProductionBlockersTest extends TestCase
             ->assertJsonPath('data.today.0.avatar_url', null);
     }
 
+    public function test_guest_hub_exposes_only_opted_in_public_highlights(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-30 12:00:00', 'Africa/Lagos'));
+        $visible = $this->celebration($this->member('Public Celebrant'), BirthdayCelebration::PUBLISHED);
+        $hiddenMember = $this->member('Private Celebrant');
+        $hidden = $this->celebration($hiddenMember, BirthdayCelebration::PUBLISHED, ['birthday_year' => 2027]);
+        BirthdayPreference::query()->updateOrCreate(['mobile_user_id' => $hiddenMember->id], ['visibility_enabled' => false]);
+
+        $response = $this->getJson('/api/v1/church-birthday-celebrations/hub')
+            ->assertOk()
+            ->assertJsonPath('data.today.0.id', $visible->public_id);
+
+        $this->assertStringNotContainsString($hidden->public_id, $response->getContent());
+        $this->assertStringNotContainsString('birthday_year', $response->getContent());
+        $this->assertStringNotContainsString('triumphant_id', $response->getContent());
+    }
+
+    public function test_guest_birthday_hub_access_does_not_open_detail_or_interactions(): void
+    {
+        $celebration = $this->celebration($this->member('Authenticated Celebrant'), BirthdayCelebration::PUBLISHED);
+
+        $this->getJson("/api/v1/church-birthday-celebrations/celebrations/{$celebration->public_id}")
+            ->assertUnauthorized();
+        $this->putJson("/api/v1/church-birthday-celebrations/celebrations/{$celebration->public_id}/greeting", [
+            'body' => 'Happy birthday.',
+        ])->assertUnauthorized();
+    }
+
     public function test_initial_migration_can_resume_after_tables_exist_without_a_history_row(): void
     {
         $migration = '2026_07_30_000001_create_church_birthday_celebration_tables';

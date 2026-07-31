@@ -66,11 +66,8 @@ class BirthdayCelebrationController
     }
 
     public function hub(
-        Request $request,
-        BirthdayEligibilityService $eligibility,
         BirthdayLifecycleService $lifecycle,
     ): JsonResponse {
-        $this->assertEligible($request->user(), $eligibility);
         $timezone = (string) BirthdaySetting::value('timezone', config('church-birthday-celebrations.timezone'));
         $today = now($timezone)->toDateString();
         $upcoming = now($timezone)->addDays((int) BirthdaySetting::value('upcoming_days', config('church-birthday-celebrations.upcoming_days')))->toDateString();
