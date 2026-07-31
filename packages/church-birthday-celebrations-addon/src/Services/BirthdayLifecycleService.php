@@ -90,11 +90,14 @@ class BirthdayLifecycleService
         }
 
         $birthdayDate = CarbonImmutable::parse($celebration->birthday_date, $this->timezone());
-        if ($celebration->status === BirthdayCelebration::PUBLISHED
-            && $birthdayDate->isSameDay(CarbonImmutable::now($this->timezone()))) {
+        if ($birthdayDate->isSameDay(CarbonImmutable::now($this->timezone()))) {
             $closesAt = $this->closesAt($birthdayDate);
-            if (! $celebration->closes_at?->equalTo($closesAt)) {
+            if ($celebration->status !== BirthdayCelebration::PUBLISHED
+                || ! $celebration->published_at?->equalTo($birthdayDate->startOfDay()->utc())
+                || ! $celebration->closes_at?->equalTo($closesAt)) {
                 $celebration->forceFill([
+                    'status' => BirthdayCelebration::PUBLISHED,
+                    'published_at' => $birthdayDate->startOfDay()->utc(),
                     'closes_at' => $closesAt,
                     'purge_due_at' => $closesAt->addDays((int) BirthdaySetting::value('retention_days', config('church-birthday-celebrations.retention_days'))),
                 ])->save();

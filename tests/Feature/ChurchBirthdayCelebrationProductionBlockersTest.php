@@ -128,6 +128,28 @@ class ChurchBirthdayCelebrationProductionBlockersTest extends TestCase
         $this->assertSame('2026-07-31 22:59:59', $celebration->fresh()->closes_at->utc()->toDateTimeString());
     }
 
+    public function test_reconciliation_reopens_a_stale_closed_celebration_for_its_local_birthday(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-31 11:13:00', 'Africa/Lagos'));
+        $celebrant = $this->member('Recovered Today Celebrant', ['birthday_month' => 7, 'birthday_day' => 31]);
+        $viewer = $this->member('Recovered Today Viewer');
+        $celebration = $this->celebration($celebrant, BirthdayCelebration::CLOSED, [
+            'birthday_date' => '2026-07-31',
+            'published_at' => CarbonImmutable::parse('2026-07-31 00:00:00', 'UTC'),
+            'closes_at' => CarbonImmutable::parse('2026-07-31 00:00:00', 'UTC'),
+            'purge_due_at' => CarbonImmutable::parse('2026-08-30 00:00:00', 'UTC'),
+        ]);
+
+        $this->withToken($viewer->issueApiToken())
+            ->getJson("/api/v1/church-birthday-celebrations/celebrations/{$celebration->public_id}")
+            ->assertOk()
+            ->assertJsonPath('data.is_interactive', true);
+
+        $fresh = $celebration->fresh();
+        $this->assertSame(BirthdayCelebration::PUBLISHED, $fresh->status);
+        $this->assertSame('2026-07-31 22:59:59', $fresh->closes_at->utc()->toDateTimeString());
+    }
+
     public function test_birthday_correction_endpoint_is_not_exposed(): void
     {
         $member = $this->member('Profile Birthday Owner');
