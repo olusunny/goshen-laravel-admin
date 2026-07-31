@@ -117,6 +117,35 @@ class ChurchBirthdayCelebrationProductionBlockersTest extends TestCase
         ]);
     }
 
+    public function test_hub_exposes_profile_images_only_when_a_celebrant_allows_them(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-30 12:00:00', 'Africa/Lagos'));
+        Storage::fake('public');
+        $celebrant = $this->member('Profile Photo Celebrant');
+        $viewer = $this->member('Birthday Viewer');
+        Storage::disk('public')->put('avatars/birthday-celebrant.jpg', 'avatar');
+        $celebrant->forceFill(['avatar' => 'avatars/birthday-celebrant.jpg'])->saveQuietly();
+        $celebration = $this->celebration($celebrant, BirthdayCelebration::PUBLISHED);
+        BirthdayPreference::query()->create([
+            'mobile_user_id' => $celebrant->id,
+            'use_profile_photo' => true,
+        ]);
+
+        $visible = $this->withToken($viewer->issueApiToken())
+            ->getJson('/api/v1/church-birthday-celebrations/hub')
+            ->assertOk();
+        $this->assertStringContainsString(
+            'avatars/birthday-celebrant.jpg',
+            (string) data_get($visible->json(), 'data.today.0.avatar_url'),
+        );
+
+        $celebration->preference()->update(['use_profile_photo' => false]);
+        $this->withToken($viewer->issueApiToken())
+            ->getJson('/api/v1/church-birthday-celebrations/hub')
+            ->assertOk()
+            ->assertJsonPath('data.today.0.avatar_url', null);
+    }
+
     public function test_initial_migration_can_resume_after_tables_exist_without_a_history_row(): void
     {
         $migration = '2026_07_30_000001_create_church_birthday_celebration_tables';

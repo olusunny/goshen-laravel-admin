@@ -2,6 +2,7 @@
 
 namespace ChurchTools\ChurchBirthdayCelebrations\Http\Controllers\Api;
 
+use App\Support\MediaUrl;
 use Carbon\CarbonImmutable;
 use ChurchTools\ChurchBirthdayCelebrations\Models\BirthdayCelebration;
 use ChurchTools\ChurchBirthdayCelebrations\Models\BirthdayCorrectionRequest;
@@ -99,10 +100,10 @@ class BirthdayCelebrationController
         $upcoming = now($timezone)->addDays((int) BirthdaySetting::value('upcoming_days', config('church-birthday-celebrations.upcoming_days')))->toDateString();
 
         return $this->ok([
-            'today' => BirthdayCelebration::query()->with('member')->where('status', BirthdayCelebration::PUBLISHED)->whereDate('birthday_date', $today)->get()
+            'today' => BirthdayCelebration::query()->with(['member', 'preference'])->where('status', BirthdayCelebration::PUBLISHED)->whereDate('birthday_date', $today)->get()
                 ->filter(fn (BirthdayCelebration $celebration) => $lifecycle->reconcileCelebration($celebration))
                 ->map(fn (BirthdayCelebration $celebration) => $this->summary($celebration))->values(),
-            'upcoming' => BirthdayCelebration::query()->with('member')->where('status', BirthdayCelebration::PREVIEW_READY)->whereBetween('birthday_date', [$today, $upcoming])->orderBy('birthday_date')->get()
+            'upcoming' => BirthdayCelebration::query()->with(['member', 'preference'])->where('status', BirthdayCelebration::PREVIEW_READY)->whereBetween('birthday_date', [$today, $upcoming])->orderBy('birthday_date')->get()
                 ->filter(fn (BirthdayCelebration $celebration) => $lifecycle->reconcileCelebration($celebration))
                 ->map(fn (BirthdayCelebration $celebration) => $this->summary($celebration))->values(),
         ]);
@@ -210,7 +211,7 @@ class BirthdayCelebrationController
 
     private function authorizeAccess(string $publicId, Model $member, BirthdayEligibilityService $eligibility, BirthdayLifecycleService $lifecycle): BirthdayCelebration
     {
-        $celebration = BirthdayCelebration::query()->with('member')->where('public_id', $publicId)->first();
+        $celebration = BirthdayCelebration::query()->with(['member', 'preference'])->where('public_id', $publicId)->first();
         if (! $celebration) {
             BirthdayApiError::abort('CELEBRATION_NOT_PUBLISHED', 'The celebration is unavailable.', 404);
         }
@@ -310,6 +311,9 @@ class BirthdayCelebrationController
             'name' => $celebration->display_name,
             'birthday_month_day' => $celebration->birthday_date?->format('m-d'),
             'status' => $celebration->status,
+            'avatar_url' => ($celebration->preference?->use_profile_photo ?? true)
+                ? MediaUrl::resolve($celebration->member?->avatar)
+                : null,
         ];
     }
 

@@ -5,6 +5,7 @@ namespace ChurchTools\ChurchBirthdayCelebrations\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class BirthdayCelebration extends Model
@@ -20,6 +21,7 @@ class BirthdayCelebration extends Model
 
     protected static function booted(): void { static::creating(fn (self $celebration) => $celebration->public_id ??= (string) Str::ulid()); }
     public function member(): BelongsTo { return $this->belongsTo(config('church-birthday-celebrations.models.mobile_user'), 'mobile_user_id'); }
+    public function preference(): HasOne { return $this->hasOne(BirthdayPreference::class, 'mobile_user_id', 'mobile_user_id'); }
     public function template(): BelongsTo { return $this->belongsTo(BirthdayTemplate::class, 'template_id'); }
     public function greetings(): HasMany { return $this->hasMany(BirthdayGreeting::class, 'celebration_id'); }
     public function reactions(): HasMany { return $this->hasMany(BirthdayReaction::class, 'celebration_id'); }
