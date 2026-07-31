@@ -9,7 +9,7 @@ Private, member-only birthday celebrations for the Goshen church application.
 | Display name | `Church Birthday Celebration` |
 | Package identifier | `church_birthday_celebrations` |
 | Flutter/backend capability | `church_birthday_celebrations` |
-| Source package version | `1.0.0` |
+| Source package version | `1.0.1` |
 | Composer package | `church-tools/church-birthday-celebrations-addon` |
 | Provider | `ChurchTools\\ChurchBirthdayCelebrations\\ChurchBirthdayCelebrationsServiceProvider` |
 | API prefix | `api/v1/church-birthday-celebrations` |

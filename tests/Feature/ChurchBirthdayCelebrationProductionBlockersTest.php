@@ -24,6 +24,7 @@ use ChurchTools\ChurchBirthdayCelebrations\Services\BirthdayNotifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
 use Spatie\Permission\Models\Permission;
@@ -114,6 +115,20 @@ class ChurchBirthdayCelebrationProductionBlockersTest extends TestCase
             'birthday_month' => 8,
             'birthday_day' => 14,
         ]);
+    }
+
+    public function test_initial_migration_can_resume_after_tables_exist_without_a_history_row(): void
+    {
+        $migration = '2026_07_30_000001_create_church_birthday_celebration_tables';
+        DB::table('migrations')->where('migration', $migration)->delete();
+
+        $this->artisan('migrate', [
+            '--path' => $this->installPath.'/database/migrations',
+            '--realpath' => true,
+            '--force' => true,
+        ])->assertSuccessful();
+
+        $this->assertDatabaseHas('migrations', ['migration' => $migration]);
     }
 
     public function test_opt_out_and_membership_loss_immediately_purge_media_notifications_and_access(): void

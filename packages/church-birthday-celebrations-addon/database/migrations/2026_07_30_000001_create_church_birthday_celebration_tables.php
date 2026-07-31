@@ -7,7 +7,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('birthday_celebration_verses', function (Blueprint $table): void {
+        $create = static function (string $table, callable $callback): void {
+            if (! Schema::hasTable($table)) {
+                Schema::create($table, $callback);
+            }
+        };
+
+        $create('birthday_celebration_verses', function (Blueprint $table): void {
             $table->id();
             $table->string('reference', 120);
             $table->string('body', 500);
@@ -16,7 +22,7 @@ return new class extends Migration {
             $table->timestamps();
         });
 
-        Schema::create('birthday_celebration_preferences', function (Blueprint $table): void {
+        $create('birthday_celebration_preferences', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('mobile_user_id')->unique()->constrained('mobile_users')->cascadeOnDelete();
             $table->boolean('visibility_enabled')->default(true)->index();
@@ -27,7 +33,7 @@ return new class extends Migration {
             $table->timestamps();
         });
 
-        Schema::create('birthday_celebration_templates', function (Blueprint $table): void {
+        $create('birthday_celebration_templates', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
             $table->unsignedInteger('sort_order')->default(0)->index();
@@ -40,14 +46,14 @@ return new class extends Migration {
             $table->timestamps();
         });
 
-        Schema::create('birthday_celebration_settings', function (Blueprint $table): void {
+        $create('birthday_celebration_settings', function (Blueprint $table): void {
             $table->id();
             $table->string('key')->unique();
             $table->json('value')->nullable();
             $table->timestamps();
         });
 
-        Schema::create('birthday_celebrations', function (Blueprint $table): void {
+        $create('birthday_celebrations', function (Blueprint $table): void {
             $table->id();
             $table->ulid('public_id')->unique();
             $table->foreignId('mobile_user_id')->constrained('mobile_users')->cascadeOnDelete();
@@ -72,7 +78,7 @@ return new class extends Migration {
             $table->unique(['mobile_user_id', 'birthday_year'], 'birthday_celebration_member_year_unique');
         });
 
-        Schema::create('birthday_celebration_greetings', function (Blueprint $table): void {
+        $create('birthday_celebration_greetings', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('celebration_id')->constrained('birthday_celebrations')->cascadeOnDelete();
             $table->foreignId('mobile_user_id')->constrained('mobile_users')->cascadeOnDelete();
@@ -86,7 +92,7 @@ return new class extends Migration {
             $table->unique(['celebration_id', 'idempotency_key'], 'birthday_greeting_key_unique');
         });
 
-        Schema::create('birthday_celebration_reactions', function (Blueprint $table): void {
+        $create('birthday_celebration_reactions', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('celebration_id')->constrained('birthday_celebrations')->cascadeOnDelete();
             $table->foreignId('mobile_user_id')->constrained('mobile_users')->cascadeOnDelete();
@@ -95,7 +101,7 @@ return new class extends Migration {
             $table->unique(['celebration_id', 'mobile_user_id'], 'birthday_reaction_member_unique');
         });
 
-        Schema::create('birthday_celebration_reports', function (Blueprint $table): void {
+        $create('birthday_celebration_reports', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('greeting_id')->constrained('birthday_celebration_greetings')->cascadeOnDelete();
             $table->foreignId('reporter_mobile_user_id')->constrained('mobile_users')->cascadeOnDelete();
@@ -104,7 +110,7 @@ return new class extends Migration {
             $table->unique(['greeting_id', 'reporter_mobile_user_id'], 'birthday_reporter_unique');
         });
 
-        Schema::create('birthday_celebration_deliveries', function (Blueprint $table): void {
+        $create('birthday_celebration_deliveries', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('celebration_id')->nullable()->constrained('birthday_celebrations')->cascadeOnDelete();
             $table->foreignId('mobile_user_id')->constrained('mobile_users')->cascadeOnDelete();
@@ -119,7 +125,7 @@ return new class extends Migration {
             $table->timestamps();
         });
 
-        Schema::create('birthday_celebration_correction_requests', function (Blueprint $table): void {
+        $create('birthday_celebration_correction_requests', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('mobile_user_id')->constrained('mobile_users')->cascadeOnDelete();
             $table->unsignedTinyInteger('birthday_month');
