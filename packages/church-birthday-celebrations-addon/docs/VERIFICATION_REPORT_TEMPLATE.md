@@ -51,7 +51,7 @@ Fill this report for each candidate release. Leave an item as `NOT RUN` when the
 | Fresh signed release APK/AAB builds | | |
 | Menu, routes, deep links, and notification taps use live capability/eligibility gating | | |
 | Inactive/ineligible/closed/purged UI is safe and clear | | |
-| Preferences, template/verse selection, correction request, card preview/download/share, reactions, greetings, thank-you, and reporting work | | |
+| Preferences, template/verse selection, card preview/download/share, reactions, greetings, thank-you, and reporting work | | |
 
 ## Deployment decision
 

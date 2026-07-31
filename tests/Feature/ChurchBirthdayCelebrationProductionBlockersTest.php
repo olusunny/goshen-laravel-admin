@@ -73,7 +73,7 @@ class ChurchBirthdayCelebrationProductionBlockersTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_api_contract_exposes_choices_identity_and_correction_without_private_birth_data(): void
+    public function test_api_contract_exposes_choices_and_identity_without_private_birth_data(): void
     {
         $template = BirthdayTemplate::query()->create(['name' => 'Gold', 'version' => 2, 'is_active' => true, 'is_default' => true]);
         $verse = BirthdayVerse::query()->create(['reference' => 'Numbers 6:24', 'body' => 'The Lord bless you.', 'is_active' => true]);
@@ -105,16 +105,39 @@ class ChurchBirthdayCelebrationProductionBlockersTest extends TestCase
         $this->assertStringNotContainsString('birthday_year', $context->getContent());
         $this->assertStringNotContainsString('"age"', $detail->getContent());
 
-        $this->withToken($member->issueApiToken())->postJson('/api/v1/church-birthday-celebrations/birthday-correction-requests', [
-            'birthday_month' => 8,
-            'birthday_day' => 14,
-            'reason' => 'The profile day is incorrect.',
-        ])->assertOk()->assertJsonPath('data.correction_request.status', 'pending');
-        $this->assertDatabaseHas('birthday_celebration_correction_requests', [
-            'mobile_user_id' => $member->id,
-            'birthday_month' => 8,
-            'birthday_day' => 14,
+    }
+
+    public function test_today_hub_entry_has_an_available_detail_for_the_full_local_day(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-31 11:13:00', 'Africa/Lagos'));
+        $celebrant = $this->member('Today Celebrant', ['birthday_month' => 7, 'birthday_day' => 31]);
+        $viewer = $this->member('Today Viewer');
+        $celebration = $this->celebration($celebrant, BirthdayCelebration::PUBLISHED, [
+            'birthday_date' => '2026-07-31',
+            'closes_at' => CarbonImmutable::parse('2026-07-31 00:00:00', 'UTC'),
         ]);
+
+        $this->withToken($viewer->issueApiToken())
+            ->getJson('/api/v1/church-birthday-celebrations/hub')
+            ->assertOk()
+            ->assertJsonPath('data.today.0.id', $celebration->public_id);
+        $this->withToken($viewer->issueApiToken())
+            ->getJson("/api/v1/church-birthday-celebrations/celebrations/{$celebration->public_id}")
+            ->assertOk()
+            ->assertJsonPath('data.is_interactive', true);
+        $this->assertSame('2026-07-31 22:59:59', $celebration->fresh()->closes_at->utc()->toDateTimeString());
+    }
+
+    public function test_birthday_correction_endpoint_is_not_exposed(): void
+    {
+        $member = $this->member('Profile Birthday Owner');
+
+        $this->withToken($member->issueApiToken())
+            ->postJson('/api/v1/church-birthday-celebrations/birthday-correction-requests', [
+                'birthday_month' => 8,
+                'birthday_day' => 14,
+            ])
+            ->assertNotFound();
     }
 
     public function test_hub_exposes_profile_images_only_when_a_celebrant_allows_them(): void

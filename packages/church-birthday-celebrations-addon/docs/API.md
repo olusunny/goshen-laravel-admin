@@ -20,7 +20,6 @@ The active middleware returns `404 ADDON_INACTIVE` when the server capability is
 | --- | --- | --- | --- |
 | `GET /context` | Capability, eligibility, preferences, active templates, and active verses. | none | `capability`, `eligible`, `eligibility_code`, `preferences`, `templates`, `verses` |
 | `PUT /preferences` | Update visibility, greetings, presentation, template, or verse. | `visibility_enabled`, `greetings_enabled`, `use_profile_photo`, `preferred_name`, `template_id`, `verse_id` | refreshed context |
-| `POST /birthday-correction-requests` | Request correction of canonical month/day. | `birthday_month`, `birthday_day`, optional `reason` | pending correction request |
 | `GET /hub` | Today's published and upcoming preview-ready celebrations. | none | `today`, `upcoming` |
 | `GET /celebrations/{publicId}` | Detail, reactions, visible greetings, thank-you, ownership, and interaction state. | none | detail |
 | `GET /celebrations/{publicId}/card?variant=square|portrait` | Private PNG card bytes. | optional `variant` | `image/png`, `private, no-store` |
@@ -30,7 +29,7 @@ The active middleware returns `404 ADDON_INACTIVE` when the server capability is
 | `PUT /celebrations/{publicId}/thank-you` | Celebrant posts one thank-you. | `body` | empty success data |
 | `POST /celebrations/{publicId}/greetings/{greetingId}/report` | Report a greeting. | `reason` | empty success data |
 
-Route throttles are deliberate: preferences `10/min`, correction requests `3/hour`, hub `30/min`, cards `10/min`, reactions `20/min`, greetings/deletes `8/min`, thank-you and reports `5/min`.
+Route throttles are deliberate: preferences `10/min`, hub `30/min`, cards `10/min`, reactions `20/min`, greetings/deletes `8/min`, thank-you and reports `5/min`.
 
 ## Access and state rules
 
@@ -38,7 +37,7 @@ Route throttles are deliberate: preferences `10/min`, correction requests `3/hou
 - A preview is visible only to its celebrant. A closed celebration is visible only to its celebrant or a member with recovery permission. Purged content returns `410`.
 - Detail includes server-authoritative `is_interactive`; clients must use it rather than device time.
 - Greetings and thank-you messages are capped at 280 characters by the server. Greetings are one per member per celebration and have no threaded replies.
-- Active template and verse IDs are validated server-side. Birthday correction requests validate real calendar month/day combinations.
+- Active template and verse IDs are validated server-side. Birthday month and day are owned and validated by the normal member profile update.
 
 ## Stable error codes
 

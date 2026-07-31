@@ -5,7 +5,6 @@ namespace ChurchTools\ChurchBirthdayCelebrations\Http\Controllers\Api;
 use App\Support\MediaUrl;
 use Carbon\CarbonImmutable;
 use ChurchTools\ChurchBirthdayCelebrations\Models\BirthdayCelebration;
-use ChurchTools\ChurchBirthdayCelebrations\Models\BirthdayCorrectionRequest;
 use ChurchTools\ChurchBirthdayCelebrations\Models\BirthdayGreeting;
 use ChurchTools\ChurchBirthdayCelebrations\Models\BirthdayPreference;
 use ChurchTools\ChurchBirthdayCelebrations\Models\BirthdayReaction;
@@ -64,29 +63,6 @@ class BirthdayCelebrationController
         $lifecycle->reconcileMember($member, $presentationChanged);
 
         return $this->ok($this->contextData($member, $preference->fresh(), $eligibility));
-    }
-
-    public function requestCorrection(Request $request, BirthdayEligibilityService $eligibility): JsonResponse
-    {
-        $member = $request->user();
-        if (! $eligibility->baseEligible($member)) {
-            BirthdayApiError::abort('MEMBER_INELIGIBLE', 'Only verified church members can request a birthday correction.', 403);
-        }
-        $data = $request->validate([
-            'birthday_month' => ['required', 'integer', 'between:1,12'],
-            'birthday_day' => ['required', 'integer', 'between:1,31'],
-            'reason' => ['nullable', 'string', 'max:500'],
-        ]);
-        if (! checkdate((int) $data['birthday_month'], (int) $data['birthday_day'], 2000)) {
-            BirthdayApiError::abort('INVALID_CONTENT', 'Enter a valid birthday month and day.', 422);
-        }
-
-        $correction = BirthdayCorrectionRequest::query()->updateOrCreate(
-            ['mobile_user_id' => $member->id, 'status' => 'pending'],
-            ['birthday_month' => $data['birthday_month'], 'birthday_day' => $data['birthday_day'], 'reason' => trim((string) ($data['reason'] ?? '')) ?: null],
-        );
-
-        return $this->ok(['correction_request' => ['id' => $correction->id, 'status' => $correction->status]]);
     }
 
     public function hub(

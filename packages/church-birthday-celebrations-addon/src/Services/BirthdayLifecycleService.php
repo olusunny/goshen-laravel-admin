@@ -89,6 +89,18 @@ class BirthdayLifecycleService
             return false;
         }
 
+        $birthdayDate = CarbonImmutable::parse($celebration->birthday_date, $this->timezone());
+        if ($celebration->status === BirthdayCelebration::PUBLISHED
+            && $birthdayDate->isSameDay(CarbonImmutable::now($this->timezone()))) {
+            $closesAt = $this->closesAt($birthdayDate);
+            if (! $celebration->closes_at?->equalTo($closesAt)) {
+                $celebration->forceFill([
+                    'closes_at' => $closesAt,
+                    'purge_due_at' => $closesAt->addDays((int) BirthdaySetting::value('retention_days', config('church-birthday-celebrations.retention_days'))),
+                ])->save();
+            }
+        }
+
         return true;
     }
 
@@ -171,8 +183,8 @@ class BirthdayLifecycleService
             }
             $this->ensureCard($celebration, $member, $preference);
             if ($celebration->status === BirthdayCelebration::PREVIEW_READY) {
-                $publishedAt = $date->utc();
-                $closesAt = $publishedAt->addHours(24);
+                $publishedAt = $date->startOfDay()->utc();
+                $closesAt = $this->closesAt($date);
                 $celebration->forceFill([
                     'status' => BirthdayCelebration::PUBLISHED,
                     'published_at' => $publishedAt,
@@ -291,5 +303,10 @@ class BirthdayLifecycleService
     private function timezone(): string
     {
         return (string) BirthdaySetting::value('timezone', config('church-birthday-celebrations.timezone', 'Africa/Lagos'));
+    }
+
+    private function closesAt(CarbonImmutable $date): CarbonImmutable
+    {
+        return $date->setTimezone($this->timezone())->endOfDay()->setMicrosecond(0)->utc();
     }
 }

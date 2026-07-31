@@ -12,6 +12,7 @@ use ChurchTools\ChurchBirthdayCelebrations\Filament\Resources\BirthdayLifecycleR
 use ChurchTools\ChurchBirthdayCelebrations\Filament\Resources\BirthdayPreferenceResource;
 use ChurchTools\ChurchBirthdayCelebrations\Filament\Resources\BirthdaySettingResource;
 use ChurchTools\ChurchBirthdayCelebrations\Filament\Resources\BirthdayTemplateResource;
+use ChurchTools\ChurchBirthdayCelebrations\Filament\Resources\BirthdayTemplateResource\Pages\CreateBirthdayTemplate;
 use ChurchTools\ChurchBirthdayCelebrations\Filament\Resources\BirthdayVerseResource;
 use ChurchTools\ChurchBirthdayCelebrations\Models\BirthdayCelebration;
 use ChurchTools\ChurchBirthdayCelebrations\Models\BirthdayGreeting;
@@ -100,6 +101,35 @@ class BirthdayAdminSurfaceTest extends TestCase
 
         $default->update(['is_active' => false]);
         $this->assertSame($fallback->id, BirthdayTemplate::selected()?->id);
+    }
+
+    public function test_admin_can_create_a_template_from_the_explained_card_design_form(): void
+    {
+        $admin = $this->admin('church_birthday_celebrations.manage');
+
+        Livewire::actingAs($admin)
+            ->test(CreateBirthdayTemplate::class)
+            ->assertSee('Create a reusable birthday card style')
+            ->assertSee('Use as the default template')
+            ->assertSee('Live card preview')
+            ->fillForm([
+                'name' => 'Gold celebration',
+                'is_active' => true,
+                'is_default' => true,
+                'version' => 1,
+                'background_color' => '#4A2E62',
+                'accent_color' => '#D49A2A',
+                'verse' => 'May the Lord bless you and keep you.',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('birthday_celebration_templates', [
+            'name' => 'Gold celebration',
+            'is_active' => true,
+            'is_default' => true,
+            'version' => 1,
+        ]);
     }
 
     public function test_moderator_can_hide_a_reported_greeting_without_deleting_the_audit_record(): void

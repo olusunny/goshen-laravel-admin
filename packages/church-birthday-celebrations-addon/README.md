@@ -21,7 +21,7 @@ The production Goshen baseline is PHP 8.4 and Redis 6.1+. The package manifest r
 
 ## What this package owns
 
-The add-on owns preferences, templates, verses, settings, celebrations, cards, greetings, reactions, reports, delivery records, and birthday-correction requests. It does **not** own member profiles, authentication, Triumphant IDs, or dates of birth.
+The add-on owns preferences, templates, verses, settings, celebrations, cards, greetings, reactions, reports, and delivery records. It does **not** own member profiles, authentication, Triumphant IDs, or dates of birth. Members update birthdays through their normal profile.
 
 Laravel is authoritative for activation, eligibility, lifecycle dates, privacy preferences, interactions, retention, cards, and notifications. Flutter only exposes an already-compiled, server-authorized experience.
 
