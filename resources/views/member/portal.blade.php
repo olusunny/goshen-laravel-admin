@@ -793,8 +793,9 @@
             text-align: left;
             font-weight: 900;
             cursor: pointer;
+            transition: background-color .16s ease, color .16s ease, transform .13s cubic-bezier(.23, 1, .32, 1);
         }
-        .nav-item:hover, .nav-item.active {
+        .nav-item.active {
             background: rgba(248, 181, 34, .16);
             color: #fff;
         }
@@ -802,9 +803,16 @@
             margin-top: 10px;
             color: #ffd6d6;
         }
-        .nav-item.logout:hover {
-            background: rgba(180, 35, 24, .22);
-            color: #fff;
+        .nav-item:focus-visible,
+        .bottom-nav button:focus-visible,
+        .icon-button:focus-visible {
+            outline: 3px solid rgba(248, 181, 34, .92);
+            outline-offset: 3px;
+        }
+        .nav-item:active,
+        .bottom-nav button:active,
+        .icon-button:active {
+            transform: scale(.97);
         }
         .nav-icon {
             width: 26px;
@@ -823,14 +831,14 @@
             padding: 20px 18px calc(var(--bottom-nav) + env(safe-area-inset-bottom) + 24px);
         }
 
-        .page-view { display: none; animation: fade .18s ease-out; }
+        .page-view { display: none; animation: portal-page-fade .18s cubic-bezier(.23, 1, .32, 1); }
         .page-view.active {
             display: grid;
             gap: 18px;
             min-width: 0;
             max-width: 100%;
         }
-        @keyframes fade { from { opacity: .65; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+        @keyframes portal-page-fade { from { opacity: .65; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
         .hero-card {
             background: radial-gradient(circle at 85% 12%, rgba(248,181,34,.24), transparent 28%), linear-gradient(135deg, #0c2230, #0f4b3d);
@@ -1712,20 +1720,12 @@
             background: var(--card);
             color: var(--danger);
         }
-        .drawer .header-logout-button:hover {
-            background: rgba(180, 35, 24, .10);
-            color: var(--danger);
-        }
         .drawer .nav-item { color: var(--ink); }
-        .drawer .nav-item.active, .drawer .nav-item:hover {
+        .drawer .nav-item.active {
             background: var(--field);
             color: var(--brand-2);
         }
         .drawer .nav-item.logout {
-            color: var(--danger);
-        }
-        .drawer .nav-item.logout:hover {
-            background: rgba(180, 35, 24, .10);
             color: var(--danger);
         }
 
@@ -1736,7 +1736,7 @@
             bottom: 0;
             z-index: 35;
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 4px;
             padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
             background: var(--nav-surface);
@@ -1755,6 +1755,10 @@
             font-weight: 900;
             font-size: 12px;
             cursor: pointer;
+            transition: background-color .16s ease, color .16s ease, transform .13s cubic-bezier(.23, 1, .32, 1);
+        }
+        .bottom-nav button span {
+            white-space: nowrap;
         }
         .bottom-nav button.active {
             background: var(--brand);
@@ -1763,6 +1767,45 @@
         html.theme-dark .bottom-nav button.active, body.theme-dark .bottom-nav button.active {
             color: #07151d;
         }
+        @media (hover: hover) and (pointer: fine) {
+            .nav-item:hover,
+            .bottom-nav button:hover {
+                transform: translateY(-1px);
+            }
+            .nav-item:hover {
+                background: rgba(248, 181, 34, .16);
+                color: #fff;
+            }
+            .nav-item.logout:hover {
+                background: rgba(180, 35, 24, .22);
+                color: #fff;
+            }
+            .drawer .nav-item:hover {
+                background: var(--field);
+                color: var(--brand-2);
+            }
+            .drawer .nav-item.logout:hover,
+            .drawer .header-logout-button:hover {
+                background: rgba(180, 35, 24, .10);
+                color: var(--danger);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+            }
+            .page-view {
+                animation: none;
+            }
+            .nav-item,
+            .bottom-nav button,
+            .icon-button {
+                transition-duration: 0ms;
+            }
+        }
 
         @media (max-width: 430px) {
             .wallet-tabs {
@@ -1770,6 +1813,18 @@
             }
             .ticket-details {
                 grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .bottom-nav {
+                gap: 2px;
+                padding-inline: 6px;
+            }
+            .bottom-nav button {
+                min-height: 52px;
+                border-radius: 14px;
+                font-size: 11px;
             }
         }
 
@@ -1872,6 +1927,11 @@
         <symbol id="icon-help" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"/>
             <path d="M9.7 9a2.5 2.5 0 1 1 4.1 1.9c-.9.7-1.8 1.3-1.8 2.6M12 17h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-more" viewBox="0 0 24 24">
+            <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+            <circle cx="19" cy="12" r="1.5" fill="currentColor"/>
         </symbol>
         <symbol id="icon-logout" viewBox="0 0 24 24">
             <path d="M10 6H6.8A1.8 1.8 0 0 0 5 7.8v8.4A1.8 1.8 0 0 0 6.8 18H10M14 8l4 4-4 4M8 12h10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
@@ -2090,7 +2150,7 @@
                 <button type="button" data-theme-mode="device" aria-label="Use device theme">Auto</button>
             </div>
             <nav class="nav-list">
-                <button class="nav-item active" type="button" data-nav-page="home"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>Home</button>
+                <button class="nav-item active" type="button" data-nav-page="home" aria-current="page" aria-controls="portalMain"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>Home</button>
                 <button class="nav-item" type="button" data-nav-page="retreat"><svg class="nav-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg>Retreat Registration</button>
                 <button class="nav-item" type="button" data-nav-page="tickets"><svg class="nav-icon" aria-hidden="true"><use href="#icon-ticket"></use></svg>My Ticket</button>
                 <button class="nav-item" type="button" data-nav-page="payments"><svg class="nav-icon" aria-hidden="true"><use href="#icon-card"></use></svg>Payments</button>
@@ -2103,7 +2163,7 @@
         </aside>
 
         <header class="mobile-topbar">
-            <button id="openDrawer" class="icon-button" type="button" aria-label="Open navigation menu"><span class="hamburger"></span></button>
+            <button id="openDrawer" class="icon-button" type="button" aria-label="Open navigation menu" aria-haspopup="dialog" aria-controls="drawerBackdrop" aria-expanded="false"><span class="hamburger"></span></button>
             <div class="top-title">
                 <strong id="mobileTitle">Home</strong>
                 <span>Goshen Retreat</span>
@@ -2136,7 +2196,7 @@
                     <button type="button" data-theme-mode="device" aria-label="Use device theme">Auto</button>
                 </div>
                 <nav class="nav-list">
-                    <button class="nav-item active" type="button" data-nav-page="home"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>Home</button>
+                    <button class="nav-item active" type="button" data-nav-page="home" aria-current="page" aria-controls="portalMain"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>Home</button>
                     <button class="nav-item" type="button" data-nav-page="retreat"><svg class="nav-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg>Retreat Registration</button>
                     <button class="nav-item" type="button" data-nav-page="tickets"><svg class="nav-icon" aria-hidden="true"><use href="#icon-ticket"></use></svg>My Ticket</button>
                     <button class="nav-item" type="button" data-nav-page="payments"><svg class="nav-icon" aria-hidden="true"><use href="#icon-card"></use></svg>Payments</button>
@@ -2150,7 +2210,7 @@
         </div>
 
         <main class="portal-main" id="portalMain">
-            <section class="page-view active" data-page-view="home">
+            <section class="page-view active" data-page-view="home" role="region" aria-labelledby="homeGreeting" tabindex="-1">
                 <div class="hero-card">
                     <p class="eyebrow">Member dashboard</p>
                     <h2 id="homeGreeting">Welcome to Goshen Retreat</h2>
@@ -2165,80 +2225,80 @@
                 <div id="homeEventPreview" class="card"></div>
             </section>
 
-            <section class="page-view" data-page-view="retreat">
+            <section class="page-view" data-page-view="retreat" role="region" aria-labelledby="page-heading-retreat" tabindex="-1">
                 <div class="section-head">
                     <div>
-                        <h2>Retreat Registration</h2>
+                        <h2 id="page-heading-retreat">Retreat Registration</h2>
                         <p>Choose a published Goshen Retreat edition and register each attendee.</p>
                     </div>
                 </div>
                 <div id="retreatEvents" class="grid"></div>
             </section>
 
-            <section class="page-view" data-page-view="tickets">
+            <section class="page-view" data-page-view="tickets" role="region" aria-labelledby="page-heading-tickets" tabindex="-1">
                 <div class="section-head">
                     <div>
-                        <h2>My Ticket</h2>
+                        <h2 id="page-heading-tickets">My Ticket</h2>
                         <p>View issued tickets, QR codes, and downloadable documents.</p>
                     </div>
                 </div>
                 <div id="ticketsList" class="record-list"></div>
             </section>
 
-            <section class="page-view" data-page-view="payments">
+            <section class="page-view" data-page-view="payments" role="region" aria-labelledby="page-heading-payments" tabindex="-1">
                 <div class="section-head">
                     <div>
-                        <h2>Payments</h2>
+                        <h2 id="page-heading-payments">Payments</h2>
                         <p>Continue pending card payments, use wallet funds, or redeem a voucher where available.</p>
                     </div>
                 </div>
                 <div id="paymentsList" class="record-list"></div>
             </section>
 
-            <section class="page-view" data-page-view="wallet">
+            <section class="page-view" data-page-view="wallet" role="region" aria-labelledby="page-heading-wallet" tabindex="-1">
                 <div class="section-head">
                     <div>
-                        <h2>Goshen Wallet</h2>
+                        <h2 id="page-heading-wallet">Goshen Wallet</h2>
                         <p>Top up, save, transfer, withdraw, and review your wallet activity.</p>
                     </div>
                 </div>
                 <div id="walletContent" class="grid"></div>
             </section>
 
-            <section class="page-view" data-page-view="receipts">
+            <section class="page-view" data-page-view="receipts" role="region" aria-labelledby="page-heading-receipts" tabindex="-1">
                 <div class="section-head">
                     <div>
-                        <h2>Receipts</h2>
+                        <h2 id="page-heading-receipts">Receipts</h2>
                         <p>Review your Goshen Retreat payment records and references.</p>
                     </div>
                 </div>
                 <div id="receiptsList" class="record-list"></div>
             </section>
 
-            <section class="page-view" data-page-view="updates">
+            <section class="page-view" data-page-view="updates" role="region" aria-labelledby="page-heading-updates" tabindex="-1">
                 <div class="section-head">
                     <div>
-                        <h2>Updates</h2>
+                        <h2 id="page-heading-updates">Updates</h2>
                         <p>Important retreat notices and account messages.</p>
                     </div>
                 </div>
                 <div id="updatesList" class="record-list"></div>
             </section>
 
-            <section class="page-view" data-page-view="profile">
+            <section class="page-view" data-page-view="profile" role="region" aria-labelledby="page-heading-profile" tabindex="-1">
                 <div class="section-head">
                     <div>
-                        <h2>Profile</h2>
+                        <h2 id="page-heading-profile">Profile</h2>
                         <p>Details used for your retreat registration and payment records.</p>
                     </div>
                 </div>
                 <div id="profileCard" class="card"></div>
             </section>
 
-            <section class="page-view" data-page-view="support">
+            <section class="page-view" data-page-view="support" role="region" aria-labelledby="page-heading-support" tabindex="-1">
                 <div class="section-head">
                     <div>
-                        <h2>Support</h2>
+                        <h2 id="page-heading-support">Support</h2>
                         <p>Use the published retreat support details when you need help.</p>
                     </div>
                 </div>
@@ -2247,10 +2307,11 @@
         </main>
 
         <nav class="bottom-nav" aria-label="Primary navigation">
-            <button class="active" type="button" data-nav-page="home"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg><span>Home</span></button>
-            <button type="button" data-nav-page="retreat"><svg class="nav-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg><span>Retreat</span></button>
-            <button type="button" data-nav-page="tickets"><svg class="nav-icon" aria-hidden="true"><use href="#icon-ticket"></use></svg><span>Tickets</span></button>
-            <button type="button" data-nav-page="payments"><svg class="nav-icon" aria-hidden="true"><use href="#icon-card"></use></svg><span>Payments</span></button>
+            <button class="active" type="button" data-nav-page="home" aria-current="page" aria-controls="portalMain"><svg class="nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg><span>Home</span></button>
+            <button type="button" data-nav-page="retreat" aria-controls="portalMain"><svg class="nav-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg><span>Retreat</span></button>
+            <button type="button" data-nav-page="wallet" aria-controls="portalMain"><svg class="nav-icon" aria-hidden="true"><use href="#icon-wallet"></use></svg><span>Wallet</span></button>
+            <button type="button" data-nav-page="tickets" aria-controls="portalMain"><svg class="nav-icon" aria-hidden="true"><use href="#icon-ticket"></use></svg><span>Tickets</span></button>
+            <button id="openBottomDrawer" type="button" aria-label="Open more portal options" aria-haspopup="dialog" aria-controls="drawerBackdrop" aria-expanded="false"><svg class="nav-icon" aria-hidden="true"><use href="#icon-more"></use></svg><span>More</span></button>
         </nav>
     </div>
 
@@ -2289,6 +2350,7 @@
         let profileEditMode = false;
         let profileCompletionNoticePreviousFocus = null;
         let profileCompletionReturnPage = null;
+        let drawerPreviousFocus = null;
 
         const authShell = document.getElementById('authShell');
         const portalShell = document.getElementById('portalShell');
@@ -2933,15 +2995,36 @@
                 : 'Triumphant ID pending';
         }
 
-        function showPage(page, push = true) {
+        function navigationControls() {
+            return document.querySelectorAll('.sidebar [data-nav-page], .drawer [data-nav-page], .bottom-nav [data-nav-page], .mobile-topbar [data-nav-page]');
+        }
+
+        function updateNavigationState() {
+            navigationControls().forEach((button) => {
+                const isActive = button.dataset.navPage === activePage;
+                button.classList.toggle('active', isActive);
+                button.setAttribute('aria-controls', 'portalMain');
+                if (isActive) {
+                    button.setAttribute('aria-current', 'page');
+                } else {
+                    button.removeAttribute('aria-current');
+                }
+            });
+        }
+
+        function focusActivePage() {
+            document.querySelector(`[data-page-view="${activePage}"]`)?.focus({ preventScroll: true });
+        }
+
+        function showPage(page, push = true, { focus = push } = {}) {
             const previousPage = activePage;
             activePage = pageTitles[page] ? page : 'home';
             document.querySelectorAll('[data-page-view]').forEach((view) => {
-                view.classList.toggle('active', view.dataset.pageView === activePage);
+                const isActive = view.dataset.pageView === activePage;
+                view.classList.toggle('active', isActive);
+                view.setAttribute('aria-hidden', `${!isActive}`);
             });
-            document.querySelectorAll('[data-nav-page]').forEach((button) => {
-                button.classList.toggle('active', button.dataset.navPage === activePage);
-            });
+            updateNavigationState();
             document.getElementById('mobileTitle').textContent = pageTitles[activePage];
             if (activePage === 'profile' && (previousPage !== 'profile' || push)) {
                 profileEditMode = false;
@@ -2950,19 +3033,36 @@
             if (activePage === 'retreat') {
                 window.setTimeout(maybeShowProfileCompletionNotice, 0);
             }
-            if (push) history.pushState(null, '', activePage === 'home' ? '/app' : `/app/${activePage}`);
+            const targetPath = activePage === 'home' ? '/app' : `/app/${activePage}`;
+            if (push && window.location.pathname !== targetPath) history.pushState(null, '', targetPath);
             closeDrawer();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+            window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
+            if (focus && previousPage !== activePage) window.requestAnimationFrame(focusActivePage);
         }
 
-        function openDrawer() {
+        function setDrawerExpanded(expanded) {
+            ['openDrawer', 'openBottomDrawer'].forEach((id) => {
+                document.getElementById(id)?.setAttribute('aria-expanded', `${expanded}`);
+            });
+        }
+
+        function openDrawer(trigger = document.activeElement) {
+            drawerPreviousFocus = trigger instanceof HTMLElement ? trigger : null;
             drawerBackdrop.hidden = false;
-            const first = drawerBackdrop.querySelector('button');
-            window.setTimeout(() => first?.focus(), 20);
+            setDrawerExpanded(true);
+            const first = drawerBackdrop.querySelector('[data-nav-page][aria-current="page"]')
+                || drawerBackdrop.querySelector('[data-nav-page]')
+                || drawerBackdrop.querySelector('button');
+            window.requestAnimationFrame(() => first?.focus());
         }
 
-        function closeDrawer() {
+        function closeDrawer({ restoreFocus = false } = {}) {
+            const wasOpen = !drawerBackdrop.hidden;
             drawerBackdrop.hidden = true;
+            setDrawerExpanded(false);
+            if (restoreFocus && wasOpen && drawerPreviousFocus?.isConnected) drawerPreviousFocus.focus();
+            drawerPreviousFocus = null;
         }
 
         async function loadGroups() {
@@ -4895,9 +4995,10 @@
             }
         });
 
-        document.getElementById('openDrawer').addEventListener('click', openDrawer);
+        document.getElementById('openDrawer').addEventListener('click', (event) => openDrawer(event.currentTarget));
+        document.getElementById('openBottomDrawer')?.addEventListener('click', (event) => openDrawer(event.currentTarget));
         drawerBackdrop.addEventListener('click', (event) => {
-            if (event.target === drawerBackdrop) closeDrawer();
+            if (event.target === drawerBackdrop) closeDrawer({ restoreFocus: true });
         });
         window.addEventListener('keydown', (event) => {
             if (!profileCompletionNotice?.hidden && event.key === 'Tab') {
@@ -4920,16 +5021,37 @@
                 }
                 return;
             }
+            if (!drawerBackdrop.hidden && event.key === 'Tab') {
+                const focusable = [...drawerBackdrop.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+                    .filter((element) => !element.hasAttribute('hidden'));
+                if (!focusable.length) {
+                    event.preventDefault();
+                    return;
+                }
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (!drawerBackdrop.contains(document.activeElement)) {
+                    event.preventDefault();
+                    first.focus();
+                } else if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+                return;
+            }
             if (event.key !== 'Escape') return;
             if (!profileCompletionNotice?.hidden) {
                 event.preventDefault();
                 profileCompletionNotice.querySelector('[data-profile-completion-action="complete"]')?.focus();
                 return;
             }
-            closeDrawer();
+            closeDrawer({ restoreFocus: true });
         });
         window.addEventListener('popstate', () => {
-            if (currentUser) showPage(currentPathSegment(), false);
+            if (currentUser) showPage(currentPathSegment(), false, { focus: true });
         });
 
         document.getElementById('sidebarLogout').addEventListener('click', () => clearUser());
