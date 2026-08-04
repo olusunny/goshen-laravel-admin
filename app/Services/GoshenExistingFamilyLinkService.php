@@ -65,7 +65,7 @@ class GoshenExistingFamilyLinkService
     }
 
     /**
-     * @param  array{father_ticket_id: int|string, mother_ticket_id: int|string, children?: array<int, array{ticket_id: int|string}>}  $data
+     * @param  array{father_ticket_id?: int|string|null, mother_ticket_id?: int|string|null, children?: array<int, array{ticket_id: int|string}>}  $data
      */
     public function link(User $admin, Event $event, string $name, string $reason, array $data): GoshenFamily
     {
@@ -86,13 +86,19 @@ class GoshenExistingFamilyLinkService
             $roles['child'][] = $child['ticket_id'] ?? null;
         }
 
+        $parentTicketIds = collect([$roles['father'], $roles['mother']])
+            ->filter(fn ($ticketId): bool => filled($ticketId));
+        if ($parentTicketIds->isEmpty()) {
+            throw ValidationException::withMessages(['family' => 'Select a father or mother ticket to link a family.']);
+        }
+
         $ticketIds = collect($roles)
             ->flatten()
             ->filter(fn ($ticketId): bool => filled($ticketId))
             ->map(fn ($ticketId): int => (int) $ticketId)
             ->values();
 
-        if ($ticketIds->count() < 2 || $ticketIds->count() !== $ticketIds->unique()->count()) {
+        if ($ticketIds->count() !== $ticketIds->unique()->count()) {
             throw ValidationException::withMessages(['family' => 'Select a different existing ticket for every family member.']);
         }
 

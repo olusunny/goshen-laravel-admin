@@ -49,6 +49,56 @@ class GoshenExistingFamilyLinkTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_link_a_father_only_family_without_children(): void
+    {
+        $event = $this->event();
+        $father = $this->ticket($event, 'David', 'Adeola');
+        $admin = User::factory()->create();
+
+        $family = app(GoshenExistingFamilyLinkService::class)->link($admin, $event, "Adeola's Family", 'Backfill the father-only family relationship.', [
+            'father_ticket_id' => $father->id,
+        ]);
+
+        $this->assertSame(['father'], $family->members->pluck('role')->all());
+        $this->assertDatabaseHas(EventAuditLog::class, [
+            'event_id' => $event->id,
+            'actor_id' => $admin->id,
+            'action' => 'goshen_existing_family_linked',
+            'auditable_id' => $family->id,
+        ]);
+    }
+
+    public function test_admin_can_link_a_mother_only_family(): void
+    {
+        $event = $this->event();
+        $mother = $this->ticket($event, 'Grace', 'Adeola');
+        $admin = User::factory()->create();
+
+        $family = app(GoshenExistingFamilyLinkService::class)->link($admin, $event, "Adeola's Family", 'Backfill the mother-only family relationship.', [
+            'mother_ticket_id' => $mother->id,
+        ]);
+
+        $this->assertSame(['mother'], $family->members->pluck('role')->all());
+    }
+
+    public function test_link_rejects_children_when_neither_parent_is_selected(): void
+    {
+        $event = $this->event();
+        $child = $this->ticket($event, 'Hope', 'Adeola');
+        $admin = User::factory()->create();
+
+        try {
+            app(GoshenExistingFamilyLinkService::class)->link($admin, $event, "Adeola's Family", 'Attempt to create a child-only family relationship.', [
+                'children' => [['ticket_id' => $child->id]],
+            ]);
+            $this->fail('Expected a validation error.');
+        } catch (ValidationException $exception) {
+            $this->assertSame('Select a father or mother ticket to link a family.', $exception->errors()['family'][0]);
+        }
+
+        $this->assertDatabaseCount('goshen_families', 0);
+    }
+
     public function test_link_rejects_unpaid_cross_event_and_already_linked_tickets(): void
     {
         $event = $this->event();
