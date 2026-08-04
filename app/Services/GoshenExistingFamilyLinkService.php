@@ -37,9 +37,9 @@ class GoshenExistingFamilyLinkService
             throw ValidationException::withMessages(['family' => 'Link a verified parent profile to this family before adding a child ticket.']);
         }
 
-        app(GoshenFamilyRegistrationService::class)->childAge(data_get($data, 'child.age'));
+        $age = app(GoshenFamilyRegistrationService::class)->childAge(data_get($data, 'child.age'));
 
-        $ticketType = $this->childTicketType($family, $data);
+        $ticketType = $this->childTicketType($family, $data, $age);
         $payment = [
             'method' => $data['payment_method'] ?? null,
             'voucher_code' => $data['voucher_code'] ?? null,
@@ -232,8 +232,48 @@ class GoshenExistingFamilyLinkService
     }
 
     /** @param array<string, mixed> $data */
-    private function childTicketType(GoshenFamily $family, array $data): EventTicketType
+    private function childTicketType(GoshenFamily $family, array $data, int $age): EventTicketType
     {
+        if ($age < 15) {
+            if (filled($data['ticket_type_id'] ?? null)) {
+                $submittedType = EventTicketType::query()
+                    ->whereKey($data['ticket_type_id'])
+                    ->where('event_id', $family->event_id)
+                    ->where('is_active', true)
+                    ->first();
+
+                if (! $submittedType) {
+                    throw ValidationException::withMessages(['ticket_type_id' => 'Select an active ticket type from this retreat edition.']);
+                }
+            }
+
+            $parentTicketTypeIds = Ticket::query()
+                ->where('event_id', $family->event_id)
+                ->whereIn('attendee_id', $family->members->whereIn('role', ['father', 'mother'])->pluck('attendee_id')->filter())
+                ->pluck('ticket_type_id')
+                ->filter()
+                ->unique();
+            $parentTicketTypes = EventTicketType::query()
+                ->whereIn('id', $parentTicketTypeIds)
+                ->where('event_id', $family->event_id)
+                ->where('is_active', true)
+                ->get();
+            $familyTypes = $parentTicketTypes
+                ->filter(fn (EventTicketType $type): bool => app(GoshenFamilyRegistrationService::class)->isFamilyTicket((string) $type->name));
+
+            if ($familyTypes->count() === 1) {
+                return $familyTypes->first();
+            }
+
+            if ($parentTicketTypes->count() === 1) {
+                return $parentTicketTypes->first();
+            }
+
+            throw ValidationException::withMessages([
+                'ticket_type_id' => 'The linked parents have ambiguous ticket types. Keep one active parent ticket category before adding a complimentary child.',
+            ]);
+        }
+
         $ticketTypeId = $data['ticket_type_id'] ?? null;
         $ticketType = EventTicketType::query()
             ->whereKey($ticketTypeId)

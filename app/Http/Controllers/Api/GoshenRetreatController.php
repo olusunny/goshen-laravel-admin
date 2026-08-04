@@ -4455,6 +4455,7 @@ class GoshenRetreatController extends Controller
         $multidayStatus = is_array($ticket->multiday_status) ? $ticket->multiday_status : [];
         $paidAmount = $this->ticketPaidAmount($ticket);
         $currency = strtoupper((string) ($ticket->booking?->currency ?: $ticket->ticketType?->currency ?: 'GBP'));
+        $metadata = is_array($ticket->metadata) ? $ticket->metadata : [];
 
         return [
             'public_id' => $ticket->public_id,
@@ -4483,7 +4484,7 @@ class GoshenRetreatController extends Controller
             'currency' => $currency,
             'amount_paid' => $paidAmount,
             'paid_amount' => $paidAmount,
-            'amount_paid_label' => trim($currency.' '.number_format($paidAmount, 2)),
+            'amount_paid_label' => $this->ticketAmountPaidLabel($metadata, $paidAmount, $currency),
             'checked_in_days' => $ticket->checkIns
                 ->where('status', TicketStatus::CheckedIn)
                 ->map(fn ($checkIn): array => [

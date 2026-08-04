@@ -55,14 +55,13 @@ class GoshenExistingFamilyChildAdditionService
             if ((int) $ticketType->event_id !== (int) $family->event_id) {
                 throw ValidationException::withMessages(['ticket_type_id' => 'Select a ticket type from this family\'s retreat edition.']);
             }
-            if ($this->familyRegistration->isFamilyTicket((string) $ticketType->name)) {
+            $child = $this->familyRegistration->prepareChild($child);
+            if ($child['is_payable'] && $this->familyRegistration->isFamilyTicket((string) $ticketType->name)) {
                 throw ValidationException::withMessages(['ticket_type_id' => 'Add a child with an individual Goshen ticket type.']);
             }
             if (! $family->members->contains(fn (GoshenFamilyMember $member): bool => $member->mobile_user_id === $billingParent->id && in_array($member->role, ['father', 'mother'], true))) {
                 throw ValidationException::withMessages(['billing_parent_id' => 'Choose a parent already linked to this family.']);
             }
-
-            $child = $this->familyRegistration->prepareChild($child);
 
             if (! is_array($child) || $this->isDuplicateChild($family, $child)) {
                 throw ValidationException::withMessages(['child' => 'This child is already attached to the family.']);

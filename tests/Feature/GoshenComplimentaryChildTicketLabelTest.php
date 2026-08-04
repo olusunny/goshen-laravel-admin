@@ -51,8 +51,10 @@ class GoshenComplimentaryChildTicketLabelTest extends TestCase
         );
 
         $payload = $this->invokePrivateMethod(app(GoshenRetreatController::class), 'ticketPayload', $ticket);
+        $scannerPayload = $this->invokePrivateMethod(app(GoshenRetreatController::class), 'scannerTicketPayload', $ticket);
 
         $this->assertSame('Children Complementary Ticket', $payload['amount_paid_label']);
+        $this->assertSame('Children Complementary Ticket', $scannerPayload['amount_paid_label']);
         $this->assertSame([
             'role' => 'child',
             'age' => 12,

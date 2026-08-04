@@ -20,7 +20,7 @@ class GoshenExistingFamilyChildUiTest extends TestCase
     {
         $source = file_get_contents(app_path('Filament/Resources/GoshenTicketResource.php'));
         $start = strpos($source, "Select::make('father_ticket_id')");
-        $end = strpos("Forms\\Components\\Repeater::make('children')", $start);
+        $end = strpos($source, "Forms\\Components\\Repeater::make('children')", $start);
         $parentFields = substr($source, $start, $end - $start);
 
         $this->assertStringContainsString("->requiredWithout('mother_ticket_id')", $parentFields);
@@ -64,6 +64,12 @@ class GoshenExistingFamilyChildUiTest extends TestCase
         $end = strpos($source, 'private static function linkableTicketOptions', $start);
         $formSource = substr($source, $start, $end - $start);
 
+        $this->assertStringContainsString("Placeholder::make('complimentary_ticket_status')", $formSource);
+        $this->assertStringContainsString('Children Complementary Ticket - no payment required.', $formSource);
+        $this->assertGreaterThan(
+            strpos($formSource, "Section::make('Paid child ticket')"),
+            strpos($formSource, "Select::make('ticket_type_id')"),
+        );
         $this->assertStringNotContainsString("TextInput::make('wallet_otp')", $formSource);
         $this->assertStringNotContainsString("'wallet' => 'My Goshen wallet'", $formSource);
     }
