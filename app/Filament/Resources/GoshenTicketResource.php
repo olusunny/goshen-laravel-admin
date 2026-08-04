@@ -694,12 +694,19 @@ class GoshenTicketResource extends Resource
                 ->label("Father's existing ticket")
                 ->options(fn (Get $get): array => static::linkableTicketOptions($get('event_id')))
                 ->searchable()
-                ->required(),
+                ->requiredWithout('mother_ticket_id')
+                ->validationMessages([
+                    'required_without' => 'Select a father, a mother, or both.',
+                ]),
             Forms\Components\Select::make('mother_ticket_id')
                 ->label("Mother's existing ticket")
                 ->options(fn (Get $get): array => static::linkableTicketOptions($get('event_id')))
                 ->searchable()
-                ->required(),
+                ->requiredWithout('father_ticket_id')
+                ->validationMessages([
+                    'required_without' => 'Select a father, a mother, or both.',
+                ])
+                ->helperText('Select either parent or both. At least one parent ticket is required.'),
             Forms\Components\Repeater::make('children')
                 ->label("Children's existing tickets")
                 ->schema([
@@ -788,7 +795,7 @@ class GoshenTicketResource extends Resource
                 return $family ? static::existingFamilyChildForm($family) : [];
             })
             ->modalHeading('Add child to existing Goshen family')
-            ->modalDescription('This adds only a new child ticket to the linked family. The existing father and mother tickets, payments, QR codes, Triumphant IDs, and accommodation records are retained.')
+            ->modalDescription('This adds only a new child ticket to the linked family. Existing parent tickets, payments, QR codes, Triumphant IDs, and accommodation records are retained.')
             ->modalSubmitActionLabel('Add child ticket')
             ->action(function (Ticket $record, array $data, GoshenExistingFamilyLinkService $families): void {
                 $admin = Auth::user();

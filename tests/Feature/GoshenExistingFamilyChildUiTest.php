@@ -16,6 +16,20 @@ class GoshenExistingFamilyChildUiTest extends TestCase
         $this->assertStringContainsString('Parent tickets are retained', $source);
     }
 
+    public function test_existing_family_link_form_allows_either_parent_but_requires_one(): void
+    {
+        $source = file_get_contents(app_path('Filament/Resources/GoshenTicketResource.php'));
+        $start = strpos($source, "Select::make('father_ticket_id')");
+        $end = strpos("Forms\\Components\\Repeater::make('children')", $start);
+        $parentFields = substr($source, $start, $end - $start);
+
+        $this->assertStringContainsString("->requiredWithout('mother_ticket_id')", $parentFields);
+        $this->assertStringContainsString("->requiredWithout('father_ticket_id')", $parentFields);
+        $this->assertStringContainsString('Select either parent or both. At least one parent ticket is required.', $parentFields);
+        $this->assertStringContainsString('Select a father, a mother, or both.', $parentFields);
+        $this->assertStringNotContainsString("->required(),", $parentFields);
+    }
+
     public function test_child_forms_use_required_age_and_gender_fields_with_age_driven_rules(): void
     {
         $source = file_get_contents(app_path('Filament/Resources/GoshenTicketResource.php'));
