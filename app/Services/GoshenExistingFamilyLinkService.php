@@ -37,9 +37,9 @@ class GoshenExistingFamilyLinkService
             throw ValidationException::withMessages(['family' => 'Link a verified parent profile to this family before adding a child ticket.']);
         }
 
-        $age = app(GoshenFamilyRegistrationService::class)->childAge(data_get($data, 'child.age'));
+        app(GoshenFamilyRegistrationService::class)->childAge(data_get($data, 'child.age'));
 
-        $ticketType = $this->childTicketType($family, $data, $age);
+        $ticketType = $this->childTicketType($family, $data);
         $payment = [
             'method' => $data['payment_method'] ?? null,
             'voucher_code' => $data['voucher_code'] ?? null,
@@ -232,16 +232,9 @@ class GoshenExistingFamilyLinkService
     }
 
     /** @param array<string, mixed> $data */
-    private function childTicketType(GoshenFamily $family, array $data, int $age): EventTicketType
+    private function childTicketType(GoshenFamily $family, array $data): EventTicketType
     {
         $ticketTypeId = $data['ticket_type_id'] ?? null;
-        if ($age < 15 && ! filled($ticketTypeId)) {
-            $ticketTypeId = Ticket::query()
-                ->where('event_id', $family->event_id)
-                ->whereIn('attendee_id', $family->members->whereIn('role', ['father', 'mother'])->pluck('attendee_id')->filter())
-                ->value('ticket_type_id');
-        }
-
         $ticketType = EventTicketType::query()
             ->whereKey($ticketTypeId)
             ->where('event_id', $family->event_id)

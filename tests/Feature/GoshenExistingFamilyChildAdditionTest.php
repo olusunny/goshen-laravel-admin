@@ -29,6 +29,7 @@ class GoshenExistingFamilyChildAdditionTest extends TestCase
         [$admin, $family, $parent, $ticketType, $parentTickets] = $this->familyFixture();
 
         $ticket = app(GoshenExistingFamilyLinkService::class)->addChild($admin, $family, [
+            'ticket_type_id' => $ticketType->id,
             'child' => [
                 'first_name' => 'Hope',
                 'last_name' => 'Adeola',
@@ -101,10 +102,10 @@ class GoshenExistingFamilyChildAdditionTest extends TestCase
             $this->assertArrayHasKey('ticket_type_id', $exception->errors());
         }
 
-        $service->addChild($admin, $family, ['child' => $child]);
+        $service->addChild($admin, $family, ['ticket_type_id' => $ticketType->id, 'child' => $child]);
 
         try {
-            $service->addChild($admin, $family, ['child' => $child]);
+            $service->addChild($admin, $family, ['ticket_type_id' => $ticketType->id, 'child' => $child]);
             $this->fail('Expected duplicate-child validation.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('child', $exception->errors());
@@ -139,11 +140,51 @@ class GoshenExistingFamilyChildAdditionTest extends TestCase
             ['age' => 10, 'gender' => '', 'field' => 'child.gender'],
         ] as $invalid) {
             try {
-                $service->addChild($admin, $family, ['child' => ['first_name' => 'Invalid', 'last_name' => 'Adeola', ...$invalid]]);
+                $service->addChild($admin, $family, ['ticket_type_id' => $ticketType->id, 'child' => ['first_name' => 'Invalid', 'last_name' => 'Adeola', ...$invalid]]);
                 $this->fail('Expected child validation.');
             } catch (ValidationException $exception) {
                 $this->assertArrayHasKey($invalid['field'], $exception->errors());
             }
+        }
+    }
+
+    public function test_complimentary_child_uses_the_selected_individual_type_when_the_parent_has_a_family_ticket(): void
+    {
+        [$admin, $family, $parent, $individualType, $parentTickets] = $this->familyFixture();
+        $familyType = EventTicketType::query()->create([
+            'event_id' => $family->event_id,
+            'name' => 'Goshen Family',
+            'currency' => 'GBP',
+            'price' => 600,
+            'is_active' => true,
+        ]);
+        $parentTickets['father']->forceFill(['ticket_type_id' => $familyType->id])->save();
+
+        $ticket = app(GoshenExistingFamilyLinkService::class)->addChild($admin, $family, [
+            'ticket_type_id' => $individualType->id,
+            'child' => [
+                'first_name' => 'Joy',
+                'last_name' => 'Adeola',
+                'age' => 10,
+                'gender' => 'female',
+            ],
+        ]);
+
+        $this->assertSame($individualType->id, $ticket->ticket_type_id);
+        $this->assertSame('0.00', $ticket->booking->total);
+    }
+
+    public function test_complimentary_child_requires_an_individual_ticket_type(): void
+    {
+        [$admin, $family] = $this->familyFixture();
+
+        try {
+            app(GoshenExistingFamilyLinkService::class)->addChild($admin, $family, [
+                'child' => ['first_name' => 'Joy', 'last_name' => 'Adeola', 'age' => 10, 'gender' => 'female'],
+            ]);
+            $this->fail('Expected an individual ticket type validation error.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('ticket_type_id', $exception->errors());
         }
     }
 

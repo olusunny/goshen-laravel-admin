@@ -845,7 +845,6 @@ class GoshenTicketResource extends Resource
                                 return;
                             }
 
-                            $set('ticket_type_id', null);
                             $set('payment_method', null);
                             $set('voucher_code', null);
                             $set('issuance_reason', null);
@@ -860,6 +859,23 @@ class GoshenTicketResource extends Resource
                         ->label('Gender')
                         ->options(['male' => 'Male', 'female' => 'Female'])
                         ->native(false)
+                        ->required(),
+                    Forms\Components\Select::make('ticket_type_id')
+                        ->label('Individual ticket type')
+                        ->options(fn (): array => EventTicketType::query()
+                            ->where('event_id', $family->event_id)
+                            ->where('is_active', true)
+                            ->orderBy('name')
+                            ->get()
+                            ->reject(fn (EventTicketType $type): bool => str_contains(strtolower((string) $type->name), 'family'))
+                            ->mapWithKeys(fn (EventTicketType $type): array => [
+                                $type->id => sprintf('%s · %s %s', $type->name, strtoupper((string) $type->currency), number_format((float) $type->price, 2)),
+                            ])
+                            ->all())
+                        ->searchable()
+                        ->live()
+                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
+                        ->helperText('This sets the child ticket record. Children aged 1-14 remain complimentary.')
                         ->required(),
                     Forms\Components\TextInput::make('child.email')
                         ->label('Email')
@@ -886,23 +902,6 @@ class GoshenTicketResource extends Resource
             Section::make('Paid child ticket')
                 ->description('This child is 15 or over and needs a paid individual Goshen ticket. Parent tickets are not reissued or charged again.')
                 ->schema([
-                    Forms\Components\Select::make('ticket_type_id')
-                        ->label('Ticket type')
-                        ->options(fn (): array => EventTicketType::query()
-                            ->where('event_id', $family->event_id)
-                            ->where('is_active', true)
-                            ->orderBy('name')
-                            ->get()
-                            ->reject(fn (EventTicketType $type): bool => str_contains(strtolower((string) $type->name), 'family'))
-                            ->mapWithKeys(fn (EventTicketType $type): array => [
-                                $type->id => sprintf('%s · %s %s', $type->name, strtoupper((string) $type->currency), number_format((float) $type->price, 2)),
-                            ])
-                            ->all())
-                        ->searchable()
-                        ->live()
-                        ->afterStateUpdated(fn (Set $set): mixed => static::clearWalletAuthorization($set))
-                        ->required(fn (Get $get): bool => static::childRequiresPayment($get('child.age')))
-                        ->dehydrated(fn (Get $get): bool => static::childRequiresPayment($get('child.age'))),
                     Forms\Components\Placeholder::make('ticket_amount')
                         ->label('Ticket amount')
                         ->content(fn (Get $get): string => static::ticketAmountLabel($get('ticket_type_id'))),
