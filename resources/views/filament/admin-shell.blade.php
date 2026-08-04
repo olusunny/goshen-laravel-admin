@@ -14,6 +14,18 @@
         --goshen-admin-sidebar-search-placeholder: #657770;
         --goshen-admin-amber: #f59e0b;
         --goshen-admin-soft: #eef8f5;
+        --goshen-admin-space-1: .25rem;
+        --goshen-admin-space-2: .5rem;
+        --goshen-admin-space-3: .75rem;
+        --goshen-admin-space-4: 1rem;
+        --goshen-admin-space-5: 1.25rem;
+        --goshen-admin-space-6: 1.5rem;
+        --goshen-admin-space-8: 2rem;
+        --goshen-admin-radius-sm: .35rem;
+        --goshen-admin-radius-md: .55rem;
+        --goshen-admin-focus-ring: rgba(245, 158, 11, .85);
+        --goshen-admin-focus-offset: 2px;
+        --goshen-admin-transition-fast: 160ms cubic-bezier(.23, 1, .32, 1);
     }
 
     .dark {
@@ -29,6 +41,127 @@
         --goshen-admin-sidebar-search-border: rgba(255, 255, 255, .08);
         --goshen-admin-sidebar-search-text: #fff;
         --goshen-admin-sidebar-search-placeholder: rgba(255, 255, 255, .82);
+        --goshen-admin-focus-ring: rgba(253, 230, 138, .95);
+    }
+
+    /* Shared foundations for custom Filament pages. Apply these classes opt-in. */
+    .goshen-admin-section {
+        display: grid;
+        gap: var(--goshen-admin-space-4);
+    }
+
+    .goshen-admin-section-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--goshen-admin-space-4);
+    }
+
+    .goshen-admin-section-heading {
+        min-width: 0;
+        color: rgb(15 23 42);
+        font-size: 1.125rem;
+        font-weight: 750;
+        line-height: 1.35;
+    }
+
+    .dark .goshen-admin-section-heading {
+        color: rgb(248 250 252);
+    }
+
+    .goshen-admin-section-copy {
+        max-width: 72ch;
+        color: rgb(100 116 139);
+        font-size: .9375rem;
+        line-height: 1.55;
+    }
+
+    .dark .goshen-admin-section-copy {
+        color: rgb(203 213 225);
+    }
+
+    .goshen-admin-state {
+        display: grid;
+        justify-items: start;
+        gap: var(--goshen-admin-space-2);
+        padding: var(--goshen-admin-space-5);
+        border: 1px solid rgb(226 232 240);
+        border-radius: var(--goshen-admin-radius-md);
+        background: rgb(248 250 252);
+    }
+
+    .dark .goshen-admin-state {
+        border-color: rgba(148, 163, 184, .24);
+        background: rgba(15, 23, 42, .35);
+    }
+
+    .goshen-admin-state-title {
+        color: rgb(30 41 59);
+        font-size: 1rem;
+        font-weight: 750;
+        line-height: 1.4;
+    }
+
+    .dark .goshen-admin-state-title {
+        color: rgb(248 250 252);
+    }
+
+    .goshen-admin-state-copy {
+        color: rgb(100 116 139);
+        font-size: .9375rem;
+        line-height: 1.55;
+    }
+
+    .dark .goshen-admin-state-copy {
+        color: rgb(203 213 225);
+    }
+
+    .goshen-admin-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scrollbar-color: rgb(148 163 184) transparent;
+        scrollbar-width: thin;
+    }
+
+    .goshen-admin-table-wrap > table {
+        width: 100%;
+    }
+
+    .goshen-admin-table-wrap[data-goshen-table-min-width='compact'] > table {
+        min-width: 42rem;
+    }
+
+    .goshen-admin-table-wrap[data-goshen-table-min-width='wide'] > table {
+        min-width: 64rem;
+    }
+
+    :where(.fi-main, .fi-sidebar) :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+        outline: 2px solid var(--goshen-admin-focus-ring);
+        outline-offset: var(--goshen-admin-focus-offset);
+    }
+
+    @media (max-width: 640px) {
+        .goshen-admin-section-header {
+            align-items: stretch;
+            flex-direction: column;
+            gap: var(--goshen-admin-space-3);
+        }
+
+        .goshen-admin-state {
+            padding: var(--goshen-admin-space-4);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        :where(.fi-main, .fi-sidebar, .fi-modal, .fi-dropdown) *,
+        :where(.fi-main, .fi-sidebar, .fi-modal, .fi-dropdown) *::before,
+        :where(.fi-main, .fi-sidebar, .fi-modal, .fi-dropdown) *::after {
+            animation-duration: .01ms !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+            transition-duration: .01ms !important;
+        }
     }
 
     .fi-sidebar.fi-main-sidebar {
@@ -46,7 +179,7 @@
     }
 
     .fi-sidebar .fi-sidebar-header {
-        padding: 1.25rem 1.2rem .8rem;
+        padding: var(--goshen-admin-space-5) 1.2rem .8rem;
     }
 
     .fi-sidebar .fi-logo {
@@ -64,7 +197,7 @@
         gap: .7rem;
         margin: 0 0 1.15rem;
         padding: .82rem .95rem;
-        border-radius: .55rem;
+        border-radius: var(--goshen-admin-radius-md);
         background: var(--goshen-admin-sidebar-search-bg);
         border: 1px solid var(--goshen-admin-sidebar-search-border);
     }
@@ -130,7 +263,7 @@
         padding: .52rem .72rem;
         border-radius: .35rem;
         color: var(--goshen-admin-sidebar-text) !important;
-        transition: background .16s ease, color .16s ease;
+        transition: background var(--goshen-admin-transition-fast), color var(--goshen-admin-transition-fast);
     }
 
     .fi-sidebar .fi-sidebar-item-btn:hover,
