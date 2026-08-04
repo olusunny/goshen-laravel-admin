@@ -154,9 +154,9 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-        :where(.fi-main, .fi-sidebar, .fi-modal, .fi-dropdown) *,
-        :where(.fi-main, .fi-sidebar, .fi-modal, .fi-dropdown) *::before,
-        :where(.fi-main, .fi-sidebar, .fi-modal, .fi-dropdown) *::after {
+        :where(.fi-main, .fi-sidebar) *,
+        :where(.fi-main, .fi-sidebar) *::before,
+        :where(.fi-main, .fi-sidebar) *::after {
             animation-duration: .01ms !important;
             animation-iteration-count: 1 !important;
             scroll-behavior: auto !important;
