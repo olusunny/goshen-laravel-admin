@@ -452,6 +452,7 @@ class GoshenTicketResource extends Resource
                 'ticketType',
                 'latestEmailLog',
             ]))
+            ->stackedOnMobile()
             ->columns([
                 Tables\Columns\TextColumn::make('formatted_number')
                     ->label('Ticket')

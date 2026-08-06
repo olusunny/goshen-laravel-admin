@@ -88,31 +88,31 @@
                 <section class="pg-panel">
                     <h3 class="pg-panel-title">Test credentials</h3>
                     <div class="pg-field">
-                        <label class="pg-label">Test publishable key</label>
-                        <input class="pg-input" wire:model.defer="testPublishableKey" placeholder="pk_test_...">
+                        <label class="pg-label" for="test-publishable-key">Test publishable key</label>
+                        <input id="test-publishable-key" class="pg-input" wire:model.defer="testPublishableKey" placeholder="pk_test_...">
                     </div>
                     <div class="pg-field" style="margin-top:12px;">
-                        <label class="pg-label">Test secret key</label>
-                        <input type="password" class="pg-input" wire:model.defer="testSecretKey" placeholder="Leave blank to keep saved secret">
-                        <span class="pg-help">For security, saved secret fields clear after saving. Use the status badges to confirm they are stored.</span>
+                        <label class="pg-label" for="test-secret-key">Test secret key</label>
+                        <input id="test-secret-key" type="password" class="pg-input" wire:model.defer="testSecretKey" placeholder="Leave blank to keep saved secret" aria-describedby="test-secret-key-help">
+                        <span id="test-secret-key-help" class="pg-help">For security, saved secret fields clear after saving. Use the status badges to confirm they are stored.</span>
                     </div>
                     <div class="pg-field" style="margin-top:12px;">
-                        <label class="pg-label">Test Giving webhook signing secret</label>
+                        <label class="pg-label" for="test-giving-webhook-secret">Test Giving webhook signing secret</label>
                         <span class="pg-badge {{ str_contains($this->webhookStatus('test', 'giving'), 'saved') ? 'pg-badge-ok' : 'pg-badge-warn' }}">{{ $this->webhookStatus('test', 'giving') }}</span>
                         <code class="pg-code">{{ $this->givingWebhookEndpoint() }}</code>
-                        <input type="password" class="pg-input" wire:model.defer="testGivingWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
+                        <input id="test-giving-webhook-secret" type="password" class="pg-input" wire:model.defer="testGivingWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
                     </div>
                     <div class="pg-field" style="margin-top:12px;">
-                        <label class="pg-label">Test Goshen Retreat webhook signing secret</label>
+                        <label class="pg-label" for="test-event-webhook-secret">Test Goshen Retreat webhook signing secret</label>
                         <span class="pg-badge {{ str_contains($this->webhookStatus('test', 'event'), 'saved') ? 'pg-badge-ok' : 'pg-badge-warn' }}">{{ $this->webhookStatus('test', 'event') }}</span>
                         <code class="pg-code">{{ $this->eventWebhookEndpoint() }}</code>
-                        <input type="password" class="pg-input" wire:model.defer="testEventWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
+                        <input id="test-event-webhook-secret" type="password" class="pg-input" wire:model.defer="testEventWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
                     </div>
                     <div class="pg-field" style="margin-top:12px;">
-                        <label class="pg-label">Test Goshen Wallet webhook signing secret</label>
+                        <label class="pg-label" for="test-wallet-webhook-secret">Test Goshen Wallet webhook signing secret</label>
                         <span class="pg-badge {{ str_contains($this->webhookStatus('test', 'wallet'), 'saved') ? 'pg-badge-ok' : 'pg-badge-warn' }}">{{ $this->webhookStatus('test', 'wallet') }}</span>
                         <code class="pg-code">{{ $this->walletWebhookEndpoint() }}</code>
-                        <input type="password" class="pg-input" wire:model.defer="testWalletWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
+                        <input id="test-wallet-webhook-secret" type="password" class="pg-input" wire:model.defer="testWalletWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
                     </div>
                     <div class="pg-actions">
                         <button type="button" wire:click="resetTestCredentials" class="pg-button pg-button-danger">Reset test keys</button>
@@ -122,31 +122,31 @@
                 <section class="pg-panel">
                     <h3 class="pg-panel-title">Live credentials</h3>
                     <div class="pg-field">
-                        <label class="pg-label">Live publishable key</label>
-                        <input class="pg-input" wire:model.defer="livePublishableKey" placeholder="pk_live_...">
+                        <label class="pg-label" for="live-publishable-key">Live publishable key</label>
+                        <input id="live-publishable-key" class="pg-input" wire:model.defer="livePublishableKey" placeholder="pk_live_...">
                     </div>
                     <div class="pg-field" style="margin-top:12px;">
-                        <label class="pg-label">Live secret key</label>
-                        <input type="password" class="pg-input" wire:model.defer="liveSecretKey" placeholder="Leave blank to keep saved secret">
-                        <span class="pg-help">For security, saved secret fields clear after saving. Use the status badges to confirm they are stored.</span>
+                        <label class="pg-label" for="live-secret-key">Live secret key</label>
+                        <input id="live-secret-key" type="password" class="pg-input" wire:model.defer="liveSecretKey" placeholder="Leave blank to keep saved secret" aria-describedby="live-secret-key-help">
+                        <span id="live-secret-key-help" class="pg-help">For security, saved secret fields clear after saving. Use the status badges to confirm they are stored.</span>
                     </div>
                     <div class="pg-field" style="margin-top:12px;">
-                        <label class="pg-label">Live Giving webhook signing secret</label>
+                        <label class="pg-label" for="live-giving-webhook-secret">Live Giving webhook signing secret</label>
                         <span class="pg-badge {{ str_contains($this->webhookStatus('live', 'giving'), 'saved') ? 'pg-badge-ok' : 'pg-badge-warn' }}">{{ $this->webhookStatus('live', 'giving') }}</span>
                         <code class="pg-code">{{ $this->givingWebhookEndpoint() }}</code>
-                        <input type="password" class="pg-input" wire:model.defer="liveGivingWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
+                        <input id="live-giving-webhook-secret" type="password" class="pg-input" wire:model.defer="liveGivingWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
                     </div>
                     <div class="pg-field" style="margin-top:12px;">
-                        <label class="pg-label">Live Goshen Retreat webhook signing secret</label>
+                        <label class="pg-label" for="live-event-webhook-secret">Live Goshen Retreat webhook signing secret</label>
                         <span class="pg-badge {{ str_contains($this->webhookStatus('live', 'event'), 'saved') ? 'pg-badge-ok' : 'pg-badge-warn' }}">{{ $this->webhookStatus('live', 'event') }}</span>
                         <code class="pg-code">{{ $this->eventWebhookEndpoint() }}</code>
-                        <input type="password" class="pg-input" wire:model.defer="liveEventWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
+                        <input id="live-event-webhook-secret" type="password" class="pg-input" wire:model.defer="liveEventWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
                     </div>
                     <div class="pg-field" style="margin-top:12px;">
-                        <label class="pg-label">Live Goshen Wallet webhook signing secret</label>
+                        <label class="pg-label" for="live-wallet-webhook-secret">Live Goshen Wallet webhook signing secret</label>
                         <span class="pg-badge {{ str_contains($this->webhookStatus('live', 'wallet'), 'saved') ? 'pg-badge-ok' : 'pg-badge-warn' }}">{{ $this->webhookStatus('live', 'wallet') }}</span>
                         <code class="pg-code">{{ $this->walletWebhookEndpoint() }}</code>
-                        <input type="password" class="pg-input" wire:model.defer="liveWalletWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
+                        <input id="live-wallet-webhook-secret" type="password" class="pg-input" wire:model.defer="liveWalletWebhookSecret" placeholder="whsec_..." style="margin-top:10px;">
                     </div>
                     <div class="pg-actions">
                         <button type="button" wire:click="resetLiveCredentials" class="pg-button pg-button-danger">Reset live keys</button>
@@ -158,32 +158,32 @@
                 <h3 class="pg-panel-title">Checkout return URLs</h3>
                 <div class="pg-grid">
                     <div class="pg-field">
-                        <label class="pg-label">Giving success URL</label>
-                        <input class="pg-input" wire:model.defer="givingSuccessUrl">
+                        <label class="pg-label" for="giving-success-url">Giving success URL</label>
+                        <input id="giving-success-url" class="pg-input" wire:model.defer="givingSuccessUrl">
                     </div>
                     <div class="pg-field">
-                        <label class="pg-label">Giving cancel URL</label>
-                        <input class="pg-input" wire:model.defer="givingCancelUrl">
+                        <label class="pg-label" for="giving-cancel-url">Giving cancel URL</label>
+                        <input id="giving-cancel-url" class="pg-input" wire:model.defer="givingCancelUrl">
                     </div>
                     <div class="pg-field">
-                        <label class="pg-label">Goshen event success URL</label>
-                        <input class="pg-input" wire:model.defer="eventSuccessUrl">
+                        <label class="pg-label" for="event-success-url">Goshen event success URL</label>
+                        <input id="event-success-url" class="pg-input" wire:model.defer="eventSuccessUrl">
                     </div>
                     <div class="pg-field">
-                        <label class="pg-label">Goshen event cancel URL</label>
-                        <input class="pg-input" wire:model.defer="eventCancelUrl">
+                        <label class="pg-label" for="event-cancel-url">Goshen event cancel URL</label>
+                        <input id="event-cancel-url" class="pg-input" wire:model.defer="eventCancelUrl">
                     </div>
                     <div class="pg-field">
-                        <label class="pg-label">Goshen wallet success URL</label>
-                        <input class="pg-input" wire:model.defer="walletSuccessUrl">
+                        <label class="pg-label" for="wallet-success-url">Goshen wallet success URL</label>
+                        <input id="wallet-success-url" class="pg-input" wire:model.defer="walletSuccessUrl">
                     </div>
                     <div class="pg-field">
-                        <label class="pg-label">Goshen wallet cancel URL</label>
-                        <input class="pg-input" wire:model.defer="walletCancelUrl">
+                        <label class="pg-label" for="wallet-cancel-url">Goshen wallet cancel URL</label>
+                        <input id="wallet-cancel-url" class="pg-input" wire:model.defer="walletCancelUrl">
                     </div>
                     <div class="pg-field">
-                        <label class="pg-label">Stripe API version</label>
-                        <input class="pg-input" wire:model.defer="apiVersion">
+                        <label class="pg-label" for="stripe-api-version">Stripe API version</label>
+                        <input id="stripe-api-version" class="pg-input" wire:model.defer="apiVersion">
                     </div>
                 </div>
             </section>

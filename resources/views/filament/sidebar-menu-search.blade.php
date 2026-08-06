@@ -7,4 +7,5 @@
         data-goshen-menu-search
         aria-label="Search menu"
     >
+    <p class="fi-sr-only" role="status" aria-live="polite" data-goshen-menu-search-status></p>
 </div>

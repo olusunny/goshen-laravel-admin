@@ -7,7 +7,7 @@
         window.goshenAdminNavigationEnhancerLoaded = true
 
         const collapseVersionKey = 'goshenSidebarCollapsedDefaults:v1'
-        const collapsedGroupsKey = 'collapsedGroups'
+        const collapsedGroupsKey = 'goshenSidebarCollapsedGroups:v1'
 
         const normalize = (value) => (value || '')
             .toString()
@@ -16,6 +16,20 @@
             .trim()
 
         const groups = () => Array.from(document.querySelectorAll('.fi-sidebar-group[data-group-label]'))
+
+        const updateSearchStatus = (query, visibleItems) => {
+            const status = document.querySelector('[data-goshen-menu-search-status]')
+
+            if (!status) {
+                return
+            }
+
+            status.textContent = query.length === 0
+                ? ''
+                : visibleItems === 0
+                    ? 'No matching menu items.'
+                    : `${visibleItems} menu item${visibleItems === 1 ? '' : 's'} shown.`
+        }
 
         const collapseDefaults = () => {
             const allGroups = groups()
@@ -46,6 +60,7 @@
             const input = document.querySelector('[data-goshen-menu-search]')
             const sidebar = document.querySelector('.fi-sidebar')
             const query = normalize(input?.value)
+            let visibleItems = 0
 
             sidebar?.classList.toggle('goshen-searching', query.length > 0)
 
@@ -61,6 +76,7 @@
 
                     if (itemMatches && query.length > 0) {
                         groupMatches = true
+                        visibleItems += 1
                     }
                 })
 
@@ -79,15 +95,22 @@
                     list.style.removeProperty('display')
                 }
             })
+
+            updateSearchStatus(query, visibleItems)
         }
 
         const bind = () => {
             collapseDefaults()
             filterMenu()
 
-            document
-                .querySelector('[data-goshen-menu-search]')
-                ?.addEventListener('input', filterMenu)
+            const input = document.querySelector('[data-goshen-menu-search]')
+
+            if (!input || input.dataset.goshenMenuSearchBound === 'true') {
+                return
+            }
+
+            input.dataset.goshenMenuSearchBound = 'true'
+            input.addEventListener('input', filterMenu)
         }
 
         document.addEventListener('DOMContentLoaded', bind)

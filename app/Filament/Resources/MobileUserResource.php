@@ -164,6 +164,7 @@ class MobileUserResource extends Resource
         return $table
             ->heading('Registered users')
             ->description(fn (): string => self::registeredUsersTableSummary())
+            ->stackedOnMobile()
             ->defaultSort(fn (Builder $query, string $direction): Builder => self::applyTriumphantIdTableSort($query, $direction))
             ->defaultSortOptionLabel('Triumphant ID')
             ->columns([

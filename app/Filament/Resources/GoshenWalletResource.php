@@ -95,6 +95,7 @@ class GoshenWalletResource extends Resource
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('user'))
+            ->stackedOnMobile()
             ->columns([
                 Tables\Columns\TextColumn::make('user.name')->label('User')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('user.email')->label('Email')->searchable()->copyable(),

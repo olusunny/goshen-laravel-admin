@@ -215,6 +215,7 @@ class GoshenBookingResource extends Resource
                 'attendees.ticket',
                 'attendees.ticketType',
             ])->withCount(['attendees', 'tickets']))
+            ->stackedOnMobile()
             ->columns(array_merge([
                 Tables\Columns\TextColumn::make('public_id')
                     ->label('Reference')
@@ -609,27 +610,27 @@ class GoshenBookingResource extends Resource
 
                 $columns = array_chunk($rows, (int) ceil(count($rows) / 2), true);
                 $details = collect($columns)
-                    ->map(fn (array $column): string => '<dl style="display: grid; gap: 12px; margin: 0;">'
+                    ->map(fn (array $column): string => '<dl class="goshen-admin-attendee-column">'
                         .collect($column)
-                            ->map(fn (string $value, string $label): string => '<div style="display: grid; grid-template-columns: minmax(104px, 42%) minmax(0, 58%); gap: 12px; align-items: start; border-bottom: 1px solid rgba(148, 163, 184, 0.22); padding-bottom: 12px;">'
-                                .'<dt style="font-size: 13px; font-weight: 700; line-height: 1.35; opacity: 0.68;">'.e($label).'</dt>'
-                                .'<dd style="font-size: 14px; font-weight: 700; line-height: 1.35; margin: 0; overflow-wrap: anywhere; text-align: right;">'.e($value).'</dd>'
+                            ->map(fn (string $value, string $label): string => '<div class="goshen-admin-attendee-row">'
+                                .'<dt>'.e($label).'</dt>'
+                                .'<dd>'.e($value).'</dd>'
                                 .'</div>')
                             ->implode('')
                         .'</dl>')
                     ->implode('');
 
-                return '<article style="border: 1px solid rgba(148, 163, 184, 0.26); border-radius: 18px; padding: 18px; background: rgba(255, 255, 255, 0.035); box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);">'
-                    .'<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">'
-                    .'<span style="display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border-radius: 999px; background: #f59e0b; color: #111827; font-size: 13px; font-weight: 900;">'.e((string) ($index + 1)).'</span>'
-                    .'<h4 style="font-size: 16px; font-weight: 800; line-height: 1.3; margin: 0;">'.e($name).'</h4>'
+                return '<article class="goshen-admin-attendee-card">'
+                    .'<div class="goshen-admin-attendee-heading">'
+                    .'<span class="goshen-admin-attendee-index">'.e((string) ($index + 1)).'</span>'
+                    .'<h4 class="goshen-admin-attendee-name">'.e($name).'</h4>'
                     .'</div>'
-                    .'<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px;">'.$details.'</div>'
+                    .'<div class="goshen-admin-attendee-details">'.$details.'</div>'
                     .'</article>';
             })
             ->implode('');
 
-        return new HtmlString('<div style="display: grid; gap: 16px;">'.$cards.'</div>');
+        return new HtmlString('<div class="goshen-admin-attendee-list">'.$cards.'</div>');
     }
 
     public static function getPages(): array
