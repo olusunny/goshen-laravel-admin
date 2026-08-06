@@ -270,6 +270,7 @@ printf '%s\n' "$commit" > "$release/.codex_deploy_revision"
 
   "$php_bin" artisan migrate --force --no-interaction
   "$php_bin" artisan optimize:clear --no-interaction
+  "$php_bin" artisan addons:refresh-runtime-cache --no-interaction
   "$php_bin" artisan config:cache --no-interaction
   "$php_bin" artisan route:cache --no-interaction
   "$php_bin" artisan view:cache --no-interaction

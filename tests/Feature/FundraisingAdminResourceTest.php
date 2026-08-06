@@ -115,7 +115,7 @@ class FundraisingAdminResourceTest extends TestCase
                 'namespace' => 'Sunny\\Fundraising\\',
                 'autoload_psr4' => ['Sunny\\Fundraising\\' => 'src/'],
             ],
-            'install_path' => $installPath,
+            'install_path' => base_path('releases/previous/addons/sunny.fundraising'),
             'signature_verified' => true,
         ]);
 
@@ -136,6 +136,22 @@ class FundraisingAdminResourceTest extends TestCase
         $this->assertSame('sunny.fundraising', $discoveries[0]['package_key']);
         $this->assertSame(realpath($resourcePath), $discoveries[0]['path']);
         $this->assertSame('Sunny\\Fundraising\\Filament\\Resources', $discoveries[0]['namespace']);
+
+        $this->artisan('addons:refresh-runtime-cache')->assertSuccessful();
+        $this->assertSame(realpath($installPath), Addon::query()->where('package_key', 'sunny.fundraising')->value('install_path'));
+
+        Addon::query()->where('package_key', 'sunny.fundraising')->update([
+            'install_path' => base_path('releases/previous/addons/sunny.fundraising'),
+        ]);
+        File::delete($cachePath);
+
+        $this->assertCount(1, (new AddonRuntimeLoader)->filamentResourceDiscoveries());
+
+        File::put($cachePath, '{"addons":[]}');
+        $this->assertCount(1, (new AddonRuntimeLoader)->filamentResourceDiscoveries());
+
+        File::put($cachePath, '{invalid');
+        $this->assertCount(1, (new AddonRuntimeLoader)->filamentResourceDiscoveries());
 
         File::deleteDirectory($installRoot);
     }

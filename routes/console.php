@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Addons\AddonRuntimeLoader;
 use App\Services\AutomaticNotificationService;
 use App\Services\CronJobMonitor;
 use Illuminate\Foundation\Inspiring;
@@ -9,6 +10,11 @@ use Illuminate\Support\Facades\Schedule;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Artisan::command('addons:refresh-runtime-cache', function () {
+    app(AddonRuntimeLoader::class)->refreshActiveAddonCache();
+    $this->info('Active add-on runtime cache refreshed.');
+})->purpose('Refresh active add-on paths and runtime discovery cache');
 
 $cronMonitor = app(CronJobMonitor::class);
 

@@ -44,15 +44,25 @@ class AddonRuntimeLoader
             ->where('status', Addon::STATUS_ACTIVE)
             ->orderBy('package_key')
             ->get()
-            ->map(fn (Addon $addon): array => [
-                'package_key' => $addon->package_key,
-                'installed_version' => $addon->installed_version,
-                'provider_class' => $addon->provider_class,
-                'install_path' => $addon->install_path,
-                'checksum' => $addon->checksum,
-                'signature_verified' => (bool) $addon->signature_verified,
-                'manifest' => $addon->manifest,
-            ])
+            ->map(function (Addon $addon): ?array {
+                $installPath = $this->resolveInstallPath((string) $addon->package_key, (string) $addon->install_path);
+                if ($installPath === null) {
+                    return null;
+                }
+
+                $this->repairInstallPath($addon, $installPath);
+
+                return [
+                    'package_key' => $addon->package_key,
+                    'installed_version' => $addon->installed_version,
+                    'provider_class' => $addon->provider_class,
+                    'install_path' => $installPath,
+                    'checksum' => $addon->checksum,
+                    'signature_verified' => (bool) $addon->signature_verified,
+                    'manifest' => $addon->manifest,
+                ];
+            })
+            ->filter()
             ->values()
             ->all();
 
@@ -99,7 +109,7 @@ class AddonRuntimeLoader
      */
     public function registerAddon(array $manifest, string $installPath): void
     {
-        $installPath = $this->safeInstallPath($installPath) ?? '';
+        $installPath = $this->resolveInstallPath((string) ($manifest['package_key'] ?? ''), $installPath) ?? '';
         if ($installPath === '') {
             return;
         }
@@ -172,18 +182,18 @@ class AddonRuntimeLoader
     {
         $path = $this->cachePath();
         if (! is_file($path)) {
-            return [];
+            return $this->activeAddonsFromDatabase();
         }
 
         try {
             $payload = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
         } catch (Throwable) {
-            return [];
+            return $this->activeAddonsFromDatabase();
         }
 
         $addons = is_array($payload) ? ($payload['addons'] ?? []) : [];
-        if (! is_array($addons)) {
-            return [];
+        if (! is_array($addons) || $addons === []) {
+            return $this->activeAddonsFromDatabase();
         }
 
         $trusted = [];
@@ -195,6 +205,27 @@ class AddonRuntimeLoader
         }
 
         return $trusted;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function activeAddonsFromDatabase(): array
+    {
+        try {
+            $addons = Addon::query()
+                ->where('status', Addon::STATUS_ACTIVE)
+                ->orderBy('package_key')
+                ->get();
+        } catch (Throwable) {
+            return [];
+        }
+
+        return $addons
+            ->map(fn (Addon $addon): ?array => $this->trustedAddon($addon))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     /**
@@ -244,11 +275,20 @@ class AddonRuntimeLoader
             return null;
         }
 
+        return $this->trustedAddon($addon);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function trustedAddon(Addon $addon): ?array
+    {
+
         if ((bool) config('addons.signatures.required', false) && ! $addon->signature_verified) {
             return null;
         }
 
-        $installPath = $this->safeInstallPath((string) $addon->install_path);
+        $installPath = $this->resolveInstallPath((string) $addon->package_key, (string) $addon->install_path);
         $manifest = is_array($addon->manifest) ? $addon->manifest : [];
         if ($installPath === null || $manifest === []) {
             return null;
@@ -263,6 +303,35 @@ class AddonRuntimeLoader
             'signature_verified' => (bool) $addon->signature_verified,
             'manifest' => $manifest,
         ];
+    }
+
+    public function resolveInstallPath(string $packageKey, ?string $recordedPath = null): ?string
+    {
+        if ($packageKey === ''
+            || str_contains($packageKey, "\0")
+            || str_contains($packageKey, '/')
+            || str_contains($packageKey, '\\')) {
+            return null;
+        }
+
+        $root = base_path(trim((string) config('addons.install_path', 'addons'), '/\\'));
+        $canonicalPath = $this->safeInstallPath($root.DIRECTORY_SEPARATOR.$packageKey);
+
+        return $canonicalPath ?? $this->safeInstallPath((string) $recordedPath);
+    }
+
+    private function repairInstallPath(Addon $addon, string $installPath): void
+    {
+        if ($addon->install_path === $installPath) {
+            return;
+        }
+
+        try {
+            Addon::query()->whereKey($addon->getKey())->update(['install_path' => $installPath]);
+            $addon->install_path = $installPath;
+        } catch (Throwable) {
+            // Loading from the verified shared path is more important than metadata repair.
+        }
     }
 
     private function safeInstallPath(string $path): ?string
