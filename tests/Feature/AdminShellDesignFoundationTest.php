@@ -91,6 +91,31 @@ class AdminShellDesignFoundationTest extends TestCase
         $this->assertStringContainsString('updateSearchStatus', $behavior);
     }
 
+    public function test_light_admin_shell_uses_a_distinct_accessible_sidebar_and_topbar_palette(): void
+    {
+        $shell = file_get_contents(resource_path('views/filament/admin-shell.blade.php'));
+
+        $this->assertStringContainsString('--goshen-admin-sidebar: #143c33;', $shell);
+        $this->assertStringContainsString('--goshen-admin-topbar: #fffaf0;', $shell);
+        $this->assertStringContainsString('--goshen-admin-sidebar-active: #f6b91a;', $shell);
+        $this->assertStringContainsString('html:not(.dark) .fi-topbar', $shell);
+        $this->assertStringContainsString('html:not(.dark) .fi-sidebar .fi-sidebar-header-ctn', $shell);
+        $this->assertStringContainsString('.fi-sidebar-item-btn:focus-visible', $shell);
+        $this->assertStringContainsString('background: var(--goshen-admin-sidebar-hover) !important;', $shell);
+        $this->assertStringContainsString('@media (min-width: 1024px) and (pointer: coarse)', $shell);
+        $this->assertStringContainsString('@media (forced-colors: active)', $shell);
+        $this->assertStringContainsString('.dark {', $shell);
+        $this->assertStringContainsString('--goshen-admin-sidebar: #20342e;', $shell);
+        $this->assertStringNotContainsString('html:not(.dark) .fi-topbar > nav', $shell);
+        $this->assertStringNotContainsString('linear-gradient', $shell);
+
+        $this->assertGreaterThan(
+            strpos($shell, '@media (min-width: 1024px) {'),
+            strpos($shell, '@media (min-width: 1024px) and (pointer: coarse) {'),
+            'The coarse-pointer override must come after the compact desktop navigation rules.',
+        );
+    }
+
     public function test_attendee_summary_uses_reflowable_shared_classes(): void
     {
         $booking = file_get_contents(app_path('Filament/Resources/GoshenBookingResource.php'));

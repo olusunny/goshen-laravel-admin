@@ -1,17 +1,21 @@
 <style>
     :root {
-        --goshen-admin-sidebar: #f7fbf9;
-        --goshen-admin-sidebar-deep: #eef6f2;
-        --goshen-admin-sidebar-active: #dff2eb;
-        --goshen-admin-sidebar-active-text: #0f513c;
-        --goshen-admin-sidebar-hover: rgba(15, 81, 60, .08);
-        --goshen-admin-sidebar-line: rgba(15, 81, 60, .16);
-        --goshen-admin-sidebar-muted: #5f716b;
-        --goshen-admin-sidebar-text: #18342b;
-        --goshen-admin-sidebar-search-bg: rgba(255, 255, 255, .84);
-        --goshen-admin-sidebar-search-border: rgba(15, 81, 60, .18);
-        --goshen-admin-sidebar-search-text: #18342b;
-        --goshen-admin-sidebar-search-placeholder: #657770;
+        --goshen-admin-sidebar: #143c33;
+        --goshen-admin-sidebar-deep: #0f3029;
+        --goshen-admin-sidebar-active: #f6b91a;
+        --goshen-admin-sidebar-active-text: #222b27;
+        --goshen-admin-sidebar-hover: rgba(255, 255, 255, .09);
+        --goshen-admin-sidebar-line: rgba(230, 245, 239, .16);
+        --goshen-admin-sidebar-muted: #aec8bf;
+        --goshen-admin-sidebar-text: #f6fbf9;
+        --goshen-admin-sidebar-search-bg: rgba(255, 255, 255, .08);
+        --goshen-admin-sidebar-search-border: rgba(255, 255, 255, .16);
+        --goshen-admin-sidebar-search-text: #ffffff;
+        --goshen-admin-sidebar-search-placeholder: #c3d8d1;
+        --goshen-admin-topbar: #fffaf0;
+        --goshen-admin-topbar-border: rgba(146, 94, 20, .16);
+        --goshen-admin-topbar-control-hover: rgba(246, 185, 26, .2);
+        --goshen-admin-topbar-icon: #29483f;
         --goshen-admin-amber: #f59e0b;
         --goshen-admin-soft: #eef8f5;
         --goshen-admin-canvas: #f6f8f7;
@@ -768,6 +772,30 @@
         border-inline-end: 1px solid var(--goshen-admin-sidebar-line);
     }
 
+    html:not(.dark) .fi-topbar {
+        border-bottom: 1px solid var(--goshen-admin-topbar-border);
+        background: var(--goshen-admin-topbar) !important;
+        box-shadow: 0 1px 2px rgba(80, 56, 20, .04), 0 4px 16px rgba(80, 56, 20, .035);
+    }
+
+    html:not(.dark) .fi-topbar .fi-icon-btn {
+        border-radius: var(--goshen-admin-radius-sm);
+        color: var(--goshen-admin-topbar-icon);
+        transition: background-color var(--goshen-admin-transition-fast), color var(--goshen-admin-transition-fast);
+    }
+
+    @media (hover: hover) {
+        html:not(.dark) .fi-topbar .fi-icon-btn:hover {
+            background: var(--goshen-admin-topbar-control-hover);
+            color: #6d4b00;
+        }
+    }
+
+    html:not(.dark) .fi-sidebar .fi-sidebar-header-ctn {
+        border-bottom: 1px solid var(--goshen-admin-sidebar-line);
+        background: var(--goshen-admin-sidebar-deep) !important;
+    }
+
     .fi-sidebar .fi-sidebar-header-ctn,
     .fi-sidebar .fi-sidebar-footer,
     .fi-sidebar .fi-sidebar-nav {
@@ -843,7 +871,7 @@
         color: var(--goshen-admin-sidebar-muted);
         font-size: .72rem;
         font-weight: 900;
-        letter-spacing: .12em;
+        letter-spacing: 0;
         text-transform: uppercase;
     }
 
@@ -866,10 +894,27 @@
         transition: background var(--goshen-admin-transition-fast), color var(--goshen-admin-transition-fast);
     }
 
-    .fi-sidebar .fi-sidebar-item-btn:hover,
+    .fi-sidebar .fi-sidebar-item-btn:hover {
+        background: var(--goshen-admin-sidebar-hover);
+        color: var(--goshen-admin-sidebar-text) !important;
+    }
+
     .fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn,
     .fi-sidebar .fi-sidebar-item-has-active-child-items > .fi-sidebar-item-btn {
         background: var(--goshen-admin-sidebar-active);
+        color: var(--goshen-admin-sidebar-active-text) !important;
+    }
+
+    .fi-sidebar .fi-sidebar-item-btn:focus-visible {
+        background: var(--goshen-admin-sidebar-hover) !important;
+        color: var(--goshen-admin-sidebar-text) !important;
+        outline-color: var(--goshen-admin-focus-ring);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--goshen-admin-focus-ring) 24%, transparent);
+    }
+
+    .fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn:focus-visible,
+    .fi-sidebar .fi-sidebar-item-has-active-child-items > .fi-sidebar-item-btn:focus-visible {
+        background: var(--goshen-admin-sidebar-active) !important;
         color: var(--goshen-admin-sidebar-active-text) !important;
     }
 
@@ -935,7 +980,7 @@
 
         .fi-sidebar .fi-sidebar-group-label {
             font-size: .7rem;
-            letter-spacing: .08em;
+            letter-spacing: 0;
         }
 
         .fi-sidebar .fi-sidebar-item-btn {
@@ -947,6 +992,12 @@
         .fi-sidebar .fi-sidebar-item-label {
             font-size: .88rem;
             font-weight: 720;
+        }
+    }
+
+    @media (min-width: 1024px) and (pointer: coarse) {
+        .fi-sidebar .fi-sidebar-item-btn {
+            min-height: 2.75rem;
         }
     }
 
@@ -1018,6 +1069,23 @@
         .goshen-settings-tabs.fi-sc-tabs.fi-vertical > .fi-tabs {
             padding-inline-end: 0;
             border-inline-end: 0;
+        }
+    }
+
+    @media (forced-colors: active) {
+        html:not(.dark) .fi-topbar,
+        html:not(.dark) .fi-sidebar .fi-sidebar-header-ctn,
+        .fi-sidebar.fi-main-sidebar {
+            border-color: CanvasText;
+            background: Canvas !important;
+            box-shadow: none;
+            color: CanvasText;
+        }
+
+        .fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn,
+        .fi-sidebar .fi-sidebar-item-has-active-child-items > .fi-sidebar-item-btn {
+            background: Highlight;
+            color: HighlightText !important;
         }
     }
 </style>
