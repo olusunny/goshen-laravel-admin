@@ -30,6 +30,11 @@ class AdminShellDesignFoundationTest extends TestCase
             'GoshenBookingResource.php',
             'GoshenTicketResource.php',
             'GoshenWalletResource.php',
+            'GoshenWalletWithdrawalRequestResource.php',
+            'GoshenWalletLedgerEntryResource.php',
+            'GoshenWalletSavingsPlanResource.php',
+            'InboxMessageResource.php',
+            'AccommodationPaymentResource.php',
         ] as $resource) {
             $source = file_get_contents(app_path('Filament/Resources/'.$resource));
 
@@ -65,5 +70,59 @@ class AdminShellDesignFoundationTest extends TestCase
         $this->assertStringContainsString('id="test-publishable-key"', $page);
         $this->assertStringContainsString('for="live-publishable-key"', $page);
         $this->assertStringContainsString('id="live-publishable-key"', $page);
+    }
+
+    public function test_custom_dashboard_widgets_use_the_shared_operational_design_system(): void
+    {
+        $shell = file_get_contents(resource_path('views/filament/admin-shell.blade.php'));
+
+        foreach ([
+            'active-mobile-users-by-country.blade.php',
+            'goshen-experience-stats.blade.php',
+            'location-insights.blade.php',
+        ] as $view) {
+            $source = file_get_contents(resource_path('views/filament/widgets/'.$view));
+
+            $this->assertStringContainsString('goshen-dashboard-grid', $source, $view.' should use the shared dashboard layout.');
+            $this->assertStringContainsString('goshen-dashboard-empty', $source, $view.' should use the shared empty state.');
+            $this->assertStringNotContainsString('<style>', $source, $view.' should not carry widget-specific style overrides.');
+            $this->assertStringNotContainsString('linear-gradient', $source, $view.' should not use decorative gradients.');
+        }
+
+        $this->assertStringContainsString('.goshen-dashboard-grid', $shell);
+        $this->assertStringContainsString('.goshen-dashboard-empty', $shell);
+        $this->assertStringContainsString('.goshen-dashboard-progress', $shell);
+    }
+
+    public function test_location_dashboard_queries_total_visits_once_per_render(): void
+    {
+        $source = file_get_contents(resource_path('views/filament/widgets/location-insights.blade.php'));
+
+        $this->assertSame(1, substr_count($source, 'getTotalVisits()'));
+    }
+
+    public function test_custom_admin_controls_expose_focus_and_state_to_assistive_technology(): void
+    {
+        $payment = file_get_contents(resource_path('views/filament/pages/payment-gateways.blade.php'));
+        $menu = file_get_contents(resource_path('views/filament/pages/admin-menu-settings.blade.php'));
+        $settings = file_get_contents(resource_path('views/filament/pages/app-settings.blade.php'));
+        $backups = file_get_contents(resource_path('views/filament/pages/cloud-backups.blade.php'));
+        $sidebar = file_get_contents(resource_path('views/filament/sidebar-navigation-behavior.blade.php'));
+
+        $this->assertStringContainsString('.pg-mode input:focus-visible + .pg-mode-card', $payment);
+        $this->assertStringContainsString('aria-label="Visible for', $menu);
+        $this->assertStringContainsString(':aria-pressed=', $settings);
+        $this->assertStringContainsString('role="progressbar"', $backups);
+        $this->assertStringContainsString('aria-valuenow=', $backups);
+        $this->assertStringContainsString('safeStorage', $sidebar);
+    }
+
+    public function test_ticket_email_filter_matches_the_latest_email_status_shown_in_the_table(): void
+    {
+        $source = file_get_contents(app_path('Filament/Resources/GoshenTicketResource.php'));
+
+        $this->assertStringContainsString("whereHas('latestEmailLog'", $source);
+        $this->assertStringContainsString("whereDoesntHave('latestEmailLog'", $source);
+        $this->assertStringNotContainsString("whereHas('emailLogs'", $source);
     }
 }

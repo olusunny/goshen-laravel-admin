@@ -2,11 +2,12 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\GoshenBookingResource;
 use Carbon\CarbonImmutable;
+use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
-use Filament\Widgets\Widget;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Models\Booking;
@@ -20,7 +21,12 @@ class GoshenBookingStatsWidget extends Widget
 
     protected int|string|array $columnSpan = 'full';
 
-    protected static ?int $sort = -1;
+    protected static ?int $sort = -80;
+
+    public static function canView(): bool
+    {
+        return GoshenBookingResource::canViewAny();
+    }
 
     public function getOverview(): array
     {

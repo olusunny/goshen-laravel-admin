@@ -6,12 +6,12 @@ use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\GoshenTicketResource\Pages;
 use App\Jobs\SendGoshenTicketEmail;
 use App\Models\GoshenAccommodationAllocation;
-use App\Models\MobileUser;
 use App\Models\GoshenFamily;
 use App\Models\GoshenFamilyMember;
+use App\Models\MobileUser;
 use App\Models\User;
-use App\Services\GoshenExistingFamilyLinkService;
 use App\Services\GoshenBookingExportService;
+use App\Services\GoshenExistingFamilyLinkService;
 use App\Support\AdminPermissions;
 use BackedEnum;
 use chillerlan\QRCode\Output\QROutputInterface;
@@ -591,10 +591,10 @@ class GoshenTicketResource extends Resource
                         }
 
                         if ($value === 'not_sent') {
-                            return $query->whereDoesntHave('emailLogs');
+                            return $query->whereDoesntHave('latestEmailLog');
                         }
 
-                        return $query->whereHas('emailLogs', fn (Builder $emailQuery): Builder => $emailQuery->where('status', $value));
+                        return $query->whereHas('latestEmailLog', fn (Builder $emailQuery): Builder => $emailQuery->where('status', $value));
                     })
                     ->native(false),
             ])

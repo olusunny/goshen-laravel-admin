@@ -2,6 +2,8 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\GoshenExperienceResponseResource;
+use App\Filament\Resources\GoshenExperienceSurveyResource;
 use App\Models\GoshenExperienceResponse;
 use App\Models\GoshenExperienceSurvey;
 use App\Services\GoshenExperienceEligibility;
@@ -14,7 +16,13 @@ class GoshenExperienceStatsWidget extends Widget
 
     protected int|string|array $columnSpan = 'full';
 
-    protected static ?int $sort = -2;
+    protected static ?int $sort = -60;
+
+    public static function canView(): bool
+    {
+        return GoshenExperienceSurveyResource::canViewAny()
+            && GoshenExperienceResponseResource::canViewAny();
+    }
 
     public function getOverview(): array
     {

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\MobileUserResource;
 use App\Models\MobileUser;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Collection;
@@ -13,7 +14,12 @@ class ActiveMobileUsersByCountryWidget extends Widget
 
     protected int|string|array $columnSpan = 'full';
 
-    protected static ?int $sort = -3;
+    protected static ?int $sort = -70;
+
+    public static function canView(): bool
+    {
+        return MobileUserResource::canViewAny();
+    }
 
     public function getCountries(): Collection
     {
@@ -34,8 +40,8 @@ class ActiveMobileUsersByCountryWidget extends Widget
             ->select([
                 DB::raw("COALESCE(NULLIF(country_of_residence, ''), 'Unknown') as country"),
                 DB::raw('COUNT(*) as total_users'),
-                DB::raw("SUM(CASE WHEN last_seen_at >= '{$activeSince->toDateTimeString()}' THEN 1 ELSE 0 END) as active_users"),
             ])
+            ->selectRaw('SUM(CASE WHEN last_seen_at >= ? THEN 1 ELSE 0 END) as active_users', [$activeSince->toDateTimeString()])
             ->where('is_deleted', false)
             ->groupBy('country')
             ->orderByDesc('active_users')

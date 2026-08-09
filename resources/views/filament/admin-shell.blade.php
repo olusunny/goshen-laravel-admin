@@ -345,6 +345,195 @@
         text-transform: uppercase;
     }
 
+    .goshen-dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--goshen-admin-space-4);
+    }
+
+    .goshen-dashboard-grid + .goshen-dashboard-grid {
+        margin-top: var(--goshen-admin-space-5);
+    }
+
+    .goshen-dashboard-grid--2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .goshen-dashboard-grid--feature {
+        grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, .825fr));
+    }
+
+    .goshen-dashboard-metric,
+    .goshen-dashboard-panel {
+        min-width: 0;
+        border: 1px solid var(--goshen-admin-border);
+        border-radius: var(--goshen-admin-radius-md);
+        background: var(--goshen-admin-surface);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    }
+
+    .goshen-dashboard-metric {
+        min-height: 8.25rem;
+        padding: var(--goshen-admin-space-5);
+    }
+
+    .goshen-dashboard-metric--primary {
+        border-inline-start: .25rem solid var(--goshen-admin-amber);
+    }
+
+    .goshen-dashboard-label {
+        color: var(--goshen-admin-text-subtle);
+        font-size: .75rem;
+        font-weight: 750;
+        letter-spacing: .04em;
+        line-height: 1.35;
+        text-transform: uppercase;
+    }
+
+    .goshen-dashboard-value {
+        margin-top: var(--goshen-admin-space-2);
+        color: var(--goshen-admin-text);
+        font-size: 2rem;
+        font-variant-numeric: tabular-nums;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+    .goshen-dashboard-note,
+    .goshen-dashboard-meta {
+        color: var(--goshen-admin-text-muted);
+        font-size: .8125rem;
+        line-height: 1.5;
+        text-wrap: pretty;
+    }
+
+    .goshen-dashboard-note {
+        margin-top: var(--goshen-admin-space-2);
+    }
+
+    .goshen-dashboard-panel {
+        padding: var(--goshen-admin-space-5);
+    }
+
+    .goshen-dashboard-panel-title {
+        margin: 0;
+        color: var(--goshen-admin-text);
+        font-size: 1rem;
+        font-weight: 750;
+        line-height: 1.35;
+        text-wrap: balance;
+    }
+
+    .goshen-dashboard-panel-heading,
+    .goshen-dashboard-row-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--goshen-admin-space-3);
+    }
+
+    .goshen-dashboard-list {
+        display: grid;
+        gap: var(--goshen-admin-space-4);
+        margin-top: var(--goshen-admin-space-4);
+    }
+
+    .goshen-dashboard-row + .goshen-dashboard-row {
+        padding-top: var(--goshen-admin-space-4);
+        border-top: 1px solid var(--goshen-admin-border-soft);
+    }
+
+    .goshen-dashboard-row-value,
+    .goshen-dashboard-share {
+        flex: 0 0 auto;
+        color: var(--goshen-admin-text);
+        font-variant-numeric: tabular-nums;
+        font-weight: 800;
+    }
+
+    .goshen-dashboard-row-summary {
+        margin-top: var(--goshen-admin-space-4);
+    }
+
+    .goshen-dashboard-progress {
+        height: .4rem;
+        margin-top: var(--goshen-admin-space-2);
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--goshen-admin-border-soft);
+    }
+
+    .goshen-dashboard-progress > span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--goshen-admin-amber);
+    }
+
+    .goshen-dashboard-country-heading {
+        display: flex;
+        align-items: center;
+        gap: var(--goshen-admin-space-3);
+        min-width: 0;
+    }
+
+    .goshen-dashboard-country-flag {
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: var(--goshen-admin-radius-md);
+        background: var(--goshen-admin-surface-muted);
+        font-size: 1.5rem;
+    }
+
+    .goshen-dashboard-breakdown {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--goshen-admin-space-2);
+        margin-top: var(--goshen-admin-space-4);
+    }
+
+    .goshen-dashboard-breakdown > div {
+        padding: var(--goshen-admin-space-3);
+        border-radius: var(--goshen-admin-radius-sm);
+        background: var(--goshen-admin-surface-muted);
+    }
+
+    .goshen-dashboard-breakdown strong {
+        display: block;
+        margin-top: var(--goshen-admin-space-1);
+        color: var(--goshen-admin-text);
+        font-size: 1.125rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .goshen-dashboard-empty {
+        grid-column: 1 / -1;
+        display: grid;
+        justify-items: start;
+        gap: var(--goshen-admin-space-2);
+        min-height: 8rem;
+        padding: var(--goshen-admin-space-5);
+        border: 1px dashed var(--goshen-admin-border);
+        border-radius: var(--goshen-admin-radius-md);
+        background: var(--goshen-admin-surface-muted);
+        color: var(--goshen-admin-text-muted);
+    }
+
+    .goshen-dashboard-empty svg {
+        width: 1.5rem;
+        height: 1.5rem;
+        color: var(--goshen-admin-text-subtle);
+    }
+
+    .goshen-dashboard-empty strong {
+        color: var(--goshen-admin-text);
+        font-size: .9375rem;
+    }
+
     .goshen-admin-attendee-list {
         display: grid;
         gap: var(--goshen-admin-space-4);
@@ -429,6 +618,18 @@
         outline-offset: var(--goshen-admin-focus-offset);
     }
 
+    @media (max-width: 1100px) {
+        .goshen-dashboard-grid,
+        .goshen-dashboard-grid--feature {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .goshen-dashboard-grid--feature > :first-child,
+        .goshen-dashboard-empty {
+            grid-column: 1 / -1;
+        }
+    }
+
     @media (max-width: 640px) {
         .goshen-admin-section-header {
             align-items: stretch;
@@ -460,6 +661,12 @@
         }
 
         .goshen-dashboard-summary {
+            grid-template-columns: 1fr;
+        }
+
+        .goshen-dashboard-grid,
+        .goshen-dashboard-grid--2,
+        .goshen-dashboard-grid--feature {
             grid-template-columns: 1fr;
         }
 

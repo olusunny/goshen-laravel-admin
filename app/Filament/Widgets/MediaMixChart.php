@@ -2,11 +2,14 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\MediaItemResource;
 use App\Models\MediaItem;
 use Filament\Widgets\ChartWidget;
 
 class MediaMixChart extends ChartWidget
 {
+    protected static ?int $sort = -20;
+
     protected ?string $heading = 'Content library mix';
 
     protected ?string $description = 'Published media by type, with consumption weighted by recorded views.';
@@ -14,6 +17,11 @@ class MediaMixChart extends ChartWidget
     protected string $color = 'info';
 
     protected ?string $pollingInterval = null;
+
+    public static function canView(): bool
+    {
+        return MediaItemResource::canViewAny();
+    }
 
     protected function getType(): string
     {

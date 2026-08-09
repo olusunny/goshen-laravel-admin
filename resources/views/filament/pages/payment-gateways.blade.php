@@ -18,6 +18,7 @@
         .pg-mode { display:block; min-width:0; cursor:pointer; }
         .pg-mode input { position:absolute; opacity:0; pointer-events:none; }
         .pg-mode-card { display:flex; min-height:118px; height:100%; width:100%; box-sizing:border-box; flex-direction:column; justify-content:center; gap:10px; padding:18px; border:1px solid var(--pg-line); border-radius:18px; background:var(--pg-soft); overflow:hidden; transition:.18s ease; }
+        .pg-mode input:focus-visible + .pg-mode-card { outline:2px solid var(--goshen-admin-focus-ring); outline-offset:2px; }
         .pg-mode input:checked + .pg-mode-card { border-color:var(--pg-accent); box-shadow:0 0 0 3px rgba(245,158,11,.15), var(--pg-shadow); background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(12,34,48,.03)); }
         .dark .pg-mode input:checked + .pg-mode-card { background:linear-gradient(135deg,rgba(245,158,11,.14),rgba(15,81,60,.12)); }
         .pg-mode-title { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; min-width:0; font-size:18px; font-weight:950; line-height:1.25; }

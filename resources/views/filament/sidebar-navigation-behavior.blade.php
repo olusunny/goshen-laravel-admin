@@ -17,6 +17,23 @@
 
         const groups = () => Array.from(document.querySelectorAll('.fi-sidebar-group[data-group-label]'))
 
+        const safeStorage = {
+            get: (key) => {
+                try {
+                    return window.localStorage.getItem(key)
+                } catch {
+                    return null
+                }
+            },
+            set: (key, value) => {
+                try {
+                    window.localStorage.setItem(key, value)
+                } catch {
+                    // Sidebar search and navigation remain usable without storage.
+                }
+            },
+        }
+
         const updateSearchStatus = (query, visibleItems) => {
             const status = document.querySelector('[data-goshen-menu-search-status]')
 
@@ -34,7 +51,7 @@
         const collapseDefaults = () => {
             const allGroups = groups()
 
-            if (!allGroups.length || localStorage.getItem(collapseVersionKey)) {
+            if (!allGroups.length || safeStorage.get(collapseVersionKey)) {
                 return
             }
 
@@ -43,8 +60,8 @@
                 .map((group) => group.dataset.groupLabel)
                 .filter(Boolean)
 
-            localStorage.setItem(collapsedGroupsKey, JSON.stringify(collapsedLabels))
-            localStorage.setItem(collapseVersionKey, '1')
+            safeStorage.set(collapsedGroupsKey, JSON.stringify(collapsedLabels))
+            safeStorage.set(collapseVersionKey, '1')
 
             allGroups.forEach((group) => {
                 if (!collapsedLabels.includes(group.dataset.groupLabel)) {

@@ -64,7 +64,7 @@
                     'integrations' => ['Integrations', 'Gateways and credentials', 'heroicon-o-squares-plus'],
                     'other' => ['Other settings', 'Additional app settings', 'heroicon-o-ellipsis-horizontal-circle'],
                 ] as $key => [$label, $note, $icon])
-                    <button type="button" class="ash-tab" :class="{ 'active': tab === '{{ $key }}' }" x-on:click="tab = '{{ $key }}'">
+                    <button type="button" class="ash-tab" :class="{ 'active': tab === '{{ $key }}' }" :aria-pressed="tab === '{{ $key }}'" x-on:click="tab = '{{ $key }}'">
                         <span class="ash-tab-icon"><x-filament::icon :icon="$icon" /></span>
                         <span>
                             <span class="ash-tab-title">{{ $label }}</span>

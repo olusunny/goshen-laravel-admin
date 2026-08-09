@@ -75,6 +75,7 @@ class GoshenWalletSavingsPlanResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->stackedOnMobile()
             ->columns([
                 Tables\Columns\TextColumn::make('wallet.user.name')->label('User')->searchable(),
                 Tables\Columns\TextColumn::make('wallet.user.email')->label('Email')->searchable()->copyable(),

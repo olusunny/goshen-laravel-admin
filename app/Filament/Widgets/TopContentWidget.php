@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\MediaItemResource;
 use App\Models\MediaItem;
 use Filament\Actions;
 use Filament\Tables;
@@ -11,7 +12,14 @@ use Illuminate\Database\Eloquent\Builder;
 
 class TopContentWidget extends TableWidget
 {
+    protected static ?int $sort = -10;
+
     protected int|string|array $columnSpan = 'full';
+
+    public static function canView(): bool
+    {
+        return MediaItemResource::canViewAny();
+    }
 
     public function table(Table $table): Table
     {

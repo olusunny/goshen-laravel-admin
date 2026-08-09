@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\MediaItemResource;
 use App\Models\MediaItem;
 use Filament\Widgets\Widget;
 
@@ -11,7 +12,12 @@ class AdminSummaryCards extends Widget
 
     protected int|string|array $columnSpan = 'full';
 
-    protected static ?int $sort = -10;
+    protected static ?int $sort = -30;
+
+    public static function canView(): bool
+    {
+        return MediaItemResource::canViewAny();
+    }
 
     public function getCards(): array
     {

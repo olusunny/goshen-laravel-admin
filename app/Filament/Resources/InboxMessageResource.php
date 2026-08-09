@@ -313,6 +313,7 @@ class InboxMessageResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->stackedOnMobile()
             ->columns([
                 Tables\Columns\ImageColumn::make('thumbnail')
                     ->disk('public')

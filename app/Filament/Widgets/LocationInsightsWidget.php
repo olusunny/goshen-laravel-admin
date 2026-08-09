@@ -2,15 +2,23 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\MobileUserResource;
 use App\Models\VisitorMetric;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Collection;
 
 class LocationInsightsWidget extends Widget
 {
+    protected static ?int $sort = -40;
+
     protected string $view = 'filament.widgets.location-insights';
 
     protected int|string|array $columnSpan = 'full';
+
+    public static function canView(): bool
+    {
+        return MobileUserResource::canViewAny();
+    }
 
     public function getLocations(): Collection
     {

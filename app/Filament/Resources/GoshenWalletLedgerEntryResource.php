@@ -13,8 +13,8 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
@@ -124,6 +124,7 @@ class GoshenWalletLedgerEntryResource extends Resource
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('wallet.user'))
+            ->stackedOnMobile()
             ->columns([
                 Tables\Columns\TextColumn::make('wallet.user.name')->label('User')->searchable(),
                 Tables\Columns\TextColumn::make('wallet.user.email')->label('Email')->searchable()->copyable(),

@@ -280,10 +280,17 @@
                                 </div>
                                 <div class="cb-progress-meta"><span data-progress-percent>{{ (int) ($run->progress_percent ?? 0) }}</span>%</div>
                             </div>
-                            <div class="cb-progress-track">
+                            <div
+                                class="cb-progress-track"
+                                role="progressbar"
+                                aria-label="Backup progress for {{ $run->connection?->name ?: 'cloud backup' }}"
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                                aria-valuenow="{{ (int) ($run->progress_percent ?? 0) }}"
+                            >
                                 <div class="cb-progress-fill" data-progress-fill style="width: {{ (int) ($run->progress_percent ?? 0) }}%;"></div>
                             </div>
-                            <div class="cb-progress-step" data-progress-step>{{ $run->current_step ?: ucfirst($run->status) }}</div>
+                            <div class="cb-progress-step" data-progress-step aria-live="polite">{{ $run->current_step ?: ucfirst($run->status) }}</div>
                         </div>
                     @endforeach
                 </div>
@@ -691,6 +698,7 @@
 
                 card.dataset.status = data.status || 'running';
                 card.querySelector('[data-progress-percent]').textContent = String(percent);
+                card.querySelector('[role="progressbar"]').setAttribute('aria-valuenow', String(percent));
                 card.querySelector('[data-progress-fill]').style.width = `${percent}%`;
                 card.querySelector('[data-progress-step]').textContent = data.error_summary || data.current_step || data.status || 'Running';
                 if (data.backup_name && card.querySelector('[data-backup-name]')) {

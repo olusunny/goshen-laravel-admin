@@ -50,6 +50,7 @@ class GoshenWalletWithdrawalRequestResource extends Resource
     {
         return $table
             ->defaultSort('created_at', 'desc')
+            ->stackedOnMobile()
             ->columns([
                 Tables\Columns\TextColumn::make('mobileUser.name')
                     ->label('Member')

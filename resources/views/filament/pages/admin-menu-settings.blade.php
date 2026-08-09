@@ -65,6 +65,7 @@
                                             <label class="ams-check" title="Visible for {{ $role['name'] }}">
                                                 <input
                                                     type="checkbox"
+                                                    aria-label="Visible for {{ str($role['name'])->headline() }}: {{ $item['label'] }}"
                                                     wire:model.defer="visibility.{{ $role['id'] }}.{{ $item['hash'] }}"
                                                 >
                                             </label>
