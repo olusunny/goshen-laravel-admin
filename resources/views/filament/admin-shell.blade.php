@@ -749,8 +749,7 @@
     @media (pointer: coarse) {
         .fi-btn,
         .fi-icon-btn,
-        .fi-pagination-item-btn,
-        .fi-sidebar .fi-sidebar-item-btn {
+        .fi-pagination-item-btn {
             min-height: 2.75rem;
         }
     }
@@ -995,7 +994,7 @@
         }
     }
 
-    @media (min-width: 1024px) and (pointer: coarse) {
+    @media (pointer: coarse) {
         .fi-sidebar .fi-sidebar-item-btn {
             min-height: 2.75rem;
         }

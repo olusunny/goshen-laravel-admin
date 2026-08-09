@@ -102,7 +102,7 @@ class AdminShellDesignFoundationTest extends TestCase
         $this->assertStringContainsString('html:not(.dark) .fi-sidebar .fi-sidebar-header-ctn', $shell);
         $this->assertStringContainsString('.fi-sidebar-item-btn:focus-visible', $shell);
         $this->assertStringContainsString('background: var(--goshen-admin-sidebar-hover) !important;', $shell);
-        $this->assertStringContainsString('@media (min-width: 1024px) and (pointer: coarse)', $shell);
+        $this->assertSame(2, substr_count($shell, '@media (pointer: coarse)'));
         $this->assertStringContainsString('@media (forced-colors: active)', $shell);
         $this->assertStringContainsString('.dark {', $shell);
         $this->assertStringContainsString('--goshen-admin-sidebar: #20342e;', $shell);
@@ -111,7 +111,7 @@ class AdminShellDesignFoundationTest extends TestCase
 
         $this->assertGreaterThan(
             strpos($shell, '@media (min-width: 1024px) {'),
-            strpos($shell, '@media (min-width: 1024px) and (pointer: coarse) {'),
+            strrpos($shell, '@media (pointer: coarse) {'),
             'The coarse-pointer override must come after the compact desktop navigation rules.',
         );
     }
