@@ -23,6 +23,44 @@ class AdminShellDesignFoundationTest extends TestCase
         $this->assertStringNotContainsString('transition: all', $shell);
     }
 
+    public function test_admin_login_uses_the_supplied_responsive_accessible_background(): void
+    {
+        $shell = file_get_contents(resource_path('views/filament/admin-shell.blade.php'));
+        $asset = public_path('images/filament-admin-login-background.svg');
+
+        $this->assertFileExists($asset);
+        $this->assertSame(
+            '4fe6d8bb8d5f988620015011f42fee73d629444a913998be40ec24368e5ff687',
+            hash_file('sha256', $asset),
+        );
+        $this->assertStringContainsString('viewBox="0 0 1920 1080"', file_get_contents($asset));
+
+        $matched = preg_match(
+            "/@if \\(request\\(\\)->routeIs\\('filament\\.admin\\.auth\\.login'\\)\\)(.*?)@endif/s",
+            $shell,
+            $matches,
+        );
+
+        $this->assertSame(1, $matched, 'Login background styles should be scoped to the Filament login route.');
+
+        $loginStyles = $matches[1];
+
+        $this->assertStringContainsString("url('{{ asset('images/filament-admin-login-background.svg') }}')", $loginStyles);
+        $this->assertStringContainsString('background-position: center;', $loginStyles);
+        $this->assertStringContainsString('background-repeat: no-repeat;', $loginStyles);
+        $this->assertStringContainsString('background-size: cover;', $loginStyles);
+        $this->assertStringContainsString('.fi-simple-layout::before', $loginStyles);
+        $this->assertStringContainsString('padding: clamp(', $loginStyles);
+        $this->assertStringContainsString('.fi-simple-main :where(', $loginStyles);
+        $this->assertStringContainsString(':focus-visible', $loginStyles);
+        $this->assertStringContainsString('@media (forced-colors: active)', $loginStyles);
+        $this->assertStringNotContainsString(
+            'filament-admin-login-background.svg',
+            str_replace($matches[0], '', $shell),
+            'The background must not leak onto authenticated admin pages.',
+        );
+    }
+
     public function test_high_volume_tables_use_filament_mobile_stack_layout(): void
     {
         foreach ([

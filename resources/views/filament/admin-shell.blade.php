@@ -60,6 +60,68 @@
         --goshen-admin-text-subtle: #99aca4;
     }
 
+    @if (request()->routeIs('filament.admin.auth.login'))
+        .fi-simple-layout {
+            position: relative;
+            isolation: isolate;
+            min-height: 100vh;
+            min-height: 100dvh;
+            background-color: #080b14;
+            background-image: url('{{ asset('images/filament-admin-login-background.svg') }}');
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+        }
+
+        .fi-simple-layout::before {
+            position: absolute;
+            z-index: -1;
+            inset: 0;
+            background: rgba(3, 6, 13, .48);
+            content: '';
+            pointer-events: none;
+        }
+
+        .fi-simple-main-ctn {
+            position: relative;
+            z-index: 1;
+            padding: clamp(1rem, 4vw, 3rem);
+        }
+
+        .fi-simple-main {
+            width: min(100%, 32rem);
+            margin-block: clamp(1rem, 8vh, 4rem);
+            border: 1px solid var(--goshen-admin-border);
+            border-radius: .5rem;
+            background-color: var(--goshen-admin-surface);
+            box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, .32);
+        }
+
+        .fi-simple-main :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+            outline: 3px solid var(--goshen-admin-focus-ring);
+            outline-offset: var(--goshen-admin-focus-offset);
+        }
+
+        @media (forced-colors: active) {
+            .fi-simple-layout {
+                background-image: none;
+            }
+
+            .fi-simple-layout::before {
+                display: none;
+            }
+
+            .fi-simple-main {
+                border-color: CanvasText;
+                box-shadow: none;
+            }
+
+            .fi-simple-main :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+                outline-color: Highlight;
+            }
+        }
+    @endif
+
     /* Shared foundations for custom Filament pages. Apply these classes opt-in. */
     .goshen-admin-section {
         display: grid;
