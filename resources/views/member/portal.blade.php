@@ -1450,6 +1450,66 @@
             flex-wrap: wrap;
             gap: 8px;
         }
+        .accommodation-record {
+            display: grid;
+            gap: 16px;
+            padding: 16px;
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            background: var(--field);
+        }
+        .accommodation-record-heading {
+            display: grid;
+            grid-template-columns: 46px minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 12px;
+        }
+        .accommodation-record-icon {
+            width: 46px;
+            height: 46px;
+            display: grid;
+            place-items: center;
+            border-radius: 15px;
+            background: var(--brand-2);
+            color: #fff;
+        }
+        html.theme-dark .accommodation-record-icon,
+        body.theme-dark .accommodation-record-icon {
+            color: #07151d;
+        }
+        .accommodation-record-icon .nav-icon { width: 23px; height: 23px; }
+        .accommodation-record-title {
+            display: grid;
+            gap: 3px;
+            min-width: 0;
+        }
+        .accommodation-record-title strong,
+        .accommodation-record-title span { overflow-wrap: anywhere; }
+        .accommodation-record-title strong { font-size: 17px; }
+        .accommodation-record-details {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin: 0;
+        }
+        .accommodation-record-detail {
+            min-width: 0;
+            display: grid;
+            gap: 3px;
+        }
+        .accommodation-record-detail dt {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+        }
+        .accommodation-record-detail dd {
+            margin: 0;
+            color: var(--ink);
+            font-weight: 900;
+            line-height: 1.4;
+            overflow-wrap: anywhere;
+        }
+        .accommodation-record-detail.ticket-number dd { font-variant-numeric: tabular-nums; }
 
         .retreat-materials-list {
             display: grid;
@@ -1814,6 +1874,11 @@
             .ticket-details {
                 grid-template-columns: 1fr;
             }
+            .accommodation-record-heading {
+                grid-template-columns: 46px minmax(0, 1fr);
+            }
+            .accommodation-record-heading .badge { grid-column: 1 / -1; width: max-content; }
+            .accommodation-record-details { grid-template-columns: 1fr; }
         }
 
         @media (max-width: 360px) {
@@ -3986,6 +4051,16 @@
             return (booking?.installments || []).find((installment) => !/paid|cancel|refund|complete/i.test(`${installment.status || ''}`));
         }
 
+        function accommodationLocationLabel(allocation) {
+            const parts = [
+                allocation?.building,
+                allocation?.room ? `Room ${allocation.room}` : '',
+                allocation?.bed ? `Bed ${allocation.bed}` : '',
+            ].map((part) => `${part || ''}`.trim()).filter(Boolean);
+
+            return parts.length ? parts.join(' - ') : 'Allocation details will be shared soon';
+        }
+
         function payableRows() {
             return (memberData.registrations || [])
                 .flatMap((booking) => (booking.installments || []).map((installment) => ({ booking, installment })))
@@ -4017,17 +4092,38 @@
             accommodation.hidden = !hasRoomAllocationStatus;
             accommodation.innerHTML = allocations.length ? `
                 <h3>Room allocation</h3>
-                <p class="muted accommodation-status-text">Your allocation status will be updated here by the retreat team.</p>
+                <p class="muted accommodation-status-text">Your room details are shared here by the retreat team when they are ready.</p>
                 <div class="record-list">
-                    ${allocations.map((allocation) => `
-                        <article class="record">
-                            <div class="record-title">
-                                <strong>${escapeHtml(allocation.attendee?.name || 'Registered attendee')}</strong>
-                                <span class="item-meta">${escapeHtml(allocation.event?.name || 'Goshen Retreat')}</span>
+                    ${allocations.map((allocation) => {
+                        const attendeeName = allocation.attendee?.name || 'Registered attendee';
+                        const eventName = allocation.event?.name || 'Goshen Retreat';
+                        const location = accommodationLocationLabel(allocation);
+                        const hasRoomDetails = [allocation.building, allocation.room, allocation.bed]
+                            .some((detail) => `${detail || ''}`.trim());
+                        return `
+                        <article class="accommodation-record">
+                            <div class="accommodation-record-heading">
+                                <span class="accommodation-record-icon" aria-hidden="true"><svg class="nav-icon"><use href="#icon-home"></use></svg></span>
+                                <div class="accommodation-record-title">
+                                    <strong>${hasRoomDetails ? 'Accommodation assigned' : 'Accommodation update'}</strong>
+                                    <span class="item-meta">${escapeHtml(eventName)}</span>
+                                </div>
                                 ${statusBadge(allocation.status || 'assigned', 'accommodation-status-badge')}
                             </div>
+                            <dl class="accommodation-record-details">
+                                <div class="accommodation-record-detail">
+                                    <dt>Attendee</dt>
+                                    <dd>${escapeHtml(attendeeName)}</dd>
+                                </div>
+                                <div class="accommodation-record-detail">
+                                    <dt>Location</dt>
+                                    <dd>${escapeHtml(location)}</dd>
+                                </div>
+                                ${allocation.ticket_number ? `<div class="accommodation-record-detail ticket-number"><dt>Ticket</dt><dd>${escapeHtml(allocation.ticket_number)}</dd></div>` : ''}
+                            </dl>
                         </article>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             ` : `
                 <h3>Room allocation</h3>

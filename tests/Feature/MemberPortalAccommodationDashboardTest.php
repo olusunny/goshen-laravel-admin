@@ -26,10 +26,20 @@ class MemberPortalAccommodationDashboardTest extends TestCase
         $this->assertStringContainsString('const hasRoomAllocationStatus = allocations.length > 0 || tickets.length > 0;', $dashboard);
         $this->assertStringContainsString('Room allocation', $dashboard);
         $this->assertStringContainsString("statusBadge('Room allocation pending', 'accommodation-status-badge')", $dashboard);
-        $this->assertStringContainsString("allocation.attendee?.name || 'Registered attendee'", $dashboard);
+        $this->assertStringContainsString('function accommodationLocationLabel(allocation)', $portal);
+        $this->assertStringContainsString('allocation?.room ? `Room ${allocation.room}` : \'\'', $portal);
+        $this->assertStringContainsString('allocation?.bed ? `Bed ${allocation.bed}` : \'\'', $portal);
+        $this->assertStringContainsString("return parts.length ? parts.join(' - ') : 'Allocation details will be shared soon';", $portal);
+        $this->assertStringContainsString("const attendeeName = allocation.attendee?.name || 'Registered attendee';", $dashboard);
+        $this->assertStringContainsString('const location = accommodationLocationLabel(allocation);', $dashboard);
+        $this->assertStringContainsString('accommodation-record-details', $dashboard);
+        $this->assertStringContainsString('<dt>Location</dt>', $dashboard);
+        $this->assertStringContainsString('allocation.ticket_number', $dashboard);
         $this->assertStringContainsString("statusBadge(allocation.status || 'assigned', 'accommodation-status-badge')", $dashboard);
         $this->assertStringContainsString('accommodation-status-text', $dashboard);
         $this->assertStringContainsString('accommodation-status-badge', $dashboard);
+        $this->assertStringContainsString('.accommodation-record', $portal);
+        $this->assertStringContainsString('.accommodation-record-details', $portal);
         $darkAccommodationStyleStart = strpos($portal, 'html.theme-dark .accommodation-status-text');
         $darkAccommodationStyleEnd = strpos($portal, '}', $darkAccommodationStyleStart);
 
