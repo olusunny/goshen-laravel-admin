@@ -142,7 +142,8 @@
             padding: 1.5rem clamp(1.5rem, 5vw, 2.5rem) clamp(1.75rem, 5vw, 2.5rem);
         }
 
-        .fi-simple-main .fi-fo-field-wrp-label {
+        .fi-simple-main .fi-fo-field-label,
+        .fi-simple-main .fi-fo-field-label-content {
             color: #29483f;
             font-size: .875rem;
             font-weight: 700;
