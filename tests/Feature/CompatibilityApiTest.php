@@ -561,6 +561,37 @@ class CompatibilityApiTest extends TestCase
         ]);
     }
 
+    public function test_api_contact_endpoint_stores_a_member_portal_support_request(): void
+    {
+        $member = MobileUser::create([
+            'name' => 'Portal Member',
+            'email' => 'member@example.com',
+            'password' => Hash::make('Passw0rd!234'),
+            'is_verified' => true,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->postJson('/api/submit_contact', [
+            'data' => [
+                'name' => $member->name,
+                'email' => $member->email,
+                'api_token' => $member->issueApiToken(),
+                'phone' => '+447000000000',
+                'subject' => 'Accommodation',
+                'message' => "Please confirm my room allocation.\n\nReference: GOSHEN-2-000123",
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('contact_message.subject', 'Accommodation');
+
+        $this->assertDatabaseHas('contact_messages', [
+            'mobile_user_id' => $member->id,
+            'email' => $member->email,
+            'subject' => 'Accommodation',
+        ]);
+    }
+
     public function test_transportation_arrangements_endpoint_exposes_active_72hours_pickup_details(): void
     {
         TransportationArrangement::create([

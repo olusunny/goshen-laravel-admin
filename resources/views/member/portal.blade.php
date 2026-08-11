@@ -464,6 +464,54 @@
             align-items: center;
         }
 
+        .support-contact-details {
+            display: grid;
+            gap: 12px;
+            margin: 18px 0 22px;
+            padding: 16px 0;
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+        }
+        .support-contact-detail {
+            display: grid;
+            gap: 4px;
+        }
+        .support-contact-detail strong,
+        .support-request-heading h4 {
+            color: var(--ink);
+        }
+        .support-contact-detail a,
+        .support-contact-detail span,
+        .support-reply-note {
+            color: var(--muted);
+            line-height: 1.55;
+        }
+        .support-contact-detail a {
+            overflow-wrap: anywhere;
+        }
+        .support-request-form {
+            display: grid;
+            gap: 16px;
+        }
+        .support-request-heading {
+            display: grid;
+            gap: 5px;
+        }
+        .support-request-heading h4 {
+            margin: 0;
+            font-size: 19px;
+        }
+        .support-request-heading p {
+            margin: 0;
+        }
+        .support-request-actions {
+            display: grid;
+            gap: 12px;
+        }
+        .support-request-feedback {
+            margin: 0;
+        }
+
         .notice {
             border-radius: 16px;
             padding: 13px 14px;
@@ -4850,15 +4898,61 @@
         function renderSupport() {
             const event = eventsCache[0] || {};
             const email = event.support_email || 'Support details will be published by the church.';
-            const phone = event.support_phone || event.phone || '';
+            const phone = eventInquiryPhone(event);
+            const name = currentUser?.name || [currentUser?.first_name, currentUser?.last_name].filter(Boolean).join(' ');
+            const accountEmail = currentUser?.email || '';
+            const contactFields = `
+                ${name
+                    ? `<input type="hidden" name="name" value="${escapeHtml(name)}">`
+                    : `<div class="field"><label for="supportName">Your name</label><input class="input" id="supportName" name="name" autocomplete="name" required></div>`}
+                ${accountEmail
+                    ? `<input type="hidden" name="email" value="${escapeHtml(accountEmail)}">`
+                    : `<div class="field"><label for="supportEmail">Email address</label><input class="input" id="supportEmail" name="email" type="email" autocomplete="email" required></div>`}
+                ${currentUser?.phone ? `<input type="hidden" name="phone" value="${escapeHtml(currentUser.phone)}">` : ''}
+            `;
+            const emailDetail = event.support_email
+                ? `<a href="mailto:${encodeURIComponent(event.support_email)}">${escapeHtml(event.support_email)}</a>`
+                : `<span>${escapeHtml(email)}</span>`;
             document.getElementById('supportCard').innerHTML = `
                 <h3>Need help with Goshen Retreat?</h3>
-                <p class="muted">Contact the retreat support team for registration, ticket, or payment help.</p>
-                <div class="detail-list">
-                    <div class="detail-row"><strong>Email</strong><span>${escapeHtml(email)}</span></div>
-                    ${phone ? `<div class="detail-row"><strong>Phone</strong><span>${escapeHtml(phone)}</span></div>` : ''}
-                    <div class="detail-row"><strong>Account</strong><span>${escapeHtml(currentUser?.email || '')}</span></div>
+                <p class="muted">Send the retreat team a message about your registration, ticket, payment, or accommodation.</p>
+                <div class="support-contact-details" aria-label="Published retreat support details">
+                    <div class="support-contact-detail"><strong>Email</strong>${emailDetail}</div>
+                    ${phone ? `<div class="support-contact-detail"><strong>Phone</strong><a href="tel:${encodeURIComponent(phone)}">${escapeHtml(phone)}</a></div>` : ''}
+                    ${accountEmail ? `<div class="support-contact-detail"><strong>Reply email</strong><span>${escapeHtml(accountEmail)}</span></div>` : ''}
                 </div>
+                <form class="support-request-form" data-support-form novalidate>
+                    ${contactFields}
+                    <div class="support-request-heading">
+                        <h4>Send a support request</h4>
+                        <p class="muted">Tell us what happened and the retreat team will get back to you.</p>
+                    </div>
+                    <div class="field">
+                        <label for="supportSubject">What can we help with?</label>
+                        <select class="input" id="supportSubject" name="subject" required>
+                            <option value="">Choose a topic</option>
+                            <option value="Registration or ticket">Registration or ticket</option>
+                            <option value="Payment or wallet">Payment or wallet</option>
+                            <option value="Accommodation">Accommodation</option>
+                            <option value="Account or profile">Account or profile</option>
+                            <option value="Something else">Something else</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="supportReference">Ticket or payment reference <span class="muted">(optional)</span></label>
+                        <input class="input" id="supportReference" name="reference" maxlength="120" placeholder="For example, GOSHEN-2-000123">
+                    </div>
+                    <div class="field">
+                        <label for="supportMessage">How can we help?</label>
+                        <textarea class="input" id="supportMessage" name="message" minlength="10" maxlength="5000" required aria-describedby="supportMessageHint"></textarea>
+                        <small class="muted" id="supportMessageHint">Please include any ticket number or payment reference that may help the team assist you.</small>
+                    </div>
+                    <div class="support-request-actions">
+                        ${accountEmail ? `<p class="support-reply-note">We will reply to ${escapeHtml(accountEmail)}.</p>` : ''}
+                        <button class="button dark" type="submit">Send support request</button>
+                    </div>
+                    <p class="notice support-request-feedback" data-support-feedback role="status" aria-live="polite" tabindex="-1" hidden></p>
+                </form>
             `;
         }
 
@@ -5213,6 +5307,49 @@
             if (registration) {
                 event.preventDefault();
                 submitRegistration(registration);
+                return;
+            }
+            const supportRequest = event.target.closest('[data-support-form]');
+            if (supportRequest) {
+                event.preventDefault();
+                if (!supportRequest.reportValidity()) return;
+
+                const data = payloadFromForm(supportRequest);
+                const feedback = supportRequest.querySelector('[data-support-feedback]');
+                const submitButton = supportRequest.querySelector('[type="submit"]');
+                const submitLabel = submitButton.textContent;
+                feedback.hidden = true;
+                feedback.classList.remove('error');
+                feedback.setAttribute('role', 'status');
+                supportRequest.setAttribute('aria-busy', 'true');
+                submitButton.textContent = 'Sending...';
+                setBusy(supportRequest, true);
+                try {
+                    if (data.reference) {
+                        data.message = `${data.message}\n\nReference: ${data.reference}`;
+                        delete data.reference;
+                    }
+                    const requestData = authPayload(data);
+                    if (!requestData.email) requestData.email = data.email || '';
+                    const payload = await apiPost('/api/submit_contact', requestData);
+                    supportRequest.reset();
+                    const message = payload.message || 'Your support request has been sent.';
+                    feedback.textContent = message;
+                    feedback.hidden = false;
+                    feedback.focus();
+                    notify(message);
+                } catch (error) {
+                    feedback.textContent = error.message;
+                    feedback.classList.add('error');
+                    feedback.setAttribute('role', 'alert');
+                    feedback.hidden = false;
+                    feedback.focus();
+                    notify(error.message, 'error');
+                } finally {
+                    supportRequest.removeAttribute('aria-busy');
+                    submitButton.textContent = submitLabel;
+                    setBusy(supportRequest, false);
+                }
                 return;
             }
             const walletTopUp = event.target.closest('.wallet-topup-form');
