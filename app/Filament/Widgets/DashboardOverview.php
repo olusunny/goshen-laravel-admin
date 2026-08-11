@@ -6,6 +6,7 @@ use App\Filament\Resources\ChurchEventResource;
 use App\Filament\Resources\DonationResource;
 use App\Filament\Resources\MediaItemResource;
 use App\Filament\Resources\MobileUserResource;
+use App\Models\AppSetting;
 use App\Models\ChurchEvent;
 use App\Models\Donation;
 use App\Models\MediaItem;
@@ -73,14 +74,83 @@ class DashboardOverview extends StatsOverviewWidget
         }
 
         if (DonationResource::canViewAny()) {
-            $donations = Donation::whereIn('status', ['paid', 'success', 'completed'])->sum('amount');
-            $stats[] = Stat::make('Giving recorded', config('app.currency', 'NGN').' '.number_format((float) $donations, 2))
+            $stats[] = Stat::make('Giving recorded', $this->givingSummary())
                 ->description('Completed donation records')
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color('warning');
         }
 
         return $stats;
+    }
+
+    private function givingSummary(): string
+    {
+        $defaultCurrency = $this->systemCurrency();
+
+        $totals = Donation::query()
+            ->where(function ($query): void {
+                $query
+                    ->whereIn('status', ['paid', 'success', 'completed'])
+                    ->orWhereNotNull('paid_at');
+            })
+            ->selectRaw('currency, SUM(amount) as total')
+            ->groupBy('currency')
+            ->get()
+            ->reduce(function (array $totals, Donation $donation) use ($defaultCurrency): array {
+                $currency = $this->normalizedCurrency($donation->currency, $defaultCurrency);
+                $totals[$currency] = ($totals[$currency] ?? 0) + $this->amountInMinorUnits($donation->total);
+
+                return $totals;
+            }, []);
+
+        if ($totals === []) {
+            return $this->formatCurrency(0, $defaultCurrency);
+        }
+
+        ksort($totals);
+
+        return collect($totals)
+            ->map(fn (int $amount, string $currency): string => $this->formatCurrency($amount, $currency))
+            ->implode(' · ');
+    }
+
+    private function systemCurrency(): string
+    {
+        return $this->normalizedCurrency(AppSetting::value('currency', 'NGN'), 'NGN');
+    }
+
+    private function normalizedCurrency(mixed $currency, string $fallback): string
+    {
+        $currency = strtoupper(trim((string) $currency));
+
+        return match ($currency) {
+            '£' => 'GBP',
+            '₦' => 'NGN',
+            '$' => 'USD',
+            '€' => 'EUR',
+            default => preg_match('/^[A-Z]{3}$/', $currency) ? $currency : $fallback,
+        };
+    }
+
+    private function amountInMinorUnits(mixed $amount): int
+    {
+        $amount = trim((string) $amount);
+
+        if (! preg_match('/^(-?)(\d+)(?:\.(\d{1,2}))?$/', $amount, $matches)) {
+            return 0;
+        }
+
+        $minor = ((int) $matches[2] * 100) + (int) str_pad($matches[3] ?? '', 2, '0');
+
+        return $matches[1] === '-' ? -$minor : $minor;
+    }
+
+    private function formatCurrency(int $amount, string $currency): string
+    {
+        $sign = $amount < 0 ? '-' : '';
+        $amount = abs($amount);
+
+        return sprintf('%s%s %d.%02d', $sign, $currency, intdiv($amount, 100), $amount % 100);
     }
 
     private function dailySeries(): array

@@ -10,9 +10,6 @@
 
         @php
             $overview = $this->getOverview();
-            $dailySales = $this->getDailySales();
-            $weeklySales = $this->getWeeklySales();
-            $monthlySales = $this->getMonthlySales();
             $editions = $this->getEditionBreakdown();
             $recentPurchases = $this->getRecentPurchases();
 
@@ -38,38 +35,6 @@
             </div>
 
             <div class="goshen-booking-grid">
-                <div class="goshen-booking-panel goshen-booking-panel-wide">
-                    <div class="goshen-booking-panel-heading">
-                        <div>
-                            <h3>Sales timeline</h3>
-                            <p>Paid revenue and issued ticket count by day, week, and month.</p>
-                        </div>
-                    </div>
-
-                    <div class="goshen-booking-timeline-grid">
-                        @foreach ([['Daily', $dailySales], ['Weekly', $weeklySales], ['Monthly', $monthlySales]] as [$title, $rows])
-                            <div class="goshen-booking-timeline">
-                                <div class="goshen-booking-subtitle">{{ $title }}</div>
-
-                                @forelse ($rows as $row)
-                                    <div class="goshen-booking-row">
-                                        <div class="goshen-booking-row-top">
-                                            <span>{{ $row['label'] }}</span>
-                                            <strong>{{ number_format($row['tickets']) }} ticket(s)</strong>
-                                        </div>
-                                        <div class="goshen-booking-row-meta">{{ $row['amount'] }}</div>
-                                        <div class="goshen-booking-bar">
-                                            <span style="width: {{ max(4, $row['bar']) }}%;"></span>
-                                        </div>
-                                    </div>
-                                @empty
-                                    <div class="goshen-booking-empty">No sales yet.</div>
-                                @endforelse
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-
                 <div class="goshen-booking-panel">
                     <div class="goshen-booking-panel-heading">
                         <div>

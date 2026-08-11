@@ -81,7 +81,7 @@
             position: absolute;
             z-index: -1;
             inset: 0;
-            background: rgba(3, 6, 13, .48);
+            background: rgba(3, 16, 14, .58);
             content: '';
             pointer-events: none;
         }
@@ -93,12 +93,111 @@
         }
 
         .fi-simple-main {
-            width: min(100%, 32rem);
-            margin-block: clamp(1rem, 8vh, 4rem);
-            border: 1px solid var(--goshen-admin-border);
-            border-radius: .5rem;
-            background-color: var(--goshen-admin-surface);
-            box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, .32);
+            width: min(100%, 29rem);
+            margin-block: clamp(1rem, 7vh, 3.25rem);
+            border: 1px solid rgba(255, 255, 255, .64);
+            border-radius: 1rem;
+            background-color: rgba(255, 255, 255, .96);
+            box-shadow: 0 1.5rem 3.75rem rgba(0, 0, 0, .36);
+            overflow: hidden;
+        }
+
+        .fi-simple-main .fi-simple-header {
+            gap: .75rem;
+            padding: clamp(1.75rem, 5vw, 2.5rem) clamp(1.5rem, 5vw, 2.5rem) 0;
+        }
+
+        .fi-simple-main .fi-logo {
+            display: grid;
+            width: 4.25rem;
+            height: 4.25rem;
+            place-items: center;
+            border: 1px solid rgba(198, 137, 17, .26);
+            border-radius: 50%;
+            background: #fffaf0;
+            box-shadow: 0 .75rem 1.75rem rgba(31, 52, 45, .14);
+        }
+
+        .fi-simple-main .fi-logo .com-admin-logo-image {
+            width: 3rem;
+            height: 3rem;
+            object-fit: contain;
+        }
+
+        .fi-simple-main .fi-logo .com-admin-logo-mark {
+            color: #17352d;
+            font-size: .875rem;
+            font-weight: 800;
+        }
+
+        .fi-simple-main .fi-simple-header-heading {
+            color: #17352d;
+            font-size: clamp(1.75rem, 5vw, 2.25rem);
+            font-weight: 750;
+            letter-spacing: 0;
+            line-height: 1.15;
+        }
+
+        .fi-simple-main form {
+            padding: 1.5rem clamp(1.5rem, 5vw, 2.5rem) clamp(1.75rem, 5vw, 2.5rem);
+        }
+
+        .fi-simple-main .fi-fo-field-wrp-label {
+            color: #29483f;
+            font-size: .875rem;
+            font-weight: 700;
+        }
+
+        .fi-simple-main .fi-input-wrp {
+            min-height: 3.25rem;
+            border-color: rgba(23, 53, 45, .22);
+            border-radius: .75rem;
+            background: #fff;
+            box-shadow: none;
+        }
+
+        .fi-simple-main .fi-input-wrp:focus-within {
+            border-color: #b7791f;
+            box-shadow: 0 0 0 3px rgba(183, 121, 31, .16);
+        }
+
+        .fi-simple-main .fi-input {
+            color: #17352d;
+        }
+
+        .fi-simple-main .fi-input::placeholder {
+            color: #718079;
+        }
+
+        .fi-simple-main .fi-checkbox-input {
+            border-color: rgba(23, 53, 45, .36);
+            border-radius: .3rem;
+        }
+
+        .fi-simple-main .fi-checkbox-label {
+            color: #51665e;
+            font-size: .875rem;
+        }
+
+        .fi-simple-main .fi-btn {
+            min-height: 3.25rem;
+            border-radius: .75rem;
+            font-weight: 750;
+            letter-spacing: 0;
+        }
+
+        .fi-simple-main .fi-btn.fi-color-primary {
+            background: #d99016;
+            color: #182019;
+        }
+
+        .fi-simple-main .fi-btn.fi-color-primary:hover {
+            background: #bf7910;
+        }
+
+        .fi-simple-main ::selection {
+            background: rgba(217, 144, 22, .28);
+            color: #17352d;
         }
 
         .fi-simple-main :where(a, button, input, select, textarea, [tabindex]):focus-visible {
@@ -116,6 +215,11 @@
             }
 
             .fi-simple-main {
+                border-color: CanvasText;
+                box-shadow: none;
+            }
+
+            .fi-simple-main .fi-logo {
                 border-color: CanvasText;
                 box-shadow: none;
             }

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Widgets\GoshenBookingStatsWidget;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Models\Attendee;
@@ -17,6 +18,24 @@ use Tests\TestCase;
 class GoshenBookingStatsWidgetTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_goshen_dashboard_omits_the_sales_timeline_panel(): void
+    {
+        $view = file_get_contents(resource_path('views/filament/widgets/goshen-booking-stats.blade.php'));
+
+        $this->assertStringNotContainsString('Sales timeline', $view);
+        $this->assertStringNotContainsString('getDailySales()', $view);
+        $this->assertStringNotContainsString('getWeeklySales()', $view);
+        $this->assertStringNotContainsString('getMonthlySales()', $view);
+    }
+
+    public function test_goshen_dashboard_renders_the_remaining_operational_panels_without_a_sales_timeline(): void
+    {
+        Livewire::test(GoshenBookingStatsWidget::class)
+            ->assertDontSee('Sales timeline')
+            ->assertSee('Recent purchases')
+            ->assertSee('Performance by Goshen edition');
+    }
 
     public function test_goshen_booking_widget_summarizes_sales_editions_and_recent_purchases(): void
     {
@@ -81,7 +100,7 @@ class GoshenBookingStatsWidgetTest extends TestCase
             'paid_at' => now(),
         ]);
 
-        $widget = new GoshenBookingStatsWidget();
+        $widget = new GoshenBookingStatsWidget;
 
         $overview = $widget->getOverview();
         $this->assertSame(1, $overview['tickets_sold']);

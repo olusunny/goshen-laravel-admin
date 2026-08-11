@@ -38,7 +38,16 @@ class AdminAccessTest extends TestCase
         $this->get('/admin/login')
             ->assertOk()
             ->assertSee('MFM')
+            ->assertSee('Forgot password?')
             ->assertDontSee('MFM Triumphant Church Admin</div>', false);
+    }
+
+    public function test_admin_password_reset_request_page_is_available(): void
+    {
+        $this->get('/admin/password-reset/request')
+            ->assertOk()
+            ->assertSee('Forgot password?')
+            ->assertSee('Send email');
     }
 
     public function test_user_without_admin_role_cannot_access_filament_dashboard(): void

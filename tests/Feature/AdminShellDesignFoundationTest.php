@@ -51,6 +51,9 @@ class AdminShellDesignFoundationTest extends TestCase
         $this->assertStringContainsString('background-size: cover;', $loginStyles);
         $this->assertStringContainsString('.fi-simple-layout::before', $loginStyles);
         $this->assertStringContainsString('padding: clamp(', $loginStyles);
+        $this->assertStringContainsString('.fi-simple-main .fi-logo', $loginStyles);
+        $this->assertStringContainsString('.fi-simple-main .fi-input-wrp:focus-within', $loginStyles);
+        $this->assertStringContainsString('.fi-simple-main .fi-btn.fi-color-primary:hover', $loginStyles);
         $this->assertStringContainsString('.fi-simple-main :where(', $loginStyles);
         $this->assertStringContainsString(':focus-visible', $loginStyles);
         $this->assertStringContainsString('@media (forced-colors: active)', $loginStyles);

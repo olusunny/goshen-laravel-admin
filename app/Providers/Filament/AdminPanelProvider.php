@@ -44,6 +44,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->passwordReset()
             ->brandName('MFM Triumphant Church Admin')
             ->brandLogo(fn () => $this->brandLogo())
             ->brandLogoHeight('3rem')
