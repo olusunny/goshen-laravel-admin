@@ -63,7 +63,6 @@ class AdminMenuSettings extends Page
 
         $this->roles = Role::query()
             ->where('guard_name', 'web')
-            ->where('name', '!=', 'super_admin')
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(fn (Role $role): array => [
@@ -128,6 +127,8 @@ class AdminMenuSettings extends Page
                 );
             }
         }
+
+        $this->dispatch('refresh-sidebar');
 
         Notification::make()
             ->title('Admin menu settings saved')

@@ -2,14 +2,11 @@
 
 namespace App\Support;
 
-use App\Filament\Pages\CloudBackups;
 use App\Filament\Pages\AppSettings;
 use App\Filament\Pages\CronJobs;
-use App\Filament\Pages\GoshenReferralSettings;
 use App\Filament\Pages\GoshenRetreatConsole;
 use App\Filament\Pages\GoshenTicketPdfTemplates;
-use App\Filament\Pages\GoogleFirebaseSettings;
-use App\Filament\Pages\PaymentGateways;
+use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Models\AdminMenuRoleVisibility;
 use App\Models\User;
 use BackedEnum;
@@ -105,10 +102,6 @@ class AdminMenuRegistry
 
     public static function visibleForUser(User $user, string $menuKey): bool
     {
-        if ($user->hasRole('super_admin')) {
-            return true;
-        }
-
         try {
             if (! Schema::hasTable('admin_menu_role_visibilities')) {
                 return true;
@@ -148,13 +141,9 @@ class AdminMenuRegistry
     {
         return [
             AppSettings::class,
-            CloudBackups::class,
             CronJobs::class,
-            GoshenReferralSettings::class,
             GoshenRetreatConsole::class,
             GoshenTicketPdfTemplates::class,
-            GoogleFirebaseSettings::class,
-            PaymentGateways::class,
         ];
     }
 
@@ -163,14 +152,29 @@ class AdminMenuRegistry
         try {
             $reflection = new ReflectionClass($resourceClass);
 
-            if (! $reflection->hasProperty('shouldRegisterNavigation')) {
+            $navigationMethod = $reflection->getMethod('shouldRegisterNavigation');
+            $authorizationMethod = new \ReflectionMethod(AuthorizesResourceAccess::class, 'shouldRegisterNavigation');
+
+            if (
+                in_array(AuthorizesResourceAccess::class, class_uses_recursive($resourceClass), true)
+                && $navigationMethod->getFileName() === $authorizationMethod->getFileName()
+                && $navigationMethod->getStartLine() === $authorizationMethod->getStartLine()
+            ) {
                 return true;
             }
 
-            $property = $reflection->getProperty('shouldRegisterNavigation');
-            $property->setAccessible(true);
+            if ($navigationMethod->getDeclaringClass()->getName() === $resourceClass) {
+                return false;
+            }
 
-            return (bool) $property->getValue();
+            if ($reflection->hasProperty('shouldRegisterNavigation')) {
+                $property = $reflection->getProperty('shouldRegisterNavigation');
+                $property->setAccessible(true);
+
+                return (bool) $property->getValue();
+            }
+
+            return true;
         } catch (Throwable) {
             return true;
         }

@@ -37,7 +37,7 @@
             </p>
 
             @if (empty($roles))
-                <div class="ams-empty">Create at least one non-super-admin web role before configuring menu visibility.</div>
+                <div class="ams-empty">Create at least one web admin role before configuring menu visibility.</div>
             @elseif (empty($items))
                 <div class="ams-empty">No admin menu items were found.</div>
             @else

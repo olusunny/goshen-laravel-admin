@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\AppSettings;
+use App\Filament\Pages\AdminMenuSettings;
 use App\Filament\Pages\CloudBackups;
 use App\Filament\Pages\CronJobs;
 use App\Filament\Pages\GoshenRetreatConsole;
 use App\Filament\Pages\PaymentGateways;
 use App\Filament\Resources\AppSettingResource;
+use App\Filament\Resources\AccommodationUnitResource;
 use App\Filament\Resources\DonationResource;
 use App\Filament\Resources\GoshenBookingResource;
 use App\Filament\Resources\RoleResource;
@@ -65,6 +67,66 @@ class AdminMenuVisibilityTest extends TestCase
 
         $this->assertTrue(CronJobs::canAccess());
         $this->assertFalse(CronJobs::shouldRegisterNavigation());
+    }
+
+    public function test_menu_visibility_hides_super_admin_navigation_without_revoking_access(): void
+    {
+        $role = Role::query()->firstOrCreate([
+            'name' => 'super_admin',
+            'guard_name' => 'web',
+        ]);
+        $admin = User::factory()->create();
+        $admin->assignRole($role);
+
+        $this->actingAs($admin);
+
+        $this->assertTrue(DonationResource::canViewAny());
+        $this->assertTrue(DonationResource::shouldRegisterNavigation());
+
+        AdminMenuRoleVisibility::query()->create([
+            'role_id' => $role->id,
+            'menu_key' => AdminMenuRegistry::resourceKey(DonationResource::class),
+            'is_visible' => false,
+        ]);
+
+        $this->assertTrue(DonationResource::canViewAny());
+        $this->assertFalse(DonationResource::shouldRegisterNavigation());
+    }
+
+    public function test_admin_menu_settings_save_super_admin_visibility_and_refresh_the_sidebar(): void
+    {
+        $role = Role::query()->firstOrCreate([
+            'name' => 'super_admin',
+            'guard_name' => 'web',
+        ]);
+        $admin = User::factory()->create();
+        $admin->assignRole($role);
+        $menuKey = AdminMenuRegistry::resourceKey(DonationResource::class);
+        $hash = sha1($menuKey);
+
+        Livewire::actingAs($admin)
+            ->test(AdminMenuSettings::class)
+            ->assertSet('roles', fn (array $roles): bool => collect($roles)->contains('id', $role->id))
+            ->set("visibility.{$role->id}.{$hash}", false)
+            ->call('save')
+            ->assertDispatched('refresh-sidebar');
+
+        $this->assertDatabaseHas('admin_menu_role_visibilities', [
+            'role_id' => $role->id,
+            'menu_key' => $menuKey,
+            'is_visible' => false,
+        ]);
+        $this->assertFalse(DonationResource::shouldRegisterNavigation());
+    }
+
+    public function test_menu_matrix_excludes_entries_that_cannot_register_sidebar_navigation(): void
+    {
+        $keys = collect(AdminMenuRegistry::items())->pluck('key')->all();
+
+        $this->assertNotContains(AdminMenuRegistry::pageKey(CloudBackups::class), $keys);
+        $this->assertNotContains(AdminMenuRegistry::resourceKey(AccommodationUnitResource::class), $keys);
+        $this->assertContains(AdminMenuRegistry::pageKey(CronJobs::class), $keys);
+        $this->assertContains(AdminMenuRegistry::resourceKey(DonationResource::class), $keys);
     }
 
     public function test_settings_quick_links_hide_pages_without_permission(): void
