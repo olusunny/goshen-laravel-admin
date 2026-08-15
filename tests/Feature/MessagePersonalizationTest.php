@@ -92,6 +92,11 @@ class MessagePersonalizationTest extends TestCase
         $this->assertStringContainsString('L12', $rendered);
         $this->assertStringContainsString('B1', $rendered);
         $this->assertStringContainsString('Orchid Hall, L12, B1', $rendered);
+
+        $tagSummary = app(MessagePersonalizationService::class)->tagSummary()->toHtml();
+
+        $this->assertStringContainsString('{user: accommodation_building}', $tagSummary);
+        $this->assertStringContainsString('{user: accommodation}', $tagSummary);
     }
 
     public function test_inbox_fetch_renders_message_for_current_recipient(): void

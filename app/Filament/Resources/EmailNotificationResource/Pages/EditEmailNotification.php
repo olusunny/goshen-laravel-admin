@@ -8,10 +8,19 @@ use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\Js;
 
 class EditEmailNotification extends EditRecord
 {
     protected static string $resource = EmailNotificationResource::class;
+
+    protected function getCancelFormAction(): Actions\Action
+    {
+        return Actions\Action::make('cancel')
+            ->label(__('filament-panels::resources/pages/edit-record.form.actions.cancel.label'))
+            ->alpineClickHandler('window.location.href = '.Js::from($this->getResourceUrl()))
+            ->color('gray');
+    }
 
     protected function getHeaderActions(): array
     {

@@ -100,7 +100,6 @@ class MessagePersonalizationService
     {
         $tags = collect($this->tags($message))
             ->pluck('tag')
-            ->take(12)
             ->implode(', ');
 
         return new HtmlString('Use personalization tags such as <code>'.e($tags).'</code>. Short forms like <code>{usertitle}</code> and <code>{user firstname}</code> also work.');
