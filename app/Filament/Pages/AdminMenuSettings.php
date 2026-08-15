@@ -49,7 +49,7 @@ class AdminMenuSettings extends Page
 
     public static function canAccess(): bool
     {
-        return (bool) Auth::user()?->hasRole('super_admin');
+        return (bool) Auth::user()?->hasRole('super_admin', 'web');
     }
 
     public static function shouldRegisterNavigation(): bool

@@ -25,6 +25,7 @@
         .ams-check { display:flex; justify-content:center; }
         .ams-check input { width:18px; height:18px; accent-color:#f59e0b; }
         .ams-actions { margin-top:18px; display:flex; justify-content:flex-end; }
+        .ams-actions--primary { margin-top:16px; }
         .ams-button { min-height:42px; border:0; border-radius:12px; padding:10px 16px; background:#f59e0b; color:#111827; font-weight:900; cursor:pointer; }
     </style>
 
@@ -35,6 +36,12 @@
                 Choose which admin navigation items are visible to each admin role. This only controls the menu:
                 underlying resource and page permissions still decide what a user can access.
             </p>
+
+            @if (! empty($roles) && ! empty($items))
+                <div class="ams-actions ams-actions--primary">
+                    <button type="submit" class="ams-button">Save menu visibility</button>
+                </div>
+            @endif
 
             @if (empty($roles))
                 <div class="ams-empty">Create at least one web admin role before configuring menu visibility.</div>
@@ -77,9 +84,6 @@
                     </table>
                 </div>
 
-                <div class="ams-actions">
-                    <button type="submit" class="ams-button">Save menu visibility</button>
-                </div>
             @endif
         </section>
     </form>
