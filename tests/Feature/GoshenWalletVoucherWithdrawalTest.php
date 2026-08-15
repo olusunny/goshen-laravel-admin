@@ -61,6 +61,40 @@ class GoshenWalletVoucherWithdrawalTest extends TestCase
         $this->assertSame(1, GoshenVoucherUsage::query()->count());
     }
 
+    public function test_member_can_fund_wallet_with_unique_voucher_suffix(): void
+    {
+        $member = $this->member('voucher-wallet-suffix@example.test', 'Voucher Wallet Suffix');
+        $token = $member->issueApiToken();
+        $wallet = $this->wallet($member, 5);
+        $created = app(GoshenVoucherService::class)->createVoucher([
+            'label' => 'Wallet suffix voucher',
+            'amount' => 15,
+            'currency' => 'GBP',
+            'max_uses' => 1,
+            'purpose' => GoshenVoucher::PURPOSE_WALLET_FUNDING,
+            'metadata' => ['purpose' => 'wallet_top_up'],
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/goshen-wallet/top-up/voucher', [
+                'data' => [
+                    'api_token' => $token,
+                    'code' => $created['voucher']->code_suffix,
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('data.balance', 20);
+
+        $this->assertSame('20.00', $wallet->fresh()->balance);
+        $this->assertDatabaseHas('goshen_voucher_usages', [
+            'mobile_user_id' => $member->id,
+            'code_suffix' => $created['voucher']->code_suffix,
+            'source' => 'wallet_top_up',
+            'amount' => 15,
+        ]);
+    }
+
     public function test_withdrawal_request_reserves_funds_and_member_can_cancel_pending_request(): void
     {
         $member = $this->member('withdrawer@example.test', 'Wallet Withdrawer');

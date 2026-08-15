@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\GoshenWallet;
+use App\Models\GoshenAccommodationAllocation;
 use App\Models\InboxMessage;
 use App\Models\MobileUser;
 use App\Services\MessagePersonalizationService;
@@ -28,8 +29,9 @@ class MessagePersonalizationTest extends TestCase
     public function test_personalization_supports_shorthand_user_and_dynamic_registration_tags(): void
     {
         $user = $this->member();
-        GoshenWallet::query()->create([
+        GoshenWallet::query()->updateOrCreate([
             'mobile_user_id' => $user->id,
+        ], [
             'balance' => 42.5,
         ]);
         [$event] = $this->registration($user);
@@ -61,6 +63,35 @@ class MessagePersonalizationTest extends TestCase
         );
 
         $this->assertSame('Dear David, your Triumphant ID is TRI-777.', $rendered);
+    }
+
+    public function test_personalization_includes_accommodation_fields_when_assigned(): void
+    {
+        $user = $this->member();
+        [$event, $booking, $attendee] = $this->registration($user);
+
+        GoshenAccommodationAllocation::query()->create([
+            'event_id' => $event->id,
+            'attendee_id' => $attendee->id,
+            'ticket_id' => $booking->tickets()->first()?->id,
+            'status' => 'assigned',
+            'building' => 'Orchid Hall',
+            'room' => 'L12',
+            'bed' => 'B1',
+            'assigned_by' => $user->id,
+            'assigned_at' => now(),
+        ]);
+
+        $rendered = app(MessagePersonalizationService::class)->renderText(
+            'Welcome {user: accommodation_building} room {user: accommodation_room} bed {user: accommodation_bed} - {user: accommodation}.',
+            $user,
+            new InboxMessage(['goshen_event_id' => $event->id]),
+        );
+
+        $this->assertStringContainsString('Orchid Hall', $rendered);
+        $this->assertStringContainsString('L12', $rendered);
+        $this->assertStringContainsString('B1', $rendered);
+        $this->assertStringContainsString('Orchid Hall, L12, B1', $rendered);
     }
 
     public function test_inbox_fetch_renders_message_for_current_recipient(): void
@@ -115,6 +146,8 @@ class MessagePersonalizationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', 'ok')
             ->assertJsonFragment(['tag' => '{user: title}'])
+            ->assertJsonFragment(['tag' => '{user: accommodation_building}'])
+            ->assertJsonFragment(['tag' => '{user: accommodation_room}'])
             ->assertJsonFragment(['tag' => '{user: future_custom_field}']);
     }
 

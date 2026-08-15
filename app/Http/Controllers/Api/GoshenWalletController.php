@@ -365,7 +365,7 @@ class GoshenWalletController extends Controller
         }
 
         $validated = validator($this->payload($request), [
-            'code' => ['required', 'string', 'min:8', 'max:80'],
+            'code' => ['required', 'string', 'min:6', 'max:80'],
         ])->validate();
 
         $wallet = $this->wallets->walletFor($user);

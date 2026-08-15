@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\GoshenWallet;
 use App\Models\MobileUser;
+use App\Models\GoshenAccommodationAllocation;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Personal\EventInstallments\Models\Booking;
@@ -71,6 +72,11 @@ class MessagePersonalizationService
             ['tag' => '{user: goshen_registration_status}', 'label' => 'Goshen registration status', 'example' => 'Paid'],
             ['tag' => '{user: check-in_status_with_time}', 'label' => 'Check-in status with time', 'example' => 'Checked in Jul 3, 2026 16:15'],
             ['tag' => '{user: designation}', 'label' => 'Designation', 'example' => 'Worker'],
+            ['tag' => '{user: accommodation_building}', 'label' => 'Accommodation building', 'example' => 'Building A'],
+            ['tag' => '{user: accommodation_room}', 'label' => 'Accommodation room', 'example' => 'Room 12'],
+            ['tag' => '{user: accommodation_bed}', 'label' => 'Accommodation bed', 'example' => 'Bed 3'],
+            ['tag' => '{user: accommodation_status}', 'label' => 'Accommodation status', 'example' => 'assigned'],
+            ['tag' => '{user: accommodation}', 'label' => 'Accommodation summary', 'example' => 'Building A, Room 12, Bed 3'],
         ];
 
         foreach ($this->registrationFieldTags($message) as $fieldTag) {
@@ -113,6 +119,7 @@ class MessagePersonalizationService
         $event = $booking?->event ?: $this->eventFor($message);
         $attendee = $booking?->attendees?->first();
         $customFields = $this->customFieldValues($event, $attendee);
+        $accommodationAllocation = $this->accommodationAllocationFor($user, $booking, $message);
 
         $context = [
             'title' => (string) ($user->title ?? ''),
@@ -129,6 +136,11 @@ class MessagePersonalizationService
             'goshen_registration_status' => $this->bookingStatus($booking),
             'check_in_status_with_time' => $this->checkInStatus($booking),
             'designation' => (string) ($customFields['designation'] ?? $attendee?->designation ?? ''),
+            'accommodation_status' => (string) ($accommodationAllocation?->status ?? ''),
+            'accommodation_building' => (string) ($accommodationAllocation?->building ?? ''),
+            'accommodation_room' => (string) ($accommodationAllocation?->room ?? ''),
+            'accommodation_bed' => (string) ($accommodationAllocation?->bed ?? ''),
+            'accommodation' => $this->accommodationSummary($accommodationAllocation),
         ];
 
         foreach ($customFields as $key => $value) {
@@ -302,6 +314,56 @@ class MessagePersonalizationService
             ->all();
     }
 
+    private function accommodationAllocationFor(MobileUser $user, ?Booking $booking, ?object $message): ?GoshenAccommodationAllocation
+    {
+        $eventId = (int) ($message->goshen_event_id ?? 0);
+        $eventId = $eventId > 0 ? $eventId : (int) ($booking?->event_id ?? 0);
+
+        $query = GoshenAccommodationAllocation::query()
+            ->with('attendee')
+            ->where('status', '!=', 'removed')
+            ->when($eventId > 0, fn ($query) => $query->where('event_id', $eventId));
+
+        $attendeeIds = $booking?->attendees?->pluck('id')->filter();
+        if ($attendeeIds && $attendeeIds->isNotEmpty()) {
+            $query->whereIn('attendee_id', $attendeeIds->all());
+        } else {
+            $query->whereHas('attendee.booking', function ($query) use ($user): void {
+                $query->where(function ($bookingQuery) use ($user): void {
+                    $bookingQuery
+                        ->where('customer_id', $user->id)
+                        ->orWhere(function ($emailQuery) use ($user): void {
+                            $emailQuery
+                                ->whereNotNull('customer_email')
+                                ->where('customer_email', $user->email);
+                        });
+                });
+            });
+        }
+
+        return $query
+            ->latest('assigned_at')
+            ->latest('updated_at')
+            ->latest('id')
+            ->first();
+    }
+
+    private function accommodationSummary(?GoshenAccommodationAllocation $allocation): string
+    {
+        if (! $allocation instanceof GoshenAccommodationAllocation) {
+            return '';
+        }
+
+        return collect([
+            $allocation->building,
+            $allocation->room,
+            $allocation->bed,
+        ])
+            ->filter(fn ($value): bool => filled($value))
+            ->map(fn (string $value): string => (string) $value)
+            ->implode(', ');
+    }
+
     private function canonicalKey(string $raw): string
     {
         $key = Str::of($raw)
@@ -331,6 +393,11 @@ class MessagePersonalizationService
             'group', 'church_group', 'churchgroup' => 'group_name',
             'wallet', 'balance', 'walletbalance' => 'wallet_balance',
             'goshenedition', 'edition', 'event' => 'goshen_edition',
+            'accommodationbuilding' => 'accommodation_building',
+            'accommodationroom' => 'accommodation_room',
+            'accommodationbed' => 'accommodation_bed',
+            'accommodationstatus' => 'accommodation_status',
+            'accommodationdetails', 'accommodationdetailsline', 'accommodationdetail' => 'accommodation',
             'registration_status', 'registrationstatus', 'goshenregistrationstatus' => 'goshen_registration_status',
             'checkin', 'checkin_status', 'checkinstatus', 'checkin_status_with_time', 'check_in_status', 'check_in_status_with_time' => 'check_in_status_with_time',
             default => $key,
