@@ -1591,8 +1591,13 @@
             gap: 3px;
             min-width: 0;
         }
-        .retreat-material-details strong,
-        .retreat-material-details span { overflow-wrap: anywhere; }
+        .retreat-material-title {
+            color: var(--ink);
+            font-size: 15px;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+        .retreat-material-meta { overflow-wrap: anywhere; }
         .retreat-material-download {
             width: auto;
             min-width: 44px;
@@ -1927,6 +1932,19 @@
             }
             .accommodation-record-heading .badge { grid-column: 1 / -1; width: max-content; }
             .accommodation-record-details { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 560px) {
+            .retreat-material {
+                grid-template-columns: 46px minmax(0, 1fr);
+                align-items: start;
+            }
+            .retreat-material-icon { align-self: start; }
+            .retreat-material-download {
+                grid-column: 2;
+                justify-self: start;
+                margin-top: 2px;
+            }
         }
 
         @media (max-width: 360px) {
@@ -3479,6 +3497,14 @@
             return /^image\//i.test(material.mime_type || material.mime || '') ? 'image' : 'document';
         }
 
+        function materialTypeLabel(material) {
+            if (material.file_type === 'pdf' || /pdf/i.test(material.mime_type || material.mime || '')) {
+                return 'PDF document';
+            }
+
+            return /^image\//i.test(material.mime_type || material.mime || '') ? 'Image' : 'Document';
+        }
+
         async function loadWallet() {
             if (!currentUser?.api_token) return;
             const walletContent = document.getElementById('walletContent');
@@ -4234,10 +4260,10 @@
                         ${retreatMaterials.items.map((material) => {
                             const id = material.id || material.public_id;
                             const label = material.label || material.title || materialFileName(material);
-                            const details = [materialFileName(material), materialFileSize(material)].filter(Boolean).join(' · ');
+                            const details = [materialTypeLabel(material), materialFileSize(material)].filter(Boolean).join(' · ');
                             return `<article class="retreat-material">
                                 <span class="retreat-material-icon" aria-hidden="true"><svg class="nav-icon"><use href="#icon-${materialIcon(material)}"></use></svg></span>
-                                <div class="retreat-material-details"><strong>${escapeHtml(label)}</strong>${details ? `<span class="item-meta">${escapeHtml(details)}</span>` : ''}</div>
+                                <div class="retreat-material-details"><strong class="retreat-material-title">${escapeHtml(label)}</strong>${details ? `<span class="item-meta retreat-material-meta">${escapeHtml(details)}</span>` : ''}</div>
                                 <button class="button small outline retreat-material-download" type="button" data-material-download="${escapeHtml(id || '')}" data-filename="${escapeHtml(materialFileName(material))}" aria-label="Download ${escapeHtml(label)}" ${id ? '' : 'disabled'}><svg class="nav-icon" aria-hidden="true"><use href="#icon-download"></use></svg><span>Download</span></button>
                             </article>`;
                         }).join('')}
