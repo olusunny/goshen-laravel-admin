@@ -3893,7 +3893,7 @@
             };
             const children = Array.isArray(existing.children) ? existing.children : [];
             return `<div class="family-registration-fields">
-                <article class="attendee-card"><strong>Family details</strong><div class="form-grid"><div class="field"><label>Family name</label><input class="input" name="family_name" value="${escapeHtml(existing.name || '')}" placeholder="e.g. Adeola Family" required></div></div><p class="muted">Each parent receives a paid ticket. Children aged 1-14 receive a complimentary ticket; children aged 15+ receive a paid ticket.</p></article>
+                <article class="attendee-card"><strong>Family details</strong><div class="form-grid"><div class="field"><label>Family name</label><input class="input" name="family_name" value="${escapeHtml(existing.name || '')}" placeholder="e.g. Adeola Family" required></div></div></article>
                 ${parentFields('father', "Father's")}
                 ${parentFields('mother', "Mother's")}
                 <div class="family-children-list">${children.map((child, index) => renderFamilyChildFields(child, index)).join('')}</div>
