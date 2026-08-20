@@ -2561,7 +2561,13 @@
         }
 
         function messageFromErrorPayload(payload, fallback) {
-            return payload?.message || payload?.msg || Object.values(payload?.errors || {})?.flat?.()?.[0] || fallback;
+            const message = payload?.message || payload?.msg || Object.values(payload?.errors || {})?.flat?.()?.[0] || fallback;
+
+            if (/access denied by imunify360 bot-protection/i.test(message)) {
+                return 'We could not complete that request because the server security check blocked it. Please try again shortly. If it continues, contact support.';
+            }
+
+            return message;
         }
 
         async function apiPost(url, data = {}) {
