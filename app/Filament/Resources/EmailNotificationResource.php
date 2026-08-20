@@ -63,6 +63,7 @@ class EmailNotificationResource extends Resource
                             'states' => 'State / county / province',
                             'genders' => 'Gender',
                             'roles' => 'User role',
+                            'goshen_ticket_holders' => 'Goshen edition: all valid ticket holders',
                             'goshen_paid' => 'Goshen edition: fully paid',
                             'goshen_unpaid' => 'Goshen edition: not fully paid',
                             'goshen_paid_between' => 'Goshen edition: paid within date range',

@@ -15,6 +15,7 @@ use Sunny\Fundraising\Models\Campaign;
 class MessageRecipientResolver
 {
     public const GOSHEN_RECIPIENT_MODES = [
+        'goshen_ticket_holders',
         'goshen_paid',
         'goshen_unpaid',
         'goshen_paid_between',
@@ -86,6 +87,8 @@ class MessageRecipientResolver
             $this->applyFundraisingAudience($users, $message);
         } elseif ($mode === 'quiz_participants') {
             $this->applyQuizAudience($users, $message);
+        } elseif ($mode === 'goshen_ticket_holders') {
+            $this->applyGoshenTicketHolderAudience($users, $message);
         } elseif (self::isGoshenMode($mode)) {
             $this->applyGoshenAudience($users, $message);
         }
@@ -219,6 +222,42 @@ class MessageRecipientResolver
 
                 $this->applyPaidWindowFilter($booking, $from, $until);
             }
+        });
+    }
+
+    private function applyGoshenTicketHolderAudience(Builder $users, object $message): void
+    {
+        $eventId = (int) ($message->goshen_event_id ?? 0);
+        if ($eventId <= 0) {
+            $users->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $users->whereExists(function ($ticket) use ($eventId): void {
+            $ticket
+                ->selectRaw('1')
+                ->from('ei_tickets')
+                ->join('ei_bookings', 'ei_bookings.id', '=', 'ei_tickets.booking_id')
+                ->leftJoin('ei_attendees', 'ei_attendees.id', '=', 'ei_tickets.attendee_id')
+                ->whereNull('ei_bookings.deleted_at')
+                ->where('ei_tickets.event_id', $eventId)
+                ->whereIn('ei_tickets.status', ['not_checked_in', 'checked_in'])
+                ->whereNotIn('ei_bookings.status', ['cancelled', 'refunded'])
+                ->where(function ($recipient): void {
+                    $recipient
+                        ->whereColumn('ei_bookings.customer_id', 'mobile_users.id')
+                        ->orWhere(function ($bookingEmail): void {
+                            $bookingEmail
+                                ->whereNotNull('mobile_users.email')
+                                ->whereColumn('ei_bookings.customer_email', 'mobile_users.email');
+                        })
+                        ->orWhere(function ($attendeeEmail): void {
+                            $attendeeEmail
+                                ->whereNotNull('mobile_users.email')
+                                ->whereColumn('ei_attendees.email', 'mobile_users.email');
+                        });
+                });
         });
     }
 

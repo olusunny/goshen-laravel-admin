@@ -2,18 +2,22 @@
 
 namespace Tests\Feature;
 
-use App\Models\InboxMessage;
 use App\Models\GoshenQuiz;
 use App\Models\GoshenQuizAttempt;
+use App\Models\InboxMessage;
 use App\Models\MobileUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\EventType;
 use Personal\EventInstallments\Enums\InstallmentStatus;
+use Personal\EventInstallments\Enums\TicketStatus;
+use Personal\EventInstallments\Models\Attendee;
 use Personal\EventInstallments\Models\Booking;
 use Personal\EventInstallments\Models\Event;
+use Personal\EventInstallments\Models\EventTicketType;
 use Personal\EventInstallments\Models\PaymentInstallment;
 use Personal\EventInstallments\Models\PaymentTransaction;
+use Personal\EventInstallments\Models\Ticket;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Sunny\Fundraising\Models\Campaign;
@@ -82,6 +86,60 @@ class ControlHubMessagingApiTest extends TestCase
 
         $this->assertContains($paid->id, $message->delivered_mobile_user_ids);
         $this->assertNotContains($unpaid->id, $message->delivered_mobile_user_ids);
+    }
+
+    public function test_control_hub_message_targets_all_valid_goshen_ticket_holders(): void
+    {
+        $manager = $this->manager();
+        $token = $manager->issueApiToken();
+        $event = $this->goshenEvent();
+        $bookingOwner = $this->member('ticket-owner@example.test', 'Ticket Owner');
+        $attendeeProfile = $this->member('ticket-attendee@example.test', 'Ticket Attendee');
+        $cancelled = $this->member('cancelled-ticket@example.test', 'Cancelled Ticket');
+        $provisional = $this->member('provisional-ticket@example.test', 'Provisional Ticket');
+        $unpaid = $this->member('unpaid-ticket@example.test', 'Unpaid Ticket');
+        $bookingWithoutTicket = $this->member('booking-only@example.test', 'Booking Only');
+        $otherEventHolder = $this->member('other-event-ticket@example.test', 'Other Event Ticket');
+
+        $validBooking = $this->booking($event, $bookingOwner, true);
+        $this->ticket($event, $validBooking, $attendeeProfile, TicketStatus::NotCheckedIn);
+
+        $cancelledBooking = $this->booking($event, $cancelled, true);
+        $this->ticket($event, $cancelledBooking, $cancelled, TicketStatus::Cancelled);
+
+        $provisionalBooking = $this->booking($event, $provisional, true);
+        $this->ticket($event, $provisionalBooking, $provisional, TicketStatus::Provisional);
+
+        $unpaidBooking = $this->booking($event, $unpaid, false);
+        $this->ticket($event, $unpaidBooking, $unpaid, TicketStatus::Unpaid);
+
+        $this->booking($event, $bookingWithoutTicket, true);
+
+        $otherEvent = $this->goshenEvent();
+        $otherBooking = $this->booking($otherEvent, $otherEventHolder, true);
+        $this->ticket($otherEvent, $otherBooking, $otherEventHolder, TicketStatus::NotCheckedIn);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/control-hub/messages/send', [
+                'data' => array_merge($this->messagePayload($token), [
+                    'recipient_mode' => 'goshen_ticket_holders',
+                    'goshen_event_id' => $event->id,
+                    'send_inbox' => true,
+                    'send_push' => false,
+                ]),
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.recipient_mode', 'goshen_ticket_holders');
+
+        $message = InboxMessage::query()->firstOrFail();
+
+        $this->assertContains($bookingOwner->id, $message->delivered_mobile_user_ids);
+        $this->assertContains($attendeeProfile->id, $message->delivered_mobile_user_ids);
+        $this->assertNotContains($cancelled->id, $message->delivered_mobile_user_ids);
+        $this->assertNotContains($provisional->id, $message->delivered_mobile_user_ids);
+        $this->assertNotContains($unpaid->id, $message->delivered_mobile_user_ids);
+        $this->assertNotContains($bookingWithoutTicket->id, $message->delivered_mobile_user_ids);
+        $this->assertNotContains($otherEventHolder->id, $message->delivered_mobile_user_ids);
     }
 
     public function test_control_hub_message_targets_goshen_paid_date_range(): void
@@ -297,5 +355,39 @@ class ControlHubMessagingApiTest extends TestCase
         }
 
         return $booking->refresh();
+    }
+
+    private function ticket(Event $event, Booking $booking, MobileUser $attendeeProfile, TicketStatus $status): Ticket
+    {
+        $ticketType = EventTicketType::query()->create([
+            'event_id' => $event->id,
+            'name' => 'Goshen adult registration',
+            'sku' => 'ADULT-'.str()->random(8),
+            'currency' => 'GBP',
+            'price' => 100,
+            'capacity' => 100,
+            'min_per_booking' => 1,
+            'max_per_booking' => 10,
+            'is_active' => true,
+        ]);
+        $attendee = Attendee::query()->create([
+            'booking_id' => $booking->id,
+            'ticket_type_id' => $ticketType->id,
+            'first_name' => str($attendeeProfile->name)->before(' ')->toString(),
+            'last_name' => str($attendeeProfile->name)->after(' ')->toString(),
+            'email' => $attendeeProfile->email,
+            'phone' => $attendeeProfile->phone,
+        ]);
+
+        return Ticket::query()->create([
+            'event_id' => $event->id,
+            'booking_id' => $booking->id,
+            'attendee_id' => $attendee->id,
+            'ticket_type_id' => $ticketType->id,
+            'ticket_number' => 'TICKET-'.str()->upper(str()->random(8)),
+            'formatted_number' => 'TICKET-'.str()->upper(str()->random(8)),
+            'qr_hash' => str()->random(64),
+            'status' => $status,
+        ]);
     }
 }

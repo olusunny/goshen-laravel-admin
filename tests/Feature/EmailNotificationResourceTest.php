@@ -30,4 +30,21 @@ class EmailNotificationResourceTest extends TestCase
             ->assertSee('{user: accommodation_building}', false)
             ->assertSee('{user: accommodation}', false);
     }
+
+    public function test_admin_message_forms_offer_the_valid_goshen_ticket_holder_recipient_mode(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@church.local')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get('/admin/email-notifications/create')
+            ->assertOk()
+            ->assertSee('Goshen edition: all valid ticket holders');
+
+        $this->actingAs($admin)
+            ->get('/admin/inbox-messages/create')
+            ->assertOk()
+            ->assertSee('Goshen edition: all valid ticket holders');
+    }
 }

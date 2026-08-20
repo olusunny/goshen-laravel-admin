@@ -93,7 +93,7 @@ class ControlHubMessagingController extends Controller
             'send_inbox' => ['nullable', 'boolean'],
             'send_push' => ['nullable', 'boolean'],
             'send_email' => ['nullable', 'boolean'],
-            'recipient_mode' => ['required', 'string', 'in:all,countries,genders,roles,goshen_paid,goshen_unpaid,goshen_paid_between,goshen_paid_recent_days,goshen_paid_week,goshen_paid_month,fundraising_participants,quiz_participants'],
+            'recipient_mode' => ['required', 'string', 'in:all,countries,genders,roles,goshen_ticket_holders,goshen_paid,goshen_unpaid,goshen_paid_between,goshen_paid_recent_days,goshen_paid_week,goshen_paid_month,fundraising_participants,quiz_participants'],
             'selected_country_of_residences' => ['nullable', 'array'],
             'selected_country_of_residences.*' => ['string', 'max:120'],
             'selected_genders' => ['nullable', 'array'],
