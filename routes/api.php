@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ControlHubVerseOfDayController;
 use App\Http\Controllers\Api\DonationStripeController;
 use App\Http\Controllers\Api\DynamicFormController;
 use App\Http\Controllers\Api\GoshenExperienceController;
+use App\Http\Controllers\Api\TriumphantExperienceVideoController;
 use App\Http\Controllers\Api\GoshenQuizController;
 use App\Http\Controllers\Api\GoshenRetreatController;
 use App\Http\Controllers\Api\GoshenWalletController;
@@ -164,6 +165,15 @@ Route::controller(GoshenExperienceController::class)
         Route::post('surveys/{survey}/settings', 'updateSurveySettings')->whereNumber('survey');
         Route::post('surveys/{survey}', 'store')->whereNumber('survey');
         Route::post('events/{event}/stats', 'stats');
+    });
+
+Route::controller(TriumphantExperienceVideoController::class)
+    ->prefix('goshen-retreat/experience')
+    ->group(function () {
+        Route::get('triumphant-videos', 'index')->middleware('throttle:30,1');
+        Route::post('triumphant-videos', 'store')->middleware('throttle:6,1');
+        Route::get('triumphant-videos/me', 'mine')->middleware('throttle:30,1');
+        Route::get('triumphant-videos/{uuid}', 'show')->whereUuid('uuid')->middleware('throttle:30,1');
     });
 
 Route::controller(DynamicFormController::class)

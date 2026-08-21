@@ -28,5 +28,7 @@ $cronMonitor->watch(Schedule::command('goshen:process-wallet-topups --limit=50')
 $cronMonitor->watch(Schedule::command('queue:work database --stop-when-empty --max-time=50 --tries=3')->everyMinute()->withoutOverlapping(), 'database_queue');
 $cronMonitor->watch(Schedule::command('goshen:reconcile-refund-pending --limit=100')->everyFiveMinutes()->withoutOverlapping(), 'goshen_refund_reconciliation');
 $cronMonitor->watch(Schedule::command('goshen:process-experience-reminders --limit=100')->everyFifteenMinutes()->withoutOverlapping(), 'goshen_experience_reminders');
+$cronMonitor->watch(Schedule::command('goshen:release-deferred-triumphant-experience-uploads --limit=10')->everyMinute()->withoutOverlapping(), 'goshen_triumphant_experience_quota_release');
+$cronMonitor->watch(Schedule::command('queue:work database --queue=youtube-uploads --stop-when-empty --max-time=50 --tries=1 --timeout=55')->everyMinute()->withoutOverlapping(), 'goshen_youtube_upload_queue');
 $cronMonitor->watch(Schedule::call(fn () => app(AutomaticNotificationService::class)->processDue())->everyMinute(), 'automatic_notifications');
 $cronMonitor->watch(Schedule::command('inbox:send-scheduled --limit=50')->everyMinute()->withoutOverlapping(), 'scheduled_inbox_messages');

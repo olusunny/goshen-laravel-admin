@@ -10,6 +10,8 @@ class AdminPermissions
 {
     public const CLOUD_BACKUPS = 'manage_cloud_backups';
 
+    public const TRIUMPHANT_EXPERIENCE_YOUTUBE = 'manage_triumphant_experience_youtube';
+
     public const CRON_MONITOR = 'manage_cron_monitor';
 
     public const COUNSELING_REQUEST = 'counseling.request';
@@ -115,6 +117,7 @@ class AdminPermissions
             )
             ->mapWithKeys(fn ($meta) => [$meta['permission'] => "{$meta['group']} - {$meta['label']}"])
             ->put(self::CLOUD_BACKUPS, 'Settings - Cloud Backups')
+            ->put(self::TRIUMPHANT_EXPERIENCE_YOUTUBE, 'Goshen Retreat - Manage Triumphant Experience YouTube connection')
             ->put(self::CRON_MONITOR, 'Settings - Cron Jobs')
             ->put(self::COUNSELING_REQUEST, 'Counseling - Request support')
             ->put(self::COUNSELING_TRIAGE, 'Counseling - Triage cases')

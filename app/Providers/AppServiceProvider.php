@@ -17,6 +17,8 @@ use App\Services\LinkedMobileAccountService;
 use App\Services\MergedAccountCredentialService;
 use App\Services\StripePaymentSettings;
 use App\Services\TriumphantIdService;
+use App\Services\YouTube\GoogleYouTubeGateway;
+use App\Services\YouTube\YouTubeGateway;
 use App\Support\RuntimeCacheStore;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
@@ -33,7 +35,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(YouTubeGateway::class, GoogleYouTubeGateway::class);
     }
 
     /**
