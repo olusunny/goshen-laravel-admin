@@ -216,6 +216,16 @@ class TriumphantExperienceYouTubeOperationsTest extends TestCase
 
         $admin->givePermissionTo($youtubePermission);
         $this->assertTrue(GoshenYouTubeConnectionResource::canViewAny());
+        $this->assertTrue(GoshenYouTubeConnectionResource::shouldRegisterNavigation());
+    }
+
+    public function test_youtube_connection_uses_the_canonical_admin_slug(): void
+    {
+        $this->assertSame('goshen-youtube', GoshenYouTubeConnectionResource::getSlug());
+        $this->assertSame(
+            url('/admin/goshen-youtube'),
+            route('filament.admin.resources.goshen-youtube.index'),
+        );
     }
 
     public function test_retention_dry_run_refuses_outside_paths_and_excludes_quota_deferred_sources(): void

@@ -22,6 +22,12 @@ class GoshenYouTubeConnectionResource extends Resource
 {
     protected static ?string $model = GoshenYouTubeConnection::class;
 
+    /**
+     * Keep the operator-facing URL stable. Filament would otherwise split the
+     * YouTube acronym into "you-tube" when it derives the resource slug.
+     */
+    protected static ?string $slug = 'goshen-youtube';
+
     protected static ?string $modelLabel = 'Triumphant Experience YouTube channel';
 
     protected static ?string $pluralModelLabel = 'Triumphant Experience YouTube channels';
