@@ -16,7 +16,7 @@ return [
     'youtube' => [
         'client_id' => env('YOUTUBE_OAUTH_CLIENT_ID'),
         'client_secret' => env('YOUTUBE_OAUTH_CLIENT_SECRET'),
-        'redirect_uri' => env('YOUTUBE_OAUTH_REDIRECT_URI', rtrim((string) env('APP_URL', ''), '/').'/admin/goshen-youtube/callback'),
+        'redirect_uri' => env('YOUTUBE_OAUTH_REDIRECT_URI', rtrim((string) env('APP_URL', ''), '/').'/admin/goshen-youtube/oauth/callback'),
         'state_ttl_seconds' => (int) env('YOUTUBE_OAUTH_STATE_TTL_SECONDS', 600),
         'default_privacy' => env('YOUTUBE_DEFAULT_PRIVACY', 'private'),
         'upload_queue' => env('YOUTUBE_UPLOAD_QUEUE', 'youtube-uploads'),

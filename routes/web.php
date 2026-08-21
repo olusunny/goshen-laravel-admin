@@ -1,16 +1,16 @@
 <?php
 
-use App\Http\Controllers\Api\CompatibilityController;
 use App\Http\Controllers\Api\AccommodationController;
+use App\Http\Controllers\Api\CompatibilityController;
 use App\Http\Controllers\Api\PrayerCommunityController;
-use App\Http\Controllers\Api\TestimonyController;
 use App\Http\Controllers\Api\RetiredFeatureController;
+use App\Http\Controllers\Api\TestimonyController;
 use App\Http\Controllers\DynamicFormSubmissionFileController;
 use App\Http\Controllers\DynamicFormWebController;
 use App\Http\Controllers\GoshenReferralInviteController;
 use App\Http\Controllers\GoshenYouTubeOAuthController;
-use App\Http\Middleware\AuthorizeGoshenYouTubeConnection;
 use App\Http\Controllers\MemberAppController;
+use App\Http\Middleware\AuthorizeGoshenYouTubeConnection;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 use Personal\EventInstallments\Http\Controllers\Admin\TicketDocumentController;
@@ -39,7 +39,7 @@ Route::get('admin/dynamic-form-submissions/{submission}/files/{field}', [Dynamic
 Route::get('admin/goshen-tickets/{ticket}/documents/{type}', TicketDocumentController::class)
     ->middleware(['auth', 'signed'])
     ->name('admin.goshen-tickets.documents.show');
-Route::prefix('admin/goshen-youtube')
+Route::prefix('admin/goshen-youtube/oauth')
     ->middleware(['auth', AuthorizeGoshenYouTubeConnection::class])
     ->controller(GoshenYouTubeOAuthController::class)
     ->group(function (): void {

@@ -85,6 +85,6 @@ class GoshenYouTubeOAuthController extends Controller
 
     private function redirectToConnections(): RedirectResponse
     {
-        return redirect()->route('filament.admin.resources.goshen-youtube-connections.index');
+        return redirect()->route('filament.admin.resources.goshen-youtube.index');
     }
 }
