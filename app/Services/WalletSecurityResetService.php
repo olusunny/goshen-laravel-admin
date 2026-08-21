@@ -156,7 +156,7 @@ class WalletSecurityResetService
 
     private function enforceAdminResetLimit(?User $admin): void
     {
-        if (! $admin || $admin->hasRole('super_admin')) {
+        if (! $admin || $admin->hasRole('super_admin', 'web')) {
             return;
         }
 

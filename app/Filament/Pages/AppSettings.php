@@ -135,7 +135,7 @@ class AppSettings extends Page
         $user = Auth::user();
 
         return $user && (
-            $user->hasRole('super_admin')
+            $user->hasRole('super_admin', 'web')
             || $user->can(AdminPermissions::resourcePermission(AppSettingResource::class))
         );
     }
@@ -265,7 +265,6 @@ class AppSettings extends Page
 
     /**
      * @param class-string<Page> $pageClass
-     *
      * @return array{label: string, description: string, url: string}|null
      */
     private function pageQuickLink(string $pageClass, string $label, string $description): ?array
@@ -287,7 +286,6 @@ class AppSettings extends Page
 
     /**
      * @param class-string $resourceClass
-     *
      * @return array{label: string, description: string, url: string}|null
      */
     private function resourceQuickLink(string $resourceClass, string $label, string $description): ?array

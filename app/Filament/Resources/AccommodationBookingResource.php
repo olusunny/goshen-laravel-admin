@@ -3,14 +3,13 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\AccommodationBookingResource\Pages;
+use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Models\AccommodationBooking;
 use App\Models\AccommodationCategory;
 use App\Models\AccommodationUnit;
-use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Infolists\Components\TextEntry;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -21,10 +20,19 @@ use Illuminate\Database\Eloquent\Model;
 class AccommodationBookingResource extends Resource
 {
     use AuthorizesResourceAccess;
+
     protected static ?string $model = AccommodationBooking::class;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-calendar-days';
+
     protected static string|\UnitEnum|null $navigationGroup = 'Legacy Accommodation Archive';
+
     protected static ?string $navigationLabel = 'Historical Bookings';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
     public static function form(Schema $schema): Schema
     {

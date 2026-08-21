@@ -5,7 +5,6 @@ namespace App\Services\Addons;
 use App\Models\Addon;
 use Composer\Autoload\ClassLoader;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\ServiceProvider;
 use Throwable;
 
 class AddonRuntimeLoader
@@ -102,6 +101,70 @@ class AddonRuntimeLoader
         }
 
         return $discoveries;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function adminPermissionLabels(): array
+    {
+        $labels = [];
+
+        foreach ($this->cachedActiveAddons() as $addon) {
+            $manifest = $addon['manifest'] ?? null;
+            if (! is_array($manifest)) {
+                continue;
+            }
+
+            $labels = array_replace(
+                $labels,
+                $this->permissionLabelsForManifest(
+                    $manifest,
+                    (string) ($addon['package_key'] ?? 'Add-on'),
+                ),
+            );
+        }
+
+        ksort($labels);
+
+        return $labels;
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     * @return array<string, string>
+     */
+    public function permissionLabelsForManifest(array $manifest, string $fallbackName = 'Add-on'): array
+    {
+        $addonName = trim((string) ($manifest['name'] ?? $fallbackName)) ?: 'Add-on';
+        $permissions = collect($manifest['permissions'] ?? [])
+            ->filter(fn (mixed $permission): bool => is_string($permission));
+
+        $capabilities = $manifest['capabilities'] ?? [];
+        if (is_array($capabilities) && ! array_is_list($capabilities)) {
+            foreach ($capabilities as $definition) {
+                if (! is_array($definition)) {
+                    continue;
+                }
+
+                $permissions = $permissions->merge(
+                    array_filter($definition['permissions'] ?? [], 'is_string'),
+                );
+            }
+        }
+
+        return $permissions
+            ->map(fn (string $permission): string => trim($permission))
+            ->filter()
+            ->unique()
+            ->mapWithKeys(fn (string $permission): array => [
+                $permission => $addonName.' - '.str($permission)
+                    ->afterLast('.')
+                    ->replace('_', ' ')
+                    ->headline()
+                    ->toString(),
+            ])
+            ->all();
     }
 
     /**

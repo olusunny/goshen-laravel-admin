@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Services\TriumphantIdService;
+use App\Support\AdminPermissions;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -11,13 +13,12 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
-use App\Support\AdminPermissions;
-use App\Services\TriumphantIdService;
 
 class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
+
     use HasRoles {
         assignRole as protected spatieAssignRole;
         syncRoles as protected spatieSyncRoles;
@@ -36,7 +37,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->hasRole('super_admin')
+        return $this->hasRole('super_admin', 'web')
             || $this->hasAnyPermission(AdminPermissions::names());
     }
 

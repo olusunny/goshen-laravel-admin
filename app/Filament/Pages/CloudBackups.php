@@ -2,7 +2,6 @@
 
 namespace App\Filament\Pages;
 
-use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
 use BackedEnum;
 use ChurchTools\CloudBackup\Models\CloudBackupConnection;
@@ -37,7 +36,7 @@ class CloudBackups extends Page
         $user = Auth::user();
 
         return $user && (
-            $user->hasRole('super_admin')
+            $user->hasRole('super_admin', 'web')
             || $user->can(AdminPermissions::CLOUD_BACKUPS)
         );
     }

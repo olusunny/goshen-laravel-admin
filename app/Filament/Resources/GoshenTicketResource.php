@@ -670,7 +670,7 @@ class GoshenTicketResource extends Resource
         $user = Auth::user();
 
         return $user instanceof User
-            && ($user->hasRole('super_admin') || $user->can(AdminPermissions::GOSHEN_FAMILY_LINK));
+            && ($user->hasRole('super_admin', 'web') || $user->can(AdminPermissions::GOSHEN_FAMILY_LINK));
     }
 
     /** @return array<int, Forms\Components\Component> */

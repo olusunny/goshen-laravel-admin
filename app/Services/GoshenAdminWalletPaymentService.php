@@ -227,7 +227,7 @@ class GoshenAdminWalletPaymentService
         MobileUser $beneficiary,
         array $authorization,
     ): void {
-        if (! $admin->hasRole('super_admin') && ! $admin->can(AdminPermissions::GOSHEN_MEMBER_WALLET_CHARGE)) {
+        if (! $admin->hasRole('super_admin', 'web') && ! $admin->can(AdminPermissions::GOSHEN_MEMBER_WALLET_CHARGE)) {
             throw ValidationException::withMessages([
                 'payment_method' => 'You are not authorized to charge a member wallet.',
             ]);

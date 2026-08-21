@@ -38,7 +38,7 @@ class CronJobs extends Page
         $user = Auth::user();
 
         return $user && (
-            $user->hasRole('super_admin')
+            $user->hasRole('super_admin', 'web')
             || $user->can(AdminPermissions::CRON_MONITOR)
         );
     }

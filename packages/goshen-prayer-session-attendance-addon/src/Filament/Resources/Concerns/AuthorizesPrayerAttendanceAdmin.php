@@ -101,7 +101,7 @@ trait AuthorizesPrayerAttendanceAdmin
             return false;
         }
 
-        if ($user->hasRole('super_admin')) {
+        if ($user->hasRole('super_admin', 'web')) {
             return true;
         }
 

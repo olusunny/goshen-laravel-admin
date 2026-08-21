@@ -15,7 +15,7 @@ class AuthorizeCloudBackup
 
         abort_unless(
             $user && (
-                $user->hasRole('super_admin')
+                $user->hasRole('super_admin', 'web')
                 || $user->can(AdminPermissions::CLOUD_BACKUPS)
             ),
             403,

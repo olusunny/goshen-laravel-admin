@@ -41,7 +41,7 @@ class GoshenTicketPdfTemplates extends Page
         $user = Auth::user();
 
         return $user && (
-            $user->hasRole('super_admin')
+            $user->hasRole('super_admin', 'web')
             || $user->can(AdminPermissions::resourcePermission(GoshenTicketResource::class))
             || $user->can(AdminPermissions::GOSHEN_TICKET_ISSUE)
         );

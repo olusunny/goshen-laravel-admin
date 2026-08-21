@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Filament\Resources\DonationResource;
 use App\Models\Donation;
 use App\Models\User;
 use App\Support\AdminPermissions;
@@ -52,7 +53,7 @@ class DonationPolicy
 
     private function canManageDonations(User $user): bool
     {
-        return $user->hasRole('super_admin')
-            || $user->can(AdminPermissions::resourcePermission(\App\Filament\Resources\DonationResource::class));
+        return $user->hasRole('super_admin', 'web')
+            || $user->can(AdminPermissions::resourcePermission(DonationResource::class));
     }
 }

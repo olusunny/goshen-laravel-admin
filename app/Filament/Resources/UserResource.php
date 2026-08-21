@@ -89,6 +89,15 @@ class UserResource extends Resource
                                 ->values()
                                 ->all();
 
+                            if (Role::query()
+                                ->whereIn('id', $roleIds)
+                                ->where('guard_name', '!=', 'web')
+                                ->exists()) {
+                                $fail('Admin users can only be assigned web admin roles.');
+
+                                return;
+                            }
+
                             try {
                                 app(TriumphantIdService::class)->assertReservedWebRolesAvailable($roleIds, $record);
                             } catch (ValidationException $exception) {
@@ -106,8 +115,8 @@ class UserResource extends Resource
                         },
                     ]),
                 Section::make('Individual admin permissions')
-                    ->description('Grant feature access directly to this admin user without changing their role. Super Admin users always have full access and do not need individual permissions.')
-                    ->hidden(fn (?User $record): bool => (bool) $record?->hasRole('super_admin'))
+                    ->description('Direct permissions override role restrictions. Leave these empty when access should follow the assigned role. Super Admin users always have full access and do not need individual permissions.')
+                    ->hidden(fn (?User $record): bool => (bool) $record?->hasRole('super_admin', 'web'))
                     ->schema([
                         Forms\Components\CheckboxList::make('permissions')
                             ->relationship(
@@ -211,13 +220,13 @@ class UserResource extends Resource
 
     private static function currentAdminIsSuperAdmin(): bool
     {
-        return (bool) Auth::user()?->hasRole('super_admin');
+        return (bool) Auth::user()?->hasRole('super_admin', 'web');
     }
 
     private static function isProtectedSuperAdminUser(Model $record): bool
     {
         return $record instanceof User
             && ! static::currentAdminIsSuperAdmin()
-            && $record->hasRole('super_admin');
+            && $record->hasRole('super_admin', 'web');
     }
 }

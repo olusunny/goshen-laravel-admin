@@ -8,7 +8,6 @@ use BackedEnum;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class TriumphantIdService
@@ -27,12 +26,7 @@ class TriumphantIdService
         Role::query()->firstOrCreate(['name' => self::IT_MANAGER_ROLE, 'guard_name' => 'mobile']);
 
         Role::query()->firstOrCreate(['name' => self::MAIN_PASTOR_ROLE, 'guard_name' => 'web']);
-        $webItManager = Role::query()->firstOrCreate(['name' => self::IT_MANAGER_ROLE, 'guard_name' => 'web']);
-        $permissions = Permission::query()->where('guard_name', 'web')->pluck('name')->all();
-
-        if ($permissions !== []) {
-            $webItManager->syncPermissions($permissions);
-        }
+        Role::query()->firstOrCreate(['name' => self::IT_MANAGER_ROLE, 'guard_name' => 'web']);
     }
 
     public function formatted(?int $sequence): ?string

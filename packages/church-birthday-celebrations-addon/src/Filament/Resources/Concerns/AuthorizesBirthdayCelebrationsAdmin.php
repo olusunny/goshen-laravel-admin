@@ -65,6 +65,6 @@ trait AuthorizesBirthdayCelebrationsAdmin
 
         return $user !== null
             && ($user->can('church_birthday_celebrations.'.$permission)
-                || (method_exists($user, 'hasRole') && $user->hasRole('super_admin')));
+                || (method_exists($user, 'hasRole') && $user->hasRole('super_admin', 'web')));
     }
 }

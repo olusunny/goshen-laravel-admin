@@ -53,7 +53,7 @@ trait AuthorizesResourceAccess
             return false;
         }
 
-        return $user->hasRole('super_admin')
+        return $user->hasRole('super_admin', 'web')
             || $user->can(AdminPermissions::resourcePermission(static::class));
     }
 }

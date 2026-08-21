@@ -3,6 +3,7 @@
 namespace ChurchTools\GoshenPrayerAttendance\Services;
 
 use Illuminate\Database\Eloquent\Model;
+use Spatie\Permission\Guard;
 use Throwable;
 
 class PrayerAttendancePermissionGate
@@ -14,7 +15,8 @@ class PrayerAttendancePermissionGate
         }
 
         try {
-            if (method_exists($user, 'hasRole') && $user->hasRole('super_admin')) {
+            if (method_exists($user, 'hasRole')
+                && $user->hasRole('super_admin', Guard::getDefaultName($user))) {
                 return true;
             }
 

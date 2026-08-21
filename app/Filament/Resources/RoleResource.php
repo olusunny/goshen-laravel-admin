@@ -98,10 +98,9 @@ class RoleResource extends Resource
                                         return;
                                     }
 
-                                    if (! static::currentAdminIsSuperAdmin()
-                                        && $guardName === 'web'
-                                        && (string) $value === 'super_admin') {
-                                        $fail('Only a Super Admin can create or edit the Super Admin role.');
+                                    if ((string) $value === 'super_admin'
+                                        && ($guardName !== 'web' || ! static::currentAdminIsSuperAdmin())) {
+                                        $fail('The Super Admin role is reserved for authorized web administrators.');
                                     }
                                 },
                             ],
@@ -224,6 +223,6 @@ class RoleResource extends Resource
 
     private static function currentAdminIsSuperAdmin(): bool
     {
-        return (bool) Auth::user()?->hasRole('super_admin');
+        return (bool) Auth::user()?->hasRole('super_admin', 'web');
     }
 }

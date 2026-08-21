@@ -48,8 +48,8 @@ class DatabaseSeeder extends Seeder
             'finance' => ['view_donations', 'manage_donations'],
         ];
 
-        foreach (collect($roles)->flatten()->unique() as $permission) {
-            Permission::firstOrCreate(['name' => $permission]);
+        foreach (collect($roles)->flatten()->merge(AdminPermissions::names())->unique() as $permission) {
+            Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
         }
 
         foreach ($roles as $name => $permissions) {

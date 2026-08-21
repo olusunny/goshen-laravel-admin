@@ -8,12 +8,32 @@ use App\Services\TriumphantIdService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class TriumphantIdServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_ensuring_reserved_roles_does_not_overwrite_it_manager_permissions(): void
+    {
+        $service = app(TriumphantIdService::class);
+        $service->ensureRoles();
+
+        $allowed = Permission::findOrCreate('manage_goshen_ticket', 'web');
+        $forbidden = Permission::findOrCreate('manage_app_setting', 'web');
+        $role = Role::query()
+            ->where('guard_name', 'web')
+            ->where('name', TriumphantIdService::IT_MANAGER_ROLE)
+            ->firstOrFail();
+        $role->syncPermissions([$allowed]);
+
+        $service->ensureRoles();
+
+        $this->assertTrue($role->refresh()->hasPermissionTo($allowed));
+        $this->assertFalse($role->hasPermissionTo($forbidden));
+    }
 
     public function test_mobile_users_receive_formatted_triumphant_ids_and_reuse_deleted_general_ids(): void
     {

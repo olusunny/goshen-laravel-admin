@@ -2,14 +2,16 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Pages\AppSettings;
 use App\Filament\Pages\AdminMenuSettings;
+use App\Filament\Pages\AppSettings;
 use App\Filament\Pages\CloudBackups;
 use App\Filament\Pages\CronJobs;
+use App\Filament\Pages\GoshenReferralSettings;
 use App\Filament\Pages\GoshenRetreatConsole;
-use App\Filament\Pages\PaymentGateways;
-use App\Filament\Resources\AppSettingResource;
+use App\Filament\Resources\AccommodationBookingResource;
+use App\Filament\Resources\AccommodationPaymentResource;
 use App\Filament\Resources\AccommodationUnitResource;
+use App\Filament\Resources\AppSettingResource;
 use App\Filament\Resources\DonationResource;
 use App\Filament\Resources\GoshenBookingResource;
 use App\Filament\Resources\RoleResource;
@@ -69,6 +71,29 @@ class AdminMenuVisibilityTest extends TestCase
         $this->assertFalse(CronJobs::shouldRegisterNavigation());
     }
 
+    public function test_explicit_hidden_visibility_is_not_reopened_by_an_unconfigured_second_role(): void
+    {
+        [$admin, $role] = $this->adminWithRolePermission(
+            AdminPermissions::resourcePermission(DonationResource::class),
+        );
+        $secondRole = Role::query()->create([
+            'name' => 'unconfigured_secondary_role',
+            'guard_name' => 'web',
+        ]);
+        $admin->assignRole($secondRole);
+
+        AdminMenuRoleVisibility::query()->create([
+            'role_id' => $role->id,
+            'menu_key' => AdminMenuRegistry::resourceKey(DonationResource::class),
+            'is_visible' => false,
+        ]);
+
+        $this->actingAs($admin);
+
+        $this->assertTrue(DonationResource::canViewAny());
+        $this->assertFalse(DonationResource::shouldRegisterNavigation());
+    }
+
     public function test_menu_visibility_hides_super_admin_navigation_without_revoking_access(): void
     {
         $role = Role::query()->firstOrCreate([
@@ -93,6 +118,28 @@ class AdminMenuVisibilityTest extends TestCase
         $this->assertFalse(DonationResource::shouldRegisterNavigation());
     }
 
+    public function test_explicit_hidden_visibility_takes_precedence_over_an_explicitly_visible_second_role(): void
+    {
+        [$admin, $hiddenRole] = $this->adminWithRolePermission(
+            AdminPermissions::resourcePermission(DonationResource::class),
+        );
+        $visibleRole = Role::query()->create([
+            'name' => 'explicitly_visible_secondary_role',
+            'guard_name' => 'web',
+        ]);
+        $admin->assignRole($visibleRole);
+        $menuKey = AdminMenuRegistry::resourceKey(DonationResource::class);
+
+        AdminMenuRoleVisibility::query()->insert([
+            ['role_id' => $hiddenRole->id, 'menu_key' => $menuKey, 'is_visible' => false],
+            ['role_id' => $visibleRole->id, 'menu_key' => $menuKey, 'is_visible' => true],
+        ]);
+
+        $this->actingAs($admin);
+
+        $this->assertFalse(DonationResource::shouldRegisterNavigation());
+    }
+
     public function test_admin_menu_settings_save_super_admin_visibility_and_refresh_the_sidebar(): void
     {
         $role = Role::query()->firstOrCreate([
@@ -111,6 +158,7 @@ class AdminMenuVisibilityTest extends TestCase
             ->assertSee('Donation')
             ->assertSee('Super Admin')
             ->assertSeeHtml('wire:submit.prevent="save"')
+            ->assertDontSeeHtml('wire:model.defer=')
             ->assertSeeHtml('type="submit"')
             ->assertSee('Save menu visibility')
             ->assertDontSee('Create at least one web admin role before configuring menu visibility.')
@@ -133,7 +181,10 @@ class AdminMenuVisibilityTest extends TestCase
 
         $this->assertNotContains(AdminMenuRegistry::pageKey(CloudBackups::class), $keys);
         $this->assertNotContains(AdminMenuRegistry::resourceKey(AccommodationUnitResource::class), $keys);
+        $this->assertNotContains(AdminMenuRegistry::resourceKey(AccommodationBookingResource::class), $keys);
+        $this->assertNotContains(AdminMenuRegistry::resourceKey(AccommodationPaymentResource::class), $keys);
         $this->assertContains(AdminMenuRegistry::pageKey(CronJobs::class), $keys);
+        $this->assertContains(AdminMenuRegistry::pageKey(GoshenReferralSettings::class), $keys);
         $this->assertContains(AdminMenuRegistry::resourceKey(DonationResource::class), $keys);
     }
 
@@ -252,6 +303,30 @@ class AdminMenuVisibilityTest extends TestCase
             ])
             ->call('create')
             ->assertHasFormErrors(['roles']);
+
+        $mobileSuperRole = Role::query()->create([
+            'name' => 'super_admin',
+            'guard_name' => 'mobile',
+        ]);
+
+        Livewire::actingAs($manager)
+            ->test(CreateUser::class)
+            ->fillForm([
+                'name' => 'Crafted Mobile Admin',
+                'email' => 'crafted-mobile@example.test',
+                'password' => 'password',
+                'roles' => [$mobileSuperRole->id],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['roles']);
+
+        $craftedUser = User::factory()->create();
+        $craftedUser->roles()->attach($mobileSuperRole->id);
+        $this->actingAs($craftedUser);
+
+        $this->assertFalse(UserResource::canViewAny());
+        $this->assertFalse(RoleResource::canViewAny());
+        $this->assertFalse(app(\Sunny\Fundraising\Services\DefaultPermissionResolver::class)->canManage($craftedUser));
     }
 
     /**
@@ -264,7 +339,6 @@ class AdminMenuVisibilityTest extends TestCase
 
     /**
      * @param array<int, string> $permissionNames
-     *
      * @return array{0: User, 1: Role}
      */
     private function adminWithRolePermissions(array $permissionNames): array
@@ -291,7 +365,7 @@ class AdminMenuVisibilityTest extends TestCase
      */
     private function settingsQuickLinkLabels(): array
     {
-        return collect((new AppSettings())->getViewData()['quickLinks'])
+        return collect((new AppSettings)->getViewData()['quickLinks'])
             ->pluck('label')
             ->values()
             ->all();
@@ -302,7 +376,7 @@ class AdminMenuVisibilityTest extends TestCase
      */
     private function goshenConsoleCardTitles(): array
     {
-        return collect((new GoshenRetreatConsole())->getViewData()['cards'])
+        return collect((new GoshenRetreatConsole)->getViewData()['cards'])
             ->pluck('title')
             ->values()
             ->all();

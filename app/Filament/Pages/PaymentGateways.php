@@ -3,7 +3,6 @@
 namespace App\Filament\Pages;
 
 use App\Services\StripePaymentSettings;
-use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
 use BackedEnum;
 use Filament\Notifications\Notification;
@@ -83,7 +82,7 @@ class PaymentGateways extends Page
         $user = Auth::user();
 
         return $user && (
-            $user->hasRole('super_admin')
+            $user->hasRole('super_admin', 'web')
             || $user->can(AdminPermissions::PAYMENT_GATEWAYS)
         );
     }

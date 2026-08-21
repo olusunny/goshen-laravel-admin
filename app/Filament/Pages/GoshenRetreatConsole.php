@@ -47,7 +47,7 @@ class GoshenRetreatConsole extends Page
             return false;
         }
 
-        if ($user->hasRole('super_admin')) {
+        if ($user->hasRole('super_admin', 'web')) {
             return true;
         }
 
@@ -88,7 +88,7 @@ class GoshenRetreatConsole extends Page
             return false;
         }
 
-        if ($user->hasRole('super_admin') || $user->can($permission)) {
+        if ($user->hasRole('super_admin', 'web') || $user->can($permission)) {
             return true;
         }
 

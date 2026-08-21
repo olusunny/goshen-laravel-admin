@@ -4,6 +4,7 @@ namespace ChurchTools\DigitalCounseling\Services;
 
 use ChurchTools\DigitalCounseling\Contracts\PermissionResolverContract;
 use ChurchTools\DigitalCounseling\Models\CounselingCase;
+use Spatie\Permission\Guard;
 use Throwable;
 
 class DefaultPermissionResolver implements PermissionResolverContract
@@ -99,7 +100,8 @@ class DefaultPermissionResolver implements PermissionResolverContract
         }
 
         try {
-            if (method_exists($user, 'hasRole') && $user->hasRole('super_admin')) {
+            if (method_exists($user, 'hasRole')
+                && $user->hasRole('super_admin', Guard::getDefaultName($user))) {
                 return true;
             }
 

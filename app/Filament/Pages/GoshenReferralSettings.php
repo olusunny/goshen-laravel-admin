@@ -5,7 +5,6 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\AppSettingResource;
 use App\Filament\Resources\GoshenReferralPointEntryResource;
 use App\Models\AppSetting;
-use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
 use BackedEnum;
 use Filament\Notifications\Notification;
@@ -55,7 +54,7 @@ class GoshenReferralSettings extends Page
         $user = Auth::user();
 
         return $user && (
-            $user->hasRole('super_admin')
+            $user->hasRole('super_admin', 'web')
             || $user->can(AdminPermissions::resourcePermission(GoshenReferralPointEntryResource::class))
             || $user->can(AdminPermissions::resourcePermission(AppSettingResource::class))
         );

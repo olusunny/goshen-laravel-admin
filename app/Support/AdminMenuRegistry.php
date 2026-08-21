@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Filament\Pages\AppSettings;
 use App\Filament\Pages\CronJobs;
+use App\Filament\Pages\GoshenReferralSettings;
 use App\Filament\Pages\GoshenRetreatConsole;
 use App\Filament\Pages\GoshenTicketPdfTemplates;
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
@@ -122,13 +123,13 @@ class AdminMenuRegistry
                 ->whereIn('role_id', $roleIds)
                 ->pluck('is_visible', 'role_id');
 
-            foreach ($roleIds as $roleId) {
-                if (! $visibilityByRole->has($roleId) || (bool) $visibilityByRole->get($roleId)) {
-                    return true;
+            foreach ($visibilityByRole as $isVisible) {
+                if (! (bool) $isVisible) {
+                    return false;
                 }
             }
 
-            return false;
+            return true;
         } catch (Throwable) {
             return true;
         }
@@ -142,6 +143,7 @@ class AdminMenuRegistry
         return [
             AppSettings::class,
             CronJobs::class,
+            GoshenReferralSettings::class,
             GoshenRetreatConsole::class,
             GoshenTicketPdfTemplates::class,
         ];

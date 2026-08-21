@@ -4,7 +4,6 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\AppSettingResource;
 use App\Models\AppSetting;
-use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
 use BackedEnum;
 use Filament\Notifications\Notification;
@@ -92,7 +91,7 @@ class GoogleFirebaseSettings extends Page
         $user = Auth::user();
 
         return $user && (
-            $user->hasRole('super_admin')
+            $user->hasRole('super_admin', 'web')
             || $user->can(AdminPermissions::resourcePermission(AppSettingResource::class))
         );
     }
@@ -190,6 +189,7 @@ class GoogleFirebaseSettings extends Page
         $json = @file_get_contents($resolvedPath);
         if ($json === false) {
             $this->firebaseCredentialsFileReadable = false;
+
             return;
         }
 

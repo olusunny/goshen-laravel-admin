@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Services\Addons\AddonRuntimeLoader;
 use Illuminate\Support\Str;
 
@@ -104,7 +105,14 @@ class AdminPermissions
 
     public static function all(): array
     {
-        return collect(self::resources())
+        $permissions = collect(self::resources())
+            ->filter(
+                fn (array $meta, string $resourceClass): bool => in_array(
+                    AuthorizesResourceAccess::class,
+                    class_uses_recursive($resourceClass),
+                    true,
+                ),
+            )
             ->mapWithKeys(fn ($meta) => [$meta['permission'] => "{$meta['group']} - {$meta['label']}"])
             ->put(self::CLOUD_BACKUPS, 'Settings - Cloud Backups')
             ->put(self::CRON_MONITOR, 'Settings - Cron Jobs')
@@ -123,8 +131,15 @@ class AdminPermissions
             ->put(self::GOSHEN_FAMILY_LINK, 'Goshen Retreat - Link existing families')
             ->put(self::GOSHEN_MEMBER_WALLET_CHARGE, 'Goshen Retreat - Charge member wallets')
             ->put(self::PAYMENT_GATEWAYS, 'Settings - Payment Gateways')
-            ->put(self::WALLET_SECURITY_RESETS, 'Goshen Retreat - Wallet Security Resets')
-            ->all();
+            ->put(self::WALLET_SECURITY_RESETS, 'Goshen Retreat - Wallet Security Resets');
+
+        if (app()->bound(AddonRuntimeLoader::class)) {
+            foreach (app(AddonRuntimeLoader::class)->adminPermissionLabels() as $permission => $label) {
+                $permissions->put($permission, 'Add-ons - '.$label);
+            }
+        }
+
+        return $permissions->all();
     }
 
     public static function names(): array

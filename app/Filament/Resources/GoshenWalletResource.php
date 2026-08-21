@@ -541,7 +541,7 @@ class GoshenWalletResource extends Resource
     {
         $admin = Auth::user();
 
-        if (! $admin || (! $admin->hasRole('super_admin') && ! $admin->can(AdminPermissions::resourcePermission(static::class)))) {
+        if (! $admin || (! $admin->hasRole('super_admin', 'web') && ! $admin->can(AdminPermissions::resourcePermission(static::class)))) {
             return false;
         }
 
@@ -566,7 +566,7 @@ class GoshenWalletResource extends Resource
         $admin = Auth::user();
 
         if (! $admin instanceof User
-            || (! $admin->hasRole('super_admin') && ! $admin->can(AdminPermissions::GOSHEN_MEMBER_WALLET_CHARGE))) {
+            || (! $admin->hasRole('super_admin', 'web') && ! $admin->can(AdminPermissions::GOSHEN_MEMBER_WALLET_CHARGE))) {
             return false;
         }
 
@@ -743,7 +743,7 @@ class GoshenWalletResource extends Resource
     {
         $admin = Auth::user();
 
-        if (! $admin || (! $admin->hasRole('super_admin') && ! $admin->can(AdminPermissions::WALLET_SECURITY_RESETS))) {
+        if (! $admin || (! $admin->hasRole('super_admin', 'web') && ! $admin->can(AdminPermissions::WALLET_SECURITY_RESETS))) {
             return false;
         }
 

@@ -8,6 +8,7 @@ use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use UnitEnum;
 
@@ -109,24 +110,34 @@ class AdminMenuSettings extends Page
     {
         abort_unless(static::canAccess(), 403);
 
-        $roleIds = collect($this->roles)->pluck('id')->map(fn ($id): int => (int) $id)->all();
-        $keysByHash = collect($this->items)->mapWithKeys(
-            fn (array $item): array => [$item['hash'] => $item['key']],
+        $roleIds = Role::query()
+            ->where('guard_name', 'web')
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+        $keysByHash = collect(AdminMenuRegistry::items())->mapWithKeys(
+            fn (array $item): array => [sha1($item['key']) => $item['key']],
         );
 
+        DB::transaction(function () use ($roleIds, $keysByHash): void {
         foreach ($roleIds as $roleId) {
             foreach ($keysByHash as $hash => $menuKey) {
+                    if (! array_key_exists($hash, $this->visibility[$roleId] ?? [])) {
+                        continue;
+                    }
+
                 AdminMenuRoleVisibility::query()->updateOrCreate(
                     [
                         'role_id' => $roleId,
                         'menu_key' => $menuKey,
                     ],
                     [
-                        'is_visible' => (bool) ($this->visibility[$roleId][$hash] ?? false),
+                            'is_visible' => (bool) $this->visibility[$roleId][$hash],
                     ],
                 );
             }
         }
+        });
 
         $this->dispatch('refresh-sidebar');
 

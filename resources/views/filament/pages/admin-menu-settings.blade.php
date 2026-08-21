@@ -73,7 +73,7 @@
                                                 <input
                                                     type="checkbox"
                                                     aria-label="Visible for {{ str($role['name'])->headline() }}: {{ $item['label'] }}"
-                                                    wire:model.defer="visibility.{{ $role['id'] }}.{{ $item['hash'] }}"
+                                                    wire:model="visibility.{{ $role['id'] }}.{{ $item['hash'] }}"
                                                 >
                                             </label>
                                         </td>
