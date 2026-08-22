@@ -4862,6 +4862,10 @@ class GoshenRetreatController extends Controller
             return false;
         }
 
+        if ($user->can('scan_goshen_tickets')) {
+            return true;
+        }
+
         return $user->hasAnyRole([
             'event_scanner',
             'Event Scanner',
@@ -4876,6 +4880,10 @@ class GoshenRetreatController extends Controller
     {
         if (! $user->canUseCommunity()) {
             return false;
+        }
+
+        if ($user->can('manage_goshen_scanners')) {
+            return true;
         }
 
         return $user->hasAnyRole([

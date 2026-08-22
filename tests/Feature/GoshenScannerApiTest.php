@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AppSetting;
 use App\Models\MobileUser;
+use App\Services\TriumphantIdService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Personal\EventInstallments\Enums\BookingStatus;
 use Personal\EventInstallments\Enums\EventType;
@@ -176,6 +177,68 @@ class GoshenScannerApiTest extends TestCase
         $this->assertSame(0, TicketCheckIn::query()
             ->where('ticket_id', $ticket->id)
             ->count());
+    }
+
+    public function test_triumphant_it_manager_can_manage_the_scanner_through_its_mobile_role_permission(): void
+    {
+        [, $ticket] = $this->ticketFixture();
+        AppSetting::query()->updateOrCreate(
+            ['key' => 'goshen_retreat_enabled'],
+            ['group' => 'modules', 'value' => '1', 'is_secret' => false],
+        );
+        AppSetting::query()->updateOrCreate(
+            ['key' => 'goshen_scanner_enabled'],
+            ['group' => 'modules', 'value' => '1', 'is_secret' => false],
+        );
+
+        $manager = MobileUser::create([
+            'name' => 'Triumphant IT Manager',
+            'email' => 'it-manager-scanner@example.test',
+            'password' => 'secret',
+            'is_verified' => true,
+            'email_verified_at' => now(),
+        ]);
+        $role = Role::findOrCreate(TriumphantIdService::IT_MANAGER_ROLE, 'mobile');
+        $role->givePermissionTo([
+            'scan_goshen_tickets',
+            'manage_goshen_scanners',
+        ]);
+        $manager->assignRole($role);
+
+        $this->postJson('/api/goshen-retreat/scanner/status', [
+            'data' => ['api_token' => $manager->issueApiToken()],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.allowed', true)
+            ->assertJsonPath('data.manager_allowed', true);
+
+        $this->postJson('/api/goshen-retreat/scanner/lookup', [
+            'data' => [
+                'api_token' => $manager->issueApiToken(),
+                'lookup_mode' => 'ticket',
+                'identifier' => $ticket->formatted_number,
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.ticket_number', $ticket->formatted_number);
+
+        $this->postJson('/api/goshen-retreat/scanner/check-in', [
+            'data' => [
+                'api_token' => $manager->issueApiToken(),
+                'identifier' => $ticket->formatted_number,
+                'day_number' => 1,
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('duplicate', false);
+    }
+
+    public function test_scanner_permissions_are_available_on_the_triumphant_it_manager_mobile_role(): void
+    {
+        $role = Role::findByName(TriumphantIdService::IT_MANAGER_ROLE, 'mobile');
+
+        $this->assertTrue($role->hasPermissionTo('scan_goshen_tickets'));
+        $this->assertTrue($role->hasPermissionTo('manage_goshen_scanners'));
     }
 
     public function test_event_duration_check_in_is_idempotent_across_event_days(): void
