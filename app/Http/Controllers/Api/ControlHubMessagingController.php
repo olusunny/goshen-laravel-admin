@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Filament\Resources\InboxMessageResource;
+use App\Models\ChurchGroup;
 use App\Models\InboxMessage;
 use App\Models\MobileUser;
 use App\Services\InboxMessageDeliveryService;
@@ -44,6 +45,29 @@ class ControlHubMessagingController extends Controller
                     ->orderBy('country_of_residence')
                     ->pluck('country_of_residence')
                     ->values(),
+                'groups' => ChurchGroup::query()
+                    ->where('is_active', true)
+                    ->orderBy('sort_order')
+                    ->orderBy('name')
+                    ->get(['id', 'name'])
+                    ->map(fn (ChurchGroup $group): array => ['id' => $group->id, 'name' => $group->name])
+                    ->values(),
+                'states_by_country' => MobileUser::query()
+                    ->where('is_blocked', false)
+                    ->where('is_deleted', false)
+                    ->whereNotNull('country_of_residence')
+                    ->where('country_of_residence', '!=', '')
+                    ->whereNotNull('state_county_province')
+                    ->where('state_county_province', '!=', '')
+                    ->orderBy('country_of_residence')
+                    ->orderBy('state_county_province')
+                    ->get(['country_of_residence', 'state_county_province'])
+                    ->groupBy('country_of_residence')
+                    ->map(fn ($users) => $users
+                        ->pluck('state_county_province')
+                        ->unique()
+                        ->values())
+                    ->all(),
                 'genders' => MobileUser::query()
                     ->whereNotNull('gender')
                     ->where('gender', '!=', '')
@@ -71,6 +95,52 @@ class ControlHubMessagingController extends Controller
         ]);
     }
 
+    public function recipients(Request $request): JsonResponse
+    {
+        $user = $this->requireUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+        if (! $this->canSendAdminMessages($user)) {
+            return $this->forbidden();
+        }
+
+        $validated = validator($this->payload($request), [
+            'query' => ['required', 'string', 'min:2', 'max:120'],
+        ])->validate();
+
+        $query = trim($validated['query']);
+
+        $recipients = MobileUser::query()
+            ->where('is_blocked', false)
+            ->where('is_deleted', false)
+            ->where(function ($users) use ($query): void {
+                $users
+                    ->where('name', 'like', "%{$query}%")
+                    ->orWhere('first_name', 'like', "%{$query}%")
+                    ->orWhere('last_name', 'like', "%{$query}%")
+                    ->orWhere('email', 'like', "%{$query}%")
+                    ->orWhere('phone', 'like', "%{$query}%")
+                    ->orWhere('triumphant_id', 'like', "%{$query}%");
+            })
+            ->orderBy('name')
+            ->limit(30)
+            ->get(['id', 'name', 'email', 'phone', 'triumphant_id'])
+            ->map(fn (MobileUser $recipient): array => [
+                'id' => $recipient->id,
+                'name' => $recipient->name,
+                'email' => $recipient->email,
+                'phone' => $recipient->phone,
+                'triumphant_id' => $recipient->triumphant_id,
+            ])
+            ->values();
+
+        return response()->json([
+            'status' => 'ok',
+            'data' => ['recipients' => $recipients],
+        ]);
+    }
+
     public function send(
         Request $request,
         InboxMessageDeliveryService $delivery,
@@ -93,9 +163,15 @@ class ControlHubMessagingController extends Controller
             'send_inbox' => ['nullable', 'boolean'],
             'send_push' => ['nullable', 'boolean'],
             'send_email' => ['nullable', 'boolean'],
-            'recipient_mode' => ['required', 'string', 'in:all,countries,genders,roles,goshen_ticket_holders,goshen_paid,goshen_unpaid,goshen_paid_between,goshen_paid_recent_days,goshen_paid_week,goshen_paid_month,fundraising_participants,quiz_participants'],
+            'recipient_mode' => ['required', 'string', 'in:all,selected,groups,countries,states,genders,roles,goshen_ticket_holders,goshen_paid,goshen_unpaid,goshen_paid_between,goshen_paid_recent_days,goshen_paid_week,goshen_paid_month,fundraising_participants,quiz_participants'],
+            'selected_mobile_user_ids' => ['nullable', 'array'],
+            'selected_mobile_user_ids.*' => ['integer', Rule::exists('mobile_users', 'id')],
+            'selected_church_group_ids' => ['nullable', 'array'],
+            'selected_church_group_ids.*' => ['integer', Rule::exists('church_groups', 'id')],
             'selected_country_of_residences' => ['nullable', 'array'],
             'selected_country_of_residences.*' => ['string', 'max:120'],
+            'selected_states_counties_provinces' => ['nullable', 'array'],
+            'selected_states_counties_provinces.*' => ['string', 'max:120'],
             'selected_genders' => ['nullable', 'array'],
             'selected_genders.*' => ['string', 'max:80'],
             'selected_role_ids' => ['nullable', 'array'],
@@ -140,6 +216,15 @@ class ControlHubMessagingController extends Controller
         if ($mode === 'countries' && empty($validated['selected_country_of_residences'])) {
             return response()->json(['status' => 'error', 'message' => 'Choose at least one country.'], 422);
         }
+        if ($mode === 'selected' && empty($validated['selected_mobile_user_ids'])) {
+            return response()->json(['status' => 'error', 'message' => 'Choose at least one user.'], 422);
+        }
+        if ($mode === 'groups' && empty($validated['selected_church_group_ids'])) {
+            return response()->json(['status' => 'error', 'message' => 'Choose at least one group.'], 422);
+        }
+        if ($mode === 'states' && (empty($validated['selected_country_of_residences']) || empty($validated['selected_states_counties_provinces']))) {
+            return response()->json(['status' => 'error', 'message' => 'Choose at least one country and state, county, or province.'], 422);
+        }
         if ($mode === 'genders' && empty($validated['selected_genders'])) {
             return response()->json(['status' => 'error', 'message' => 'Choose at least one gender.'], 422);
         }
@@ -183,7 +268,10 @@ class ControlHubMessagingController extends Controller
             'send_push' => $sendPush,
             'send_email' => $sendEmail,
             'recipient_mode' => $mode,
-            'selected_country_of_residences' => $mode === 'countries' ? array_values($validated['selected_country_of_residences'] ?? []) : null,
+            'selected_mobile_user_ids' => $mode === 'selected' ? array_values($validated['selected_mobile_user_ids'] ?? []) : null,
+            'selected_church_group_ids' => $mode === 'groups' ? array_values($validated['selected_church_group_ids'] ?? []) : null,
+            'selected_country_of_residences' => in_array($mode, ['countries', 'states'], true) ? array_values($validated['selected_country_of_residences'] ?? []) : null,
+            'selected_states_counties_provinces' => $mode === 'states' ? array_values($validated['selected_states_counties_provinces'] ?? []) : null,
             'selected_genders' => $mode === 'genders' ? array_values($validated['selected_genders'] ?? []) : null,
             'selected_role_ids' => $mode === 'roles' ? array_values($validated['selected_role_ids'] ?? []) : null,
             'goshen_event_id' => MessageRecipientResolver::isGoshenMode($mode) ? $validated['goshen_event_id'] : null,

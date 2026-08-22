@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\GoshenQuiz;
 use App\Models\GoshenQuizAttempt;
+use App\Models\ChurchGroup;
 use App\Models\InboxMessage;
 use App\Models\MobileUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -86,6 +87,114 @@ class ControlHubMessagingApiTest extends TestCase
 
         $this->assertContains($paid->id, $message->delivered_mobile_user_ids);
         $this->assertNotContains($unpaid->id, $message->delivered_mobile_user_ids);
+    }
+
+    public function test_control_hub_message_supports_selected_group_and_state_audiences(): void
+    {
+        $manager = $this->manager();
+        $token = $manager->issueApiToken();
+        $selected = $this->member('selected-recipient@example.test', 'Selected Recipient');
+        $group = ChurchGroup::query()->create([
+            'name' => 'Recipient audience '.str()->uuid(),
+            'is_active' => true,
+        ]);
+        $groupMember = $this->member('group-recipient@example.test', 'Group Recipient');
+        $groupMember->forceFill(['group_id' => $group->id])->save();
+        $stateMatch = $this->member('state-recipient@example.test', 'State Recipient');
+        $stateMatch->forceFill([
+            'country_of_residence' => 'United Kingdom',
+            'state_county_province' => 'London',
+        ])->save();
+        $stateMiss = $this->member('state-miss@example.test', 'State Miss');
+        $stateMiss->forceFill([
+            'country_of_residence' => 'United Kingdom',
+            'state_county_province' => 'Manchester',
+        ])->save();
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/control-hub/messages/send', [
+                'data' => array_merge($this->messagePayload($token), [
+                    'recipient_mode' => 'selected',
+                    'selected_mobile_user_ids' => [$selected->id],
+                    'send_inbox' => true,
+                    'send_push' => false,
+                ]),
+            ])
+            ->assertOk();
+
+        $selectedMessage = InboxMessage::query()->latest('id')->firstOrFail();
+        $this->assertSame([$selected->id], $selectedMessage->delivered_mobile_user_ids);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/control-hub/messages/send', [
+                'data' => array_merge($this->messagePayload($token), [
+                    'recipient_mode' => 'groups',
+                    'selected_church_group_ids' => [$group->id],
+                    'send_inbox' => true,
+                    'send_push' => false,
+                ]),
+            ])
+            ->assertOk();
+
+        $groupMessage = InboxMessage::query()->latest('id')->firstOrFail();
+        $this->assertContains($groupMember->id, $groupMessage->delivered_mobile_user_ids);
+        $this->assertNotContains($selected->id, $groupMessage->delivered_mobile_user_ids);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/control-hub/messages/send', [
+                'data' => array_merge($this->messagePayload($token), [
+                    'recipient_mode' => 'states',
+                    'selected_country_of_residences' => ['United Kingdom'],
+                    'selected_states_counties_provinces' => ['London'],
+                    'send_inbox' => true,
+                    'send_push' => false,
+                ]),
+            ])
+            ->assertOk();
+
+        $stateMessage = InboxMessage::query()->latest('id')->firstOrFail();
+        $this->assertContains($stateMatch->id, $stateMessage->delivered_mobile_user_ids);
+        $this->assertNotContains($stateMiss->id, $stateMessage->delivered_mobile_user_ids);
+    }
+
+    public function test_control_hub_message_options_and_recipient_search_are_limited_to_authorized_active_users(): void
+    {
+        $regular = $this->member('recipient-regular@example.test', 'Recipient Regular');
+        $regularToken = $regular->issueApiToken();
+        $manager = $this->manager();
+        $token = $manager->issueApiToken();
+        $group = ChurchGroup::query()->create([
+            'name' => 'Recipient options '.str()->uuid(),
+            'is_active' => true,
+        ]);
+        $recipient = $this->member('recipient-search@example.test', 'Recipient Search');
+        $recipient->forceFill([
+            'country_of_residence' => 'United Kingdom',
+            'state_county_province' => 'London',
+        ])->save();
+        $blocked = $this->member('recipient-blocked@example.test', 'Recipient Blocked');
+        $blocked->forceFill(['is_blocked' => true])->save();
+
+        $this->withHeader('Authorization', 'Bearer '.$regularToken)
+            ->postJson('/api/control-hub/messages/recipients', [
+                'data' => ['api_token' => $regularToken, 'query' => 'search@example'],
+            ])
+            ->assertForbidden();
+
+        $options = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/control-hub/messages/options', ['data' => ['api_token' => $token]])
+            ->assertOk();
+
+        $this->assertContains($group->id, collect($options->json('data.groups'))->pluck('id')->all());
+        $this->assertContains('London', $options->json('data.states_by_country.United Kingdom'));
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/control-hub/messages/recipients', [
+                'data' => ['api_token' => $token, 'query' => 'search@example'],
+            ])
+            ->assertOk()
+            ->assertJsonCount(1, 'data.recipients')
+            ->assertJsonPath('data.recipients.0.id', $recipient->id);
     }
 
     public function test_control_hub_message_targets_all_valid_goshen_ticket_holders(): void

@@ -236,6 +236,7 @@ Route::controller(ControlHubMessagingController::class)
     ->prefix('control-hub/messages')
     ->group(function () {
         Route::match(['get', 'post'], 'options', 'options');
+        Route::post('recipients', 'recipients')->middleware('throttle:30,1');
         Route::post('send', 'send')->middleware('throttle:8,1');
     });
 
