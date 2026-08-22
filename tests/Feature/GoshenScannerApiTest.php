@@ -178,6 +178,115 @@ class GoshenScannerApiTest extends TestCase
             ->count());
     }
 
+    public function test_event_duration_check_in_is_idempotent_across_event_days(): void
+    {
+        [$event, $ticket] = $this->ticketFixture();
+        $event->forceFill([
+            'settings' => [
+                'check_in' => ['mode' => Event::CHECK_IN_MODE_EVENT_DURATION],
+            ],
+        ])->save();
+
+        $scanner = $this->scannerUser();
+        $token = $scanner->issueApiToken();
+
+        $this->postJson('/api/goshen-retreat/scanner/check-in', [
+            'data' => [
+                'api_token' => $token,
+                'identifier' => $ticket->formatted_number,
+                'day_number' => 1,
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('duplicate', false)
+            ->assertJsonPath('data.event.check_in_mode', Event::CHECK_IN_MODE_EVENT_DURATION);
+
+        $this->postJson('/api/goshen-retreat/scanner/check-in', [
+            'data' => [
+                'api_token' => $token,
+                'identifier' => $ticket->formatted_number,
+                'day_number' => 2,
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('duplicate', true)
+            ->assertJsonPath('message', 'This ticket was already checked in for this event.');
+
+        $this->assertDatabaseCount('ei_ticket_check_ins', 1);
+        $this->assertDatabaseHas('ei_ticket_check_ins', [
+            'ticket_id' => $ticket->id,
+            'day_number' => 1,
+            'status' => TicketStatus::CheckedIn->value,
+        ]);
+        $this->assertDatabaseHas('ei_tickets', [
+            'id' => $ticket->id,
+            'status' => TicketStatus::CheckedIn->value,
+        ]);
+    }
+
+    public function test_event_duration_offline_sync_deduplicates_a_ticket_across_event_days(): void
+    {
+        [$event, $ticket] = $this->ticketFixture();
+        $event->forceFill([
+            'settings' => [
+                'check_in' => ['mode' => Event::CHECK_IN_MODE_EVENT_DURATION],
+            ],
+        ])->save();
+
+        $scanner = $this->scannerUser();
+        $token = $scanner->issueApiToken();
+
+        $this->postJson('/api/goshen-retreat/scanner/sync', [
+            'data' => [
+                'api_token' => $token,
+                'items' => [[
+                    'local_id' => 'duration-day-one',
+                    'identifier' => $ticket->formatted_number,
+                    'day_number' => 1,
+                ]],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.results.0.duplicate', false);
+
+        $this->postJson('/api/goshen-retreat/scanner/sync', [
+            'data' => [
+                'api_token' => $token,
+                'items' => [[
+                    'local_id' => 'duration-day-two',
+                    'identifier' => $ticket->formatted_number,
+                    'day_number' => 2,
+                ]],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.results.0.duplicate', true)
+            ->assertJsonPath('data.results.0.message', 'This ticket was already checked in for this event.');
+
+        $this->assertSame(1, TicketCheckIn::query()
+            ->where('ticket_id', $ticket->id)
+            ->count());
+    }
+
+    public function test_scanner_rejects_a_day_that_is_not_scheduled_for_per_day_check_in(): void
+    {
+        [, $ticket] = $this->ticketFixture();
+        $scanner = $this->scannerUser();
+        $token = $scanner->issueApiToken();
+
+        $this->postJson('/api/goshen-retreat/scanner/check-in', [
+            'data' => [
+                'api_token' => $token,
+                'identifier' => $ticket->formatted_number,
+                'day_number' => 3,
+            ],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'The selected check-in day is not configured for this event.');
+
+        $this->assertDatabaseCount('ei_ticket_check_ins', 0);
+    }
+
     public function test_scanner_role_cannot_use_internal_raw_ticket_browser_endpoints(): void
     {
         [$event, $ticket] = $this->ticketFixture();
@@ -264,6 +373,14 @@ class GoshenScannerApiTest extends TestCase
             'starts_at' => now()->addWeek(),
             'ends_at' => now()->addWeek()->addHours(4),
             'metadata' => ['title' => 'Opening service'],
+        ]);
+
+        EventSchedule::create([
+            'event_id' => $event->id,
+            'day_number' => 2,
+            'starts_at' => now()->addWeek()->addDay(),
+            'ends_at' => now()->addWeek()->addDay()->addHours(4),
+            'metadata' => ['title' => 'Retreat day two'],
         ]);
 
         return $event->refresh();

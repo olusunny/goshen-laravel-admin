@@ -4,6 +4,7 @@ namespace Personal\EventInstallments\Services;
 
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Personal\EventInstallments\Enums\TicketStatus;
 use Personal\EventInstallments\Models\Ticket;
 use Personal\EventInstallments\Models\TicketCheckIn;
@@ -36,25 +37,42 @@ class CheckInService
     ): TicketCheckIn {
         $checkIn = DB::transaction(function () use ($ticket, $status, $actorId, $dayNumber, $source, $deviceId, $metadata) {
             $ticket = Ticket::query()
+                ->with('event')
                 ->whereKey($ticket->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $existing = TicketCheckIn::query()
+            $submittedDayNumber = max(1, $dayNumber);
+            if (! $ticket->event?->allowsCheckInDayNumber($submittedDayNumber)) {
+                throw ValidationException::withMessages([
+                    'day_number' => 'The selected check-in day is not configured for this event.',
+                ]);
+            }
+
+            $effectiveDayNumber = $ticket->event?->effectiveCheckInDayNumber($submittedDayNumber) ?? $submittedDayNumber;
+            $isEventDurationCheckIn = $ticket->event?->usesEventDurationCheckIn() ?? false;
+
+            $existingQuery = TicketCheckIn::query()
                 ->where('ticket_id', $ticket->id)
-                ->where('day_number', $dayNumber)
-                ->lockForUpdate()
-                ->first();
+                ->lockForUpdate();
+
+            if (! $isEventDurationCheckIn) {
+                $existingQuery->where('day_number', $effectiveDayNumber);
+            }
+
+            $existing = $existingQuery->first();
 
             if ($existing) {
                 return $existing;
             }
 
             $multidayStatus = $ticket->multiday_status ?: [];
-            $multidayStatus[$dayNumber] = $status->value;
+            $multidayStatus[$effectiveDayNumber] = $status->value;
 
             $ticket->forceFill([
-                'status' => $dayNumber === 1 ? $status : TicketStatus::NotCheckedIn,
+                'status' => ($isEventDurationCheckIn || $effectiveDayNumber === 1)
+                    ? $status
+                    : TicketStatus::NotCheckedIn,
                 'multiday_status' => $multidayStatus,
             ])->save();
 
@@ -62,12 +80,15 @@ class CheckInService
                 'ticket_id' => $ticket->id,
                 'event_id' => $ticket->event_id,
                 'actor_id' => $actorId,
-                'day_number' => $dayNumber,
+                'day_number' => $effectiveDayNumber,
                 'status' => $status,
                 'checked_in_at' => now(),
                 'source' => $source,
                 'device_id' => $deviceId,
-                'metadata' => $metadata,
+                'metadata' => array_replace([
+                    'check_in_mode' => $ticket->event?->checkInMode() ?? 'per_day',
+                    'submitted_day_number' => $submittedDayNumber,
+                ], $metadata),
             ]);
         });
 

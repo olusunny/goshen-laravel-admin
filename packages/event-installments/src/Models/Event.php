@@ -13,6 +13,10 @@ class Event extends Model
     use HasPublicId;
     use SoftDeletes;
 
+    public const CHECK_IN_MODE_PER_DAY = 'per_day';
+
+    public const CHECK_IN_MODE_EVENT_DURATION = 'event_duration';
+
     protected $table = 'ei_events';
 
     protected $fillable = [
@@ -70,5 +74,45 @@ class Event extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    public function checkInMode(): string
+    {
+        $mode = data_get($this->settings, 'check_in.mode');
+
+        return in_array($mode, [self::CHECK_IN_MODE_PER_DAY, self::CHECK_IN_MODE_EVENT_DURATION], true)
+            ? $mode
+            : self::CHECK_IN_MODE_PER_DAY;
+    }
+
+    public function usesEventDurationCheckIn(): bool
+    {
+        return $this->checkInMode() === self::CHECK_IN_MODE_EVENT_DURATION;
+    }
+
+    public function effectiveCheckInDayNumber(int $submittedDayNumber): int
+    {
+        return $this->usesEventDurationCheckIn() ? 1 : max(1, $submittedDayNumber);
+    }
+
+    public function allowsCheckInDayNumber(int $submittedDayNumber): bool
+    {
+        if ($this->usesEventDurationCheckIn()) {
+            return true;
+        }
+
+        $dayNumber = max(1, $submittedDayNumber);
+        $this->loadMissing('schedules');
+        $scheduledDays = $this->schedules
+            ->pluck('day_number')
+            ->map(fn (mixed $day): int => (int) $day)
+            ->filter(fn (int $day): bool => $day > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        return $scheduledDays === []
+            ? $dayNumber === 1
+            : in_array($dayNumber, $scheduledDays, true);
     }
 }

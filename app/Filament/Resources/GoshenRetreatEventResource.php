@@ -162,6 +162,16 @@ class GoshenRetreatEventResource extends Resource
                         ->rows(3)
                         ->maxLength(500)
                         ->helperText('Shown in the app when registration is force closed.'),
+                    Forms\Components\Select::make('settings.check_in.mode')
+                        ->label('Check-in frequency')
+                        ->options([
+                            Event::CHECK_IN_MODE_EVENT_DURATION => 'One check-in for the whole event',
+                            Event::CHECK_IN_MODE_PER_DAY => 'Check in each event day',
+                        ])
+                        ->default(Event::CHECK_IN_MODE_PER_DAY)
+                        ->native(false)
+                        ->required()
+                        ->helperText('Choose one check-in for the full retreat, or require attendance to be recorded separately for each event day.'),
                 ]),
             Section::make('Pay-in-full discount')
                 ->columns(2)
@@ -210,6 +220,13 @@ class GoshenRetreatEventResource extends Resource
                     ->badge()
                     ->state(fn (Event $record): string => self::registrationIsOpen($record) ? 'Open' : 'Closed')
                     ->color(fn (string $state): string => $state === 'Open' ? 'success' : 'danger'),
+                Tables\Columns\TextColumn::make('check_in_mode')
+                    ->label('Check-in')
+                    ->badge()
+                    ->state(fn (Event $record): string => $record->usesEventDurationCheckIn()
+                        ? 'Once per event'
+                        : 'Each day')
+                    ->color(fn (string $state): string => $state === 'Once per event' ? 'success' : 'info'),
                 Tables\Columns\TextColumn::make('ticket_types_count')->counts('ticketTypes')->label('Ticket types'),
                 Tables\Columns\TextColumn::make('bookings_count')->counts('bookings')->label('Bookings'),
             ])

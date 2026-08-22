@@ -43,6 +43,7 @@ class GoshenRetreatSetupManagementTest extends TestCase
                 'sales_end_at' => now()->addMonth()->toIso8601String(),
                 'registration_override' => 'open',
                 'registration_close_reason' => '',
+                'check_in_mode' => 'event_duration',
                 'pay_in_full_discount' => [
                     'enabled' => true,
                     'label' => 'Early full payment',
@@ -56,6 +57,7 @@ class GoshenRetreatSetupManagementTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', 'ok')
             ->assertJsonPath('data.event.name', 'Goshen Retreat 2026 Updated')
+            ->assertJsonPath('data.event.check_in_mode', 'event_duration')
             ->assertJsonPath('data.event.pay_in_full_discount.label', 'Early full payment');
 
         $this->postJson("/api/goshen-retreat/events/{$event->public_id}/setup/schedules", [

@@ -404,6 +404,10 @@ class GoshenRetreatController extends Controller
             'sales_end_at' => ['nullable', 'date', 'after_or_equal:sales_start_at'],
             'registration_override' => ['required', 'string', Rule::in(['auto', 'open', 'closed'])],
             'registration_close_reason' => ['nullable', 'string', 'max:500'],
+            'check_in_mode' => ['nullable', 'string', Rule::in([
+                Event::CHECK_IN_MODE_PER_DAY,
+                Event::CHECK_IN_MODE_EVENT_DURATION,
+            ])],
             'pay_in_full_discount' => ['nullable', 'array'],
             'pay_in_full_discount.enabled' => ['nullable', 'boolean'],
             'pay_in_full_discount.label' => ['nullable', 'string', 'max:120'],
@@ -435,6 +439,10 @@ class GoshenRetreatController extends Controller
             $registration['reopened_at'] = null;
         }
         $settings['registration'] = $registration;
+
+        $checkIn = is_array($settings['check_in'] ?? null) ? $settings['check_in'] : [];
+        $checkIn['mode'] = $validated['check_in_mode'] ?? $event->checkInMode();
+        $settings['check_in'] = $checkIn;
 
         $discount = is_array($validated['pay_in_full_discount'] ?? null) ? $validated['pay_in_full_discount'] : [];
         $settings['pay_in_full_discount'] = [
@@ -2990,7 +2998,7 @@ class GoshenRetreatController extends Controller
         $user = $this->mobileUserFromToken($request);
         $data = $this->payload($request);
         $identifier = $this->ticketIdentifierFromScan($data, $qrPayload);
-        $dayNumber = max(1, (int) ($data['day_number'] ?? 1));
+        $submittedDayNumber = max(1, (int) ($data['day_number'] ?? 1));
 
         if (! $identifier) {
             return $this->scannerJson([
@@ -3021,6 +3029,13 @@ class GoshenRetreatController extends Controller
             ], 404);
         }
 
+        if (! ($ticket->event?->allowsCheckInDayNumber($submittedDayNumber) ?? false)) {
+            return $this->scannerJson([
+                'status' => 'error',
+                'message' => 'The selected check-in day is not configured for this event.',
+            ], 422);
+        }
+
         $status = $ticket->status?->value ?? (string) $ticket->status;
         if (in_array($status, [TicketStatus::Cancelled->value, TicketStatus::Unpaid->value], true)) {
             return $this->scannerJson([
@@ -3030,26 +3045,35 @@ class GoshenRetreatController extends Controller
             ], 422);
         }
 
-        $alreadyCheckedIn = $ticket->checkIns()
-            ->where('day_number', $dayNumber)
+        $isEventDurationCheckIn = $ticket->event?->usesEventDurationCheckIn() ?? false;
+        $dayNumber = $ticket->event?->effectiveCheckInDayNumber($submittedDayNumber) ?? $submittedDayNumber;
+
+        $alreadyCheckedInQuery = $ticket->checkIns()
             ->where('status', TicketStatus::CheckedIn->value)
-            ->latest('checked_in_at')
-            ->first();
+            ->latest('checked_in_at');
+
+        if (! $isEventDurationCheckIn) {
+            $alreadyCheckedInQuery->where('day_number', $dayNumber);
+        }
+
+        $alreadyCheckedIn = $alreadyCheckedInQuery->first();
 
         if ($alreadyCheckedIn) {
             return $this->scannerJson([
                 'status' => 'ok',
-                'message' => 'This ticket was already checked in for this day.',
+                'message' => $isEventDurationCheckIn
+                    ? 'This ticket was already checked in for this event.'
+                    : 'This ticket was already checked in for this day.',
                 'duplicate' => true,
                 'data' => $this->scannerTicketPayload($ticket->refresh()->load(['event.schedules', 'booking', 'attendee', 'ticketType', 'checkIns'])),
             ]);
         }
 
-        $checkIns->checkIn(
+        $checkIn = $checkIns->checkIn(
             ticket: $ticket,
             status: TicketStatus::CheckedIn,
             actorId: $user?->id,
-            dayNumber: $dayNumber,
+            dayNumber: $submittedDayNumber,
             source: 'flutter_scanner',
             deviceId: $data['device_id'] ?? null,
             metadata: [
@@ -3060,8 +3084,12 @@ class GoshenRetreatController extends Controller
 
         return $this->scannerJson([
             'status' => 'ok',
-            'message' => 'Ticket checked in successfully.',
-            'duplicate' => false,
+            'message' => $checkIn->wasRecentlyCreated
+                ? 'Ticket checked in successfully.'
+                : ($isEventDurationCheckIn
+                    ? 'This ticket was already checked in for this event.'
+                    : 'This ticket was already checked in for this day.'),
+            'duplicate' => ! $checkIn->wasRecentlyCreated,
             'data' => $this->scannerTicketPayload($ticket->refresh()->load(['event.schedules', 'booking', 'attendee', 'ticketType', 'checkIns'])),
         ]);
     }
@@ -3121,7 +3149,7 @@ class GoshenRetreatController extends Controller
 
             $localId = is_string($item['local_id'] ?? null) ? trim($item['local_id']) : null;
             $identifier = $this->ticketIdentifierFromScan($item, $qrPayload);
-            $dayNumber = max(1, (int) ($item['day_number'] ?? 1));
+            $submittedDayNumber = max(1, (int) ($item['day_number'] ?? 1));
             $deviceId = is_string($item['device_id'] ?? null)
                 ? trim((string) $item['device_id'])
                 : (is_string($data['device_id'] ?? null) ? trim((string) $data['device_id']) : null);
@@ -3147,6 +3175,18 @@ class GoshenRetreatController extends Controller
                 continue;
             }
 
+            if (! ($ticket->event?->allowsCheckInDayNumber($submittedDayNumber) ?? false)) {
+                $results[] = $this->scannerSyncResult(
+                    $index,
+                    $localId,
+                    'rejected',
+                    'The selected check-in day is not configured for this event.',
+                    $ticket,
+                );
+
+                continue;
+            }
+
             $status = $ticket->status?->value ?? (string) $ticket->status;
             if (in_array($status, [TicketStatus::Cancelled->value, TicketStatus::Unpaid->value], true)) {
                 $results[] = $this->scannerSyncResult(
@@ -3160,6 +3200,9 @@ class GoshenRetreatController extends Controller
                 continue;
             }
 
+            $isEventDurationCheckIn = $ticket->event?->usesEventDurationCheckIn() ?? false;
+            $dayNumber = $ticket->event?->effectiveCheckInDayNumber($submittedDayNumber) ?? $submittedDayNumber;
+
             $existingOfflineCheckIn = $localId
                 ? $ticket->checkIns()
                     ->where('day_number', $dayNumber)
@@ -3168,11 +3211,15 @@ class GoshenRetreatController extends Controller
                     ->first()
                 : null;
 
-            $alreadyCheckedIn = $ticket->checkIns()
-                ->where('day_number', $dayNumber)
+            $alreadyCheckedInQuery = $ticket->checkIns()
                 ->where('status', TicketStatus::CheckedIn->value)
-                ->latest('checked_in_at')
-                ->first();
+                ->latest('checked_in_at');
+
+            if (! $isEventDurationCheckIn) {
+                $alreadyCheckedInQuery->where('day_number', $dayNumber);
+            }
+
+            $alreadyCheckedIn = $alreadyCheckedInQuery->first();
 
             if ($existingOfflineCheckIn || $alreadyCheckedIn) {
                 $results[] = $this->scannerSyncResult(
@@ -3181,7 +3228,9 @@ class GoshenRetreatController extends Controller
                     'synced',
                     $existingOfflineCheckIn
                         ? 'This offline check-in was already synced.'
-                        : 'This ticket was already checked in for this day.',
+                        : ($isEventDurationCheckIn
+                            ? 'This ticket was already checked in for this event.'
+                            : 'This ticket was already checked in for this day.'),
                     $ticket->refresh()->load(['event.schedules', 'booking', 'attendee', 'ticketType', 'checkIns']),
                     duplicate: true,
                 );
@@ -3189,11 +3238,11 @@ class GoshenRetreatController extends Controller
                 continue;
             }
 
-            $checkIns->checkIn(
+            $checkIn = $checkIns->checkIn(
                 ticket: $ticket,
                 status: TicketStatus::CheckedIn,
                 actorId: $user?->id,
-                dayNumber: $dayNumber,
+                dayNumber: $submittedDayNumber,
                 source: 'flutter_offline_sync',
                 deviceId: $deviceId,
                 metadata: [
@@ -3210,8 +3259,13 @@ class GoshenRetreatController extends Controller
                 $index,
                 $localId,
                 'synced',
-                'Offline check-in synced successfully.',
+                $checkIn->wasRecentlyCreated
+                    ? 'Offline check-in synced successfully.'
+                    : ($isEventDurationCheckIn
+                        ? 'This ticket was already checked in for this event.'
+                        : 'This ticket was already checked in for this day.'),
                 $ticket->refresh()->load(['event.schedules', 'booking', 'attendee', 'ticketType', 'checkIns']),
+                duplicate: ! $checkIn->wasRecentlyCreated,
             );
         }
 
@@ -3381,6 +3435,7 @@ class GoshenRetreatController extends Controller
             'registration' => $this->registrationPayload($event),
             'registration_open' => $this->registrationIsOpen($event),
             'registration_closed_reason' => $this->registrationClosedReason($event),
+            'check_in_mode' => $event->checkInMode(),
             'registration_form' => [
                 'attendee_fields' => $registrationFields,
                 'privacy_consent' => [
@@ -4467,6 +4522,7 @@ class GoshenRetreatController extends Controller
                 'public_id' => $ticket->event?->public_id,
                 'name' => $ticket->event?->name,
                 'timezone' => $ticket->event?->timezone,
+                'check_in_mode' => $ticket->event?->checkInMode() ?? Event::CHECK_IN_MODE_PER_DAY,
                 'days' => $ticket->event?->schedules
                     ? $ticket->event->schedules
                         ->sortBy(['day_number', 'starts_at'])
@@ -4502,6 +4558,7 @@ class GoshenRetreatController extends Controller
             'public_id' => $event->public_id,
             'name' => $event->name,
             'timezone' => $event->timezone,
+            'check_in_mode' => $event->checkInMode(),
             'days' => $event->schedules
                 ? $event->schedules
                     ->sortBy(['day_number', 'starts_at'])

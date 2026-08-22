@@ -61,6 +61,10 @@ class GoshenBookingStatsWidget extends Widget
         $tickets = Ticket::query()
             ->whereIn('event_id', $eventIds)
             ->whereIn('status', $this->soldTicketStatusValues())
+            ->withExists([
+                'checkIns as has_checked_in' => fn (Builder $query) => $query
+                    ->where('status', TicketStatus::CheckedIn->value),
+            ])
             ->get(['id', 'status', 'issued_at', 'created_at']);
 
         $todayPayments = $this->paidTransactionsBetween($eventIds, $todayStart, $now->endOfDay());
@@ -77,8 +81,8 @@ class GoshenBookingStatsWidget extends Widget
             'week_revenue' => $this->moneySummary($weekPayments),
             'month_tickets' => $this->ticketsIssuedFrom($tickets, $monthStart)->count(),
             'month_revenue' => $this->moneySummary($monthPayments),
-            'checked_in' => $tickets->where('status', TicketStatus::CheckedIn)->count(),
-            'awaiting_check_in' => $tickets->where('status', TicketStatus::NotCheckedIn)->count(),
+            'checked_in' => $tickets->where('has_checked_in', true)->count(),
+            'awaiting_check_in' => $tickets->where('has_checked_in', false)->count(),
         ];
     }
 
@@ -110,7 +114,10 @@ class GoshenBookingStatsWidget extends Widget
             ->withCount([
                 'bookings as paid_bookings_count' => fn (Builder $query) => $query->where('status', BookingStatus::Paid->value),
                 'tickets as tickets_sold_count' => fn (Builder $query) => $query->whereIn('status', $this->soldTicketStatusValues()),
-                'tickets as checked_in_count' => fn (Builder $query) => $query->where('status', TicketStatus::CheckedIn->value),
+                'tickets as checked_in_count' => fn (Builder $query) => $query->whereHas(
+                    'checkIns',
+                    fn (Builder $checkIns) => $checkIns->where('status', TicketStatus::CheckedIn->value),
+                ),
             ])
             ->orderByDesc('start_date')
             ->orderByDesc('id')
