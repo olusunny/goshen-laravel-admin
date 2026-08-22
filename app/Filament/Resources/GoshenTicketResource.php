@@ -445,13 +445,18 @@ class GoshenTicketResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
-                'event',
-                'booking',
-                'attendee',
-                'ticketType',
-                'latestEmailLog',
-            ]))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->with([
+                    'event',
+                    'booking',
+                    'attendee',
+                    'ticketType',
+                    'latestEmailLog',
+                ])
+                ->withExists([
+                    'checkIns as checked_in_exists' => fn (Builder $checkIns): Builder => $checkIns
+                        ->where('status', TicketStatus::CheckedIn->value),
+                ]))
             ->stackedOnMobile()
             ->columns([
                 Tables\Columns\TextColumn::make('formatted_number')
@@ -503,6 +508,14 @@ class GoshenTicketResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
                     ->sortable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('check_in_status')
+                    ->label('Check-in')
+                    ->badge()
+                    ->state(fn (Ticket $record): bool => (bool) $record->checked_in_exists)
+                    ->formatStateUsing(fn (bool $state): string => $state ? 'Checked in' : 'Not checked in')
+                    ->color(fn (bool $state): string => $state ? 'success' : 'gray')
+                    ->icon(fn (bool $state): string => $state ? 'heroicon-o-check-circle' : 'heroicon-o-clock')
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('last_ticket_email_status')
                     ->label('Last email')
