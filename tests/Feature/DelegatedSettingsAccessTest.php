@@ -109,4 +109,32 @@ class DelegatedSettingsAccessTest extends TestCase
         $this->artisan('admin-permissions:explain', ['user' => $user->id])->assertSuccessful();
         $this->assertTrue($role->fresh()->hasPermissionTo($legacy));
     }
+
+    public function test_report_distinguishes_an_addon_grant_from_installed_and_global_availability(): void
+    {
+        $user = User::factory()->create();
+        $user->givePermissionTo(Permission::findOrCreate('example.view', 'web'));
+        $addon = \App\Models\Addon::create([
+            'package_key' => 'example.addon', 'name' => 'Example add-on', 'status' => 'inactive',
+            'manifest' => ['capabilities' => ['example' => ['permissions' => ['example.view']]]],
+        ]);
+        \App\Models\Addon::create([
+            'package_key' => 'unrelated.addon', 'name' => 'Unrelated add-on', 'status' => 'active',
+            'manifest' => ['permissions' => ['unrelated.view']],
+        ]);
+        config(['addons.enabled' => false]);
+        $report = AdminAccessReport::forUser($user);
+        $this->assertFalse($report['addon_system_enabled']);
+        $this->assertSame([[
+            'package_key' => 'example.addon', 'name' => 'Example add-on', 'status' => 'inactive',
+            'granted_permissions' => ['example.view'],
+        ]], $report['addons']);
+        $this->assertTrue($user->fresh()->can('example.view'));
+        $this->assertStringContainsString('Add-on system disabled', view('filament.components.admin-access-report', compact('report'))->render());
+        $addon->update(['status' => 'active']);
+        config(['addons.enabled' => true]);
+        $report = AdminAccessReport::forUser($user);
+        $this->assertTrue($report['addon_system_enabled']);
+        $this->assertSame('active', $report['addons'][0]['status']);
+    }
 }

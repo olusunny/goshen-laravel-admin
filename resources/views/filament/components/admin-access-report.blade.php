@@ -19,6 +19,15 @@
             </tbody>
         </table>
     </div>
+    @if ($report['addons'])
+        <p><strong>Add-on availability:</strong> Add-on system {{ $report['addon_system_enabled'] ? 'enabled' : 'disabled' }}.</p>
+        <ul class="list-inside list-disc">
+            @foreach ($report['addons'] as $addon)
+                <li>{{ $addon['name'] }}: {{ $addon['status'] }} (grants: {{ implode(', ', $addon['granted_permissions']) }})</li>
+            @endforeach
+        </ul>
+        <p>These are installed statuses. A grant does not activate an add-on or guarantee its runtime health.</p>
+    @endif
     @if ($report['hidden_menus'])
         <p><strong>Hidden menus:</strong></p>
         <ul class="list-inside list-disc">
