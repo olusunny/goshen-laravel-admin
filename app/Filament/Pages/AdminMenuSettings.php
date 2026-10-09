@@ -55,7 +55,8 @@ class AdminMenuSettings extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return false;
+        return static::canAccess()
+            && AdminMenuRegistry::visibleForPage(static::class);
     }
 
     public function mount(): void

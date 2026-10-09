@@ -6,6 +6,7 @@ use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\UserResource\Pages;
 use App\Models\User;
 use App\Services\TriumphantIdService;
+use App\Services\AdminAccessService;
 use App\Support\AdminPermissions;
 use Closure;
 use Filament\Actions;
@@ -53,31 +54,55 @@ class UserResource extends Resource
     public static function canEdit(Model $record): bool
     {
         return static::adminCanManageResource()
-            && ! static::isProtectedSuperAdminUser($record);
+            && AdminAccessService::canEditUser($record);
     }
 
     public static function canDelete(Model $record): bool
     {
-        return static::adminCanManageResource()
-            && ! static::isProtectedSuperAdminUser($record);
+        return AdminAccessService::canDeleteUser($record);
+    }
+
+    public static function canCreate(): bool
+    {
+        return AdminAccessService::isSuperAdmin();
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->schema([
+                Section::make('Current effective admin access')
+                    ->visible(fn (?User $record): bool => $record !== null)
+                    ->collapsible()
+                    ->collapsed()
+                    ->schema([
+                        Forms\Components\Placeholder::make('effective_access')
+                            ->hiddenLabel()
+                            ->content(fn (?User $record) => $record ? view('filament.components.admin-access-report', [
+                                'report' => \App\Support\AdminAccessReport::forUser($record),
+                            ]) : null),
+                    ])->columnSpanFull(),
                 Forms\Components\TextInput::make('name')
                     ->required(),
                 Forms\Components\TextInput::make('email')
                     ->email()
+                    ->unique(ignoreRecord: true)
                     ->required(),
-                Forms\Components\DateTimePicker::make('email_verified_at'),
+                Forms\Components\DateTimePicker::make('email_verified_at')
+                    ->visible(fn (): bool => AdminAccessService::isSuperAdmin()),
                 Forms\Components\TextInput::make('password')
                     ->password()
                     ->dehydrated(fn ($state) => filled($state))
                     ->required(fn (string $operation): bool => $operation === 'create'),
                 Forms\Components\Select::make('roles')
                     ->relationship('roles', 'name')
+                    ->saveRelationshipsUsing(fn () => null)
+                    ->visible(fn (): bool => AdminAccessService::isSuperAdmin())
                     ->multiple()
                     ->preload()
                     ->options(fn (): array => static::webRoleOptions())
@@ -115,8 +140,8 @@ class UserResource extends Resource
                         },
                     ]),
                 Section::make('Individual admin permissions')
-                    ->description('Direct permissions override role restrictions. Leave these empty when access should follow the assigned role. Super Admin users always have full access and do not need individual permissions.')
-                    ->hidden(fn (?User $record): bool => (bool) $record?->hasRole('super_admin', 'web'))
+                    ->description('These grants add to all assigned role permissions. Removing a role permission does not remove a direct grant. Only Super Admin can change access.')
+                    ->hidden(fn (?User $record): bool => ! AdminAccessService::isSuperAdmin() || (bool) $record?->hasRole('super_admin', 'web'))
                     ->schema([
                         Forms\Components\CheckboxList::make('permissions')
                             ->relationship(
@@ -126,6 +151,7 @@ class UserResource extends Resource
                                     ->where('guard_name', 'web')
                                     ->whereIn('name', AdminPermissions::names()),
                             )
+                            ->saveRelationshipsUsing(fn () => null)
                             ->options(fn (): array => Permission::query()
                                 ->where('guard_name', 'web')
                                 ->whereIn('name', AdminPermissions::names())
@@ -182,11 +208,7 @@ class UserResource extends Resource
             ->recordActions([
                 Actions\EditAction::make(),
             ])
-            ->toolbarActions([
-                Actions\BulkActionGroup::make([
-                    Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->toolbarActions([]);
     }
 
     public static function getRelations(): array

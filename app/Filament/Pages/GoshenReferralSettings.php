@@ -2,8 +2,8 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\AppSettingResource;
-use App\Filament\Resources\GoshenReferralPointEntryResource;
+use App\Support\AdminMenuRegistry;
+
 use App\Models\AppSetting;
 use App\Support\AdminPermissions;
 use BackedEnum;
@@ -38,7 +38,8 @@ class GoshenReferralSettings extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return false;
+        return static::canAccess()
+            && AdminMenuRegistry::visibleForPage(static::class);
     }
 
     public function mount(): void
@@ -55,8 +56,7 @@ class GoshenReferralSettings extends Page
 
         return $user && (
             $user->hasRole('super_admin', 'web')
-            || $user->can(AdminPermissions::resourcePermission(GoshenReferralPointEntryResource::class))
-            || $user->can(AdminPermissions::resourcePermission(AppSettingResource::class))
+            || $user->can(AdminPermissions::REFERRAL_SETTINGS)
         );
     }
 

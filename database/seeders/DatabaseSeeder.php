@@ -33,19 +33,20 @@ class DatabaseSeeder extends Seeder
         $roles = [
             'super_admin' => ['*'],
             'content_manager' => [
-                'manage_content',
-                'manage_settings',
+                'manage_content_page',
+                'manage_app_setting',
                 AdminPermissions::resourcePermission(MediaItemResource::class),
                 AdminPermissions::resourcePermission(VideoAudioMediaResource::class),
             ],
             'moderator' => [
-                'moderate_comments',
+                'manage_user_comment',
+                'manage_mobile_user',
                 'manage_mobile_users',
                 'create_mobile_users',
                 'update_mobile_users',
                 'delete_mobile_users',
             ],
-            'finance' => ['view_donations', 'manage_donations'],
+            'finance' => ['manage_donation'],
         ];
 
         foreach (collect($roles)->flatten()->merge(AdminPermissions::names())->unique() as $permission) {
@@ -53,7 +54,7 @@ class DatabaseSeeder extends Seeder
         }
 
         foreach ($roles as $name => $permissions) {
-            Role::firstOrCreate(['name' => $name])->syncPermissions($permissions);
+            Role::firstOrCreate(['name' => $name, 'guard_name' => 'web'])->syncPermissions($permissions);
         }
 
         $goPermission = Permission::firstOrCreate(['name' => 'manage_prophetic_decree', 'guard_name' => 'mobile']);

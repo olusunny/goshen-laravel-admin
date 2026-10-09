@@ -26,8 +26,6 @@ class AddonResource extends Resource
 
     protected static ?string $modelLabel = 'add-on';
 
-    protected static bool $shouldRegisterNavigation = false;
-
     protected static ?string $pluralModelLabel = 'add-ons';
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-puzzle-piece';
@@ -35,11 +33,6 @@ class AddonResource extends Resource
     protected static string|UnitEnum|null $navigationGroup = 'Settings';
 
     protected static ?int $navigationSort = 90;
-
-    public static function shouldRegisterNavigation(): bool
-    {
-        return false;
-    }
 
     public static function canCreate(): bool
     {

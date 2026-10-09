@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Filament\Resources\RoleResource\Pages;
 use App\Support\AdminPermissions;
+use App\Services\AdminAccessService;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -27,8 +28,6 @@ class RoleResource extends Resource
 
     protected static ?string $model = Role::class;
 
-    protected static bool $shouldRegisterNavigation = false;
-
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shield-check';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Settings';
@@ -39,9 +38,9 @@ class RoleResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Role Permissions';
 
-    public static function shouldRegisterNavigation(): bool
+    public static function canCreate(): bool
     {
-        return false;
+        return AdminAccessService::isSuperAdmin();
     }
 
     public static function getEloquentQuery(): Builder
@@ -65,14 +64,18 @@ class RoleResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return static::adminCanManageResource()
-            && ! static::isProtectedSuperAdminRole($record);
+        return AdminAccessService::isSuperAdmin();
     }
 
     public static function canDelete(Model $record): bool
     {
-        return static::adminCanManageResource()
-            && ! static::isProtectedSuperAdminRole($record);
+        return AdminAccessService::isSuperAdmin()
+            && ! AdminAccessService::isReservedRoleName($record->name);
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
     }
 
     public static function form(Schema $schema): Schema
@@ -82,6 +85,7 @@ class RoleResource extends Resource
                 ->columns(2)
                 ->schema([
                     Forms\Components\TextInput::make('name')
+                        ->readOnly(fn (?Role $record): bool => $record && AdminAccessService::isReservedRoleName($record->name))
                         ->required()
                         ->maxLength(120)
                         ->rules(
@@ -112,6 +116,7 @@ class RoleResource extends Resource
                             'mobile' => 'App member role',
                         ])
                         ->default('web')
+                        ->disabled(fn (?Role $record): bool => $record !== null)
                         ->required()
                         ->native(false)
                         ->live()
@@ -136,6 +141,7 @@ class RoleResource extends Resource
                                     fn ($query) => $query->whereIn('name', AdminPermissions::names()),
                                 ),
                         )
+                        ->saveRelationshipsUsing(fn () => null)
                         ->options(fn (Get $get): array => Permission::query()
                             ->where('guard_name', $get('guard_name') ?: 'web')
                             ->when(
@@ -187,7 +193,7 @@ class RoleResource extends Resource
             ->recordActions([
                 Actions\EditAction::make(),
                 Actions\DeleteAction::make()
-                    ->visible(fn (Role $record): bool => ! in_array($record->name, ['super_admin', 'G.O'], true)),
+                    ->using(fn (Role $record): bool => app(AdminAccessService::class)->deleteRole($record)),
             ])
             ->toolbarActions([]);
     }

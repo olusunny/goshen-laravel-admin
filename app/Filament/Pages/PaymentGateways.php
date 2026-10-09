@@ -2,6 +2,8 @@
 
 namespace App\Filament\Pages;
 
+use App\Support\AdminMenuRegistry;
+
 use App\Services\StripePaymentSettings;
 use App\Support\AdminPermissions;
 use BackedEnum;
@@ -69,7 +71,8 @@ class PaymentGateways extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return false;
+        return static::canAccess()
+            && AdminMenuRegistry::visibleForPage(static::class);
     }
 
     public function mount(StripePaymentSettings $settings): void

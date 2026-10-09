@@ -2,10 +2,7 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\AddonResource;
-use App\Filament\Resources\AiProviderSettingResource;
 use App\Filament\Resources\AppSettingResource;
-use App\Filament\Resources\RoleResource;
 use App\Models\AppSetting;
 use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
@@ -206,104 +203,7 @@ class AppSettings extends Page
      */
     private function visibleQuickLinks(): array
     {
-        return collect([
-            $this->pageQuickLink(
-                PaymentGateways::class,
-                'Payment Gateways',
-                'Stripe test/live keys, webhooks, and checkout URLs.',
-            ),
-            $this->pageQuickLink(
-                GoogleFirebaseSettings::class,
-                'Google & Firebase',
-                'Google login IDs, fingerprints, and Firebase Admin status.',
-            ),
-            $this->pageQuickLink(
-                GoshenReferralSettings::class,
-                'Referral Settings',
-                'Referral points, wallet conversion rate, and conversion minimums.',
-            ),
-            $this->pageQuickLink(
-                GoshenTicketPdfTemplates::class,
-                'Ticket PDF Templates',
-                'Choose the preferred Goshen ticket PDF design and preview options.',
-            ),
-            $this->pageQuickLink(
-                CloudBackups::class,
-                'Cloud Backups',
-                'Google Drive and OneDrive backup providers.',
-            ),
-            $this->pageQuickLink(
-                CronJobs::class,
-                'Cron Jobs',
-                'Scheduler health report and cPanel cron setup commands.',
-            ),
-            $this->resourceQuickLink(
-                AiProviderSettingResource::class,
-                'AI Providers',
-                'AI provider model, API key, and test configuration.',
-            ),
-            $this->resourceQuickLink(
-                AddonResource::class,
-                'Add-ons',
-                'Installed add-ons, lifecycle status, and package health.',
-            ),
-            $this->resourceQuickLink(
-                RoleResource::class,
-                'Role Permissions',
-                'Admin roles and feature permissions.',
-            ),
-            $this->pageQuickLink(
-                AdminMenuSettings::class,
-                'Admin Menu Settings',
-                'Role-based visibility for admin navigation items.',
-            ),
-        ])
-            ->filter()
-            ->values()
-            ->all();
-    }
-
-    /**
-     * @param class-string<Page> $pageClass
-     * @return array{label: string, description: string, url: string}|null
-     */
-    private function pageQuickLink(string $pageClass, string $label, string $description): ?array
-    {
-        if (! $pageClass::canAccess()) {
-            return null;
-        }
-
-        if (! AdminMenuRegistry::visibleForPage($pageClass)) {
-            return null;
-        }
-
-        return [
-            'label' => $label,
-            'description' => $description,
-            'url' => $pageClass::getUrl(),
-        ];
-    }
-
-    /**
-     * @param class-string $resourceClass
-     * @return array{label: string, description: string, url: string}|null
-     */
-    private function resourceQuickLink(string $resourceClass, string $label, string $description): ?array
-    {
-        if (method_exists($resourceClass, 'canViewAny') && ! $resourceClass::canViewAny()) {
-            return null;
-        }
-
-        if (AdminMenuRegistry::resourceIsConfigurable($resourceClass)
-            && ! AdminMenuRegistry::visibleForResource($resourceClass)) {
-            return null;
-        }
-
-        return [
-            'label' => $label,
-            'description' => $description,
-            'url' => $resourceClass::getUrl('index'),
-        ];
+        return AdminMenuRegistry::settingsQuickLinks();
     }
 
     public function save(): void

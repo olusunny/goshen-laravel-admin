@@ -2,7 +2,8 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\AppSettingResource;
+use App\Support\AdminMenuRegistry;
+
 use App\Models\AppSetting;
 use App\Support\AdminPermissions;
 use BackedEnum;
@@ -83,7 +84,8 @@ class GoogleFirebaseSettings extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return false;
+        return static::canAccess()
+            && AdminMenuRegistry::visibleForPage(static::class);
     }
 
     public static function canAccess(): bool
@@ -92,7 +94,7 @@ class GoogleFirebaseSettings extends Page
 
         return $user && (
             $user->hasRole('super_admin', 'web')
-            || $user->can(AdminPermissions::resourcePermission(AppSettingResource::class))
+            || $user->can(AdminPermissions::GOOGLE_FIREBASE)
         );
     }
 

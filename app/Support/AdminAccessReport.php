@@ -1,0 +1,34 @@
+<?php
+
+namespace App\Support;
+
+use App\Models\AdminMenuRoleVisibility;
+use App\Models\User;
+
+class AdminAccessReport
+{
+    public static function forUser(User $user): array
+    {
+        $user->load('roles.permissions', 'permissions');
+        $catalog = AdminPermissions::all();
+        $roles = $user->roles->where('guard_name', 'web');
+        $effective = $user->getAllPermissions()->where('guard_name', 'web')->sortBy('name')
+            ->map(fn ($permission): array => [
+                'name' => $permission->name,
+                'label' => $catalog[$permission->name] ?? $permission->name,
+                'catalogued' => array_key_exists($permission->name, $catalog),
+                'direct' => $user->permissions->contains('id', $permission->id),
+                'roles' => $roles->filter(fn ($role): bool => $role->permissions->contains('id', $permission->id))->pluck('name')->all(),
+            ])->values()->all();
+
+        return [
+            'user_id' => $user->id,
+            'super_admin' => $roles->contains('name', 'super_admin'),
+            'roles' => $roles->map->only(['id', 'name', 'guard_name'])->values()->all(),
+            'permissions' => $effective,
+            'hidden_menus' => AdminMenuRoleVisibility::whereIn('role_id', $roles->pluck('id'))
+                ->where('is_visible', false)->get(['role_id', 'menu_key'])->toArray(),
+            'note' => 'Permissions are additive. Any assigned role can hide a menu without revoking access. Feature switches and enabled add-ons can also limit availability. Super Admin bypasses feature permission checks.',
+        ];
+    }
+}

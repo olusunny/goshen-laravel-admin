@@ -2,7 +2,6 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\GoshenTicketResource;
 use App\Services\GoshenTicketPdfTemplateSettings;
 use App\Support\AdminMenuRegistry;
 use App\Support\AdminPermissions;
@@ -42,8 +41,7 @@ class GoshenTicketPdfTemplates extends Page
 
         return $user && (
             $user->hasRole('super_admin', 'web')
-            || $user->can(AdminPermissions::resourcePermission(GoshenTicketResource::class))
-            || $user->can(AdminPermissions::GOSHEN_TICKET_ISSUE)
+            || $user->can(AdminPermissions::TICKET_PDF_SETTINGS)
         );
     }
 

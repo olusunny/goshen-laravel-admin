@@ -7,6 +7,7 @@ use App\Models\AccommodationBooking;
 use App\Models\AccommodationCategory;
 use App\Models\AccommodationPayment;
 use App\Models\AppSetting;
+use App\Models\User;
 use App\Services\AccommodationBookingService;
 use App\Services\PaystackAccommodationService;
 use App\Support\MediaUrl;
@@ -202,6 +203,7 @@ class AccommodationController extends Controller
 
     public function exportCsv(Request $request)
     {
+        $this->authorizeAdminBookingAccess();
         $rows = AccommodationBooking::with(['user', 'category', 'unit'])->latest()->get();
 
         $callback = function () use ($rows) {
@@ -236,7 +238,7 @@ class AccommodationController extends Controller
 
     public function printReceipt(AccommodationBooking $booking)
     {
-        abort_unless(auth()->check(), 403);
+        $this->authorizeAdminBookingAccess();
 
         $booking->load(['user', 'category', 'unit', 'payments']);
         $payment = $booking->payments->sortByDesc('created_at')->first();
@@ -344,6 +346,12 @@ class AccommodationController extends Controller
 </body>
 </html>
 HTML);
+    }
+
+    private function authorizeAdminBookingAccess(): void
+    {
+        $user = auth()->user();
+        abort_unless($user instanceof User && ($user->hasRole('super_admin', 'web') || $user->can('manage_accommodation_booking')), 403);
     }
 
     private function validatedBookingData(Request $request, bool $requireRules): array

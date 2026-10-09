@@ -179,7 +179,7 @@ class AdminMenuVisibilityTest extends TestCase
     {
         $keys = collect(AdminMenuRegistry::items())->pluck('key')->all();
 
-        $this->assertNotContains(AdminMenuRegistry::pageKey(CloudBackups::class), $keys);
+        $this->assertContains(AdminMenuRegistry::pageKey(CloudBackups::class), $keys);
         $this->assertNotContains(AdminMenuRegistry::resourceKey(AccommodationUnitResource::class), $keys);
         $this->assertNotContains(AdminMenuRegistry::resourceKey(AccommodationBookingResource::class), $keys);
         $this->assertNotContains(AdminMenuRegistry::resourceKey(AccommodationPaymentResource::class), $keys);
@@ -294,15 +294,7 @@ class AdminMenuVisibilityTest extends TestCase
         $this->assertFalse(RoleResource::canEdit($superRole));
 
         Livewire::actingAs($manager)
-            ->test(CreateUser::class)
-            ->fillForm([
-                'name' => 'Crafted Admin',
-                'email' => 'crafted@example.test',
-                'password' => 'password',
-                'roles' => [$superRole->id],
-            ])
-            ->call('create')
-            ->assertHasFormErrors(['roles']);
+            ->test(CreateUser::class)->assertForbidden();
 
         $mobileSuperRole = Role::query()->create([
             'name' => 'super_admin',
@@ -310,15 +302,7 @@ class AdminMenuVisibilityTest extends TestCase
         ]);
 
         Livewire::actingAs($manager)
-            ->test(CreateUser::class)
-            ->fillForm([
-                'name' => 'Crafted Mobile Admin',
-                'email' => 'crafted-mobile@example.test',
-                'password' => 'password',
-                'roles' => [$mobileSuperRole->id],
-            ])
-            ->call('create')
-            ->assertHasFormErrors(['roles']);
+            ->test(CreateUser::class)->assertForbidden();
 
         $craftedUser = User::factory()->create();
         $craftedUser->roles()->attach($mobileSuperRole->id);

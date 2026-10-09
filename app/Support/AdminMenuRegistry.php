@@ -3,10 +3,7 @@
 namespace App\Support;
 
 use App\Filament\Pages\AppSettings;
-use App\Filament\Pages\CronJobs;
-use App\Filament\Pages\GoshenReferralSettings;
 use App\Filament\Pages\GoshenRetreatConsole;
-use App\Filament\Pages\GoshenTicketPdfTemplates;
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
 use App\Models\AdminMenuRoleVisibility;
 use App\Models\User;
@@ -136,17 +133,55 @@ class AdminMenuRegistry
     }
 
     /**
-     * @return array<int, class-string>
+     * @return array<int, array{type: string, class: class-string, label: string, description: string}>
      */
-    private static function pageClasses(): array
+    public static function settingsDestinations(): array
     {
         return [
-            AppSettings::class,
-            CronJobs::class,
-            GoshenReferralSettings::class,
-            GoshenRetreatConsole::class,
-            GoshenTicketPdfTemplates::class,
+            ['type' => 'page', 'class' => \App\Filament\Pages\PaymentGateways::class,
+                'label' => 'Payment Gateways', 'description' => 'Stripe test/live keys, webhooks, and checkout URLs.'],
+            ['type' => 'page', 'class' => \App\Filament\Pages\GoogleFirebaseSettings::class,
+                'label' => 'Google & Firebase', 'description' => 'Google login IDs, fingerprints, and Firebase Admin status.'],
+            ['type' => 'page', 'class' => \App\Filament\Pages\GoshenReferralSettings::class,
+                'label' => 'Referral Settings', 'description' => 'Referral points, wallet conversion rate, and conversion minimums.'],
+            ['type' => 'page', 'class' => \App\Filament\Pages\GoshenTicketPdfTemplates::class,
+                'label' => 'Ticket PDF Templates', 'description' => 'Choose the preferred Goshen ticket PDF design and preview options.'],
+            ['type' => 'page', 'class' => \App\Filament\Pages\CloudBackups::class,
+                'label' => 'Cloud Backups', 'description' => 'Google Drive and OneDrive backup providers.'],
+            ['type' => 'page', 'class' => \App\Filament\Pages\CronJobs::class,
+                'label' => 'Cron Jobs', 'description' => 'Scheduler health report and cPanel cron setup commands.'],
+            ['type' => 'resource', 'class' => \App\Filament\Resources\AiProviderSettingResource::class,
+                'label' => 'AI Providers', 'description' => 'AI provider model, API key, and test configuration.'],
+            ['type' => 'resource', 'class' => \App\Filament\Resources\AddonResource::class,
+                'label' => 'Add-ons', 'description' => 'Installed add-ons, lifecycle status, and package health.'],
+            ['type' => 'resource', 'class' => \App\Filament\Resources\RoleResource::class,
+                'label' => 'Role Permissions', 'description' => 'Admin roles and feature permissions.'],
+            ['type' => 'page', 'class' => \App\Filament\Pages\AdminMenuSettings::class,
+                'label' => 'Admin Menu Settings', 'description' => 'Role-based visibility for admin navigation items.'],
         ];
+    }
+
+    public static function settingsQuickLinks(): array
+    {
+        return collect(self::settingsDestinations())->filter(function (array $item): bool {
+            $class = $item['class'];
+
+            return $item['type'] === 'page'
+                ? $class::canAccess() && self::visibleForPage($class)
+                : $class::canViewAny() && self::visibleForResource($class);
+        })->map(fn (array $item): array => [
+            'label' => $item['label'],
+            'description' => $item['description'],
+            'url' => $item['class']::getUrl(),
+        ])->values()->all();
+    }
+
+    private static function pageClasses(): array
+    {
+        return array_values(array_unique(array_merge(
+            [AppSettings::class, GoshenRetreatConsole::class],
+            collect(self::settingsDestinations())->where('type', 'page')->pluck('class')->all(),
+        )));
     }
 
     private static function resourceShouldAppearInMatrix(string $resourceClass): bool

@@ -2,6 +2,8 @@
 
 namespace App\Filament\Pages;
 
+use App\Support\AdminMenuRegistry;
+
 use App\Support\AdminPermissions;
 use BackedEnum;
 use ChurchTools\CloudBackup\Models\CloudBackupConnection;
@@ -28,7 +30,8 @@ class CloudBackups extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return false;
+        return static::canAccess()
+            && AdminMenuRegistry::visibleForPage(static::class);
     }
 
     public static function canAccess(): bool

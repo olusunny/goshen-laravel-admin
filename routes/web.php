@@ -116,7 +116,7 @@ Route::controller(CompatibilityController::class)
 Route::controller(AccommodationController::class)
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->group(function () {
-        Route::get('admin/accommodation-bookings/export-csv', 'exportCsv')->middleware('auth');
+        Route::get('admin/accommodation-bookings/export/csv', 'exportCsv')->middleware('auth')->name('admin.accommodation.export');
         Route::get('admin/accommodation-bookings/{booking}/receipt', 'printReceipt')->whereNumber('booking')->middleware('auth');
     });
 

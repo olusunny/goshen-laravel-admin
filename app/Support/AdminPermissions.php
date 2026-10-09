@@ -8,6 +8,12 @@ use Illuminate\Support\Str;
 
 class AdminPermissions
 {
+    public const GOOGLE_FIREBASE = 'manage_google_firebase';
+
+    public const REFERRAL_SETTINGS = 'manage_referral_settings';
+
+    public const TICKET_PDF_SETTINGS = 'manage_ticket_pdf_settings';
+
     public const CLOUD_BACKUPS = 'manage_cloud_backups';
 
     public const TRIUMPHANT_EXPERIENCE_YOUTUBE = 'manage_triumphant_experience_youtube';
@@ -116,6 +122,9 @@ class AdminPermissions
                 ),
             )
             ->mapWithKeys(fn ($meta) => [$meta['permission'] => "{$meta['group']} - {$meta['label']}"])
+            ->put(self::GOOGLE_FIREBASE, 'Settings - Google & Firebase')
+            ->put(self::REFERRAL_SETTINGS, 'Settings - Referral Settings')
+            ->put(self::TICKET_PDF_SETTINGS, 'Settings - Ticket PDF Templates')
             ->put(self::CLOUD_BACKUPS, 'Settings - Cloud Backups')
             ->put(self::TRIUMPHANT_EXPERIENCE_YOUTUBE, 'Goshen Retreat - Manage Triumphant Experience YouTube connection')
             ->put(self::CRON_MONITOR, 'Settings - Cron Jobs')
