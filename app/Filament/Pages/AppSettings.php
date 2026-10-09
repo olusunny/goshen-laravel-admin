@@ -184,6 +184,7 @@ class AppSettings extends Page
     {
         abort_unless(static::canAccess() && AppSettingsSections::canManage($section), 403);
         abort_unless(isset(AppSettingsSections::sections()[$section]) || $section === 'other', 403);
+        $this->resetValidation();
         DB::transaction(function () use ($section): void {
             if ($section === 'other') {
                 $this->saveAdditionalSettings();

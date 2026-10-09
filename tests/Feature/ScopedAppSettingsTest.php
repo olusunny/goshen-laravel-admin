@@ -58,6 +58,14 @@ class ScopedAppSettingsTest extends TestCase
         $this->assertDatabaseHas('admin_access_audits', ['target_type' => 'app_setting', 'action' => 'updated']);
     }
 
+    public function test_correcting_invalid_input_clears_old_validation_errors(): void
+    {
+        Livewire::actingAs($this->admin(['general']))->test(AppSettings::class)
+            ->set('websiteUrl', 'not-a-valid-url')->call('save', 'general')->assertHasErrors('websiteUrl')
+            ->set('websiteUrl', 'https://example.com')->call('save', 'general')->assertHasNoErrors();
+        $this->assertSame('https://example.com', AppSetting::value('website_url'));
+    }
+
     public function test_cross_section_and_additional_settings_forgery_are_denied(): void
     {
         $user = $this->admin(['branding']);
