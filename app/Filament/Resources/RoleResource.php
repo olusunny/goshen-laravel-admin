@@ -191,8 +191,9 @@ class RoleResource extends Resource
                     ]),
             ])
             ->recordActions([
-                Actions\EditAction::make(),
+                Actions\EditAction::make()->authorize(fn (Role $record): bool => static::canEdit($record)),
                 Actions\DeleteAction::make()
+                    ->authorize(fn (Role $record): bool => static::canDelete($record))
                     ->using(fn (Role $record): bool => app(AdminAccessService::class)->deleteRole($record)),
             ])
             ->toolbarActions([]);

@@ -38,6 +38,7 @@ class EditUser extends EditRecord
     {
         return [
             Actions\DeleteAction::make()
+                ->authorize(fn (User $record): bool => AdminAccessService::canDeleteUser($record))
                 ->using(fn (User $record): bool => app(AdminAccessService::class)->deleteUser($record)),
         ];
     }

@@ -38,6 +38,7 @@ class EditRole extends EditRecord
     {
         return [
             Actions\DeleteAction::make()
+                ->authorize(fn (Role $record): bool => RoleResource::canDelete($record))
                 ->using(fn (Role $record): bool => app(AdminAccessService::class)->deleteRole($record)),
         ];
     }

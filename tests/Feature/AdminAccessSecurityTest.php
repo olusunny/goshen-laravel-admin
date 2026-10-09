@@ -56,6 +56,30 @@ class AdminAccessSecurityTest extends TestCase
         Livewire::actingAs($manager)->test(EditRole::class, ['record' => $ordinary->id])->assertForbidden();
     }
 
+    public function test_admin_actions_follow_server_side_protections(): void
+    {
+        $manager = $this->admin();
+        Livewire::actingAs($manager)->test(EditUser::class, ['record' => $manager->id])
+            ->assertActionHidden('delete');
+        Livewire::actingAs($manager)->test(\App\Filament\Resources\UserResource\Pages\ListUsers::class)
+            ->assertActionHidden('create');
+        Livewire::actingAs($manager)->test(\App\Filament\Resources\RoleResource\Pages\ListRoles::class)
+            ->assertActionHidden('create')
+            ->assertActionHidden(\Filament\Actions\Testing\TestAction::make('edit')->table($manager->roles->first()))
+            ->assertActionHidden(\Filament\Actions\Testing\TestAction::make('delete')->table($manager->roles->first()));
+        $stronger = $this->admin();
+        $stronger->givePermissionTo(Permission::findOrCreate('manage_payment_gateways', 'web'));
+        Livewire::actingAs($manager)->test(\App\Filament\Resources\UserResource\Pages\ListUsers::class)
+            ->assertActionHidden(\Filament\Actions\Testing\TestAction::make('edit')->table($stronger));
+        $super = $this->admin(true);
+        Livewire::actingAs($super)->test(EditUser::class, ['record' => $super->id])
+            ->assertActionHidden('delete');
+        Livewire::actingAs($super)->test(EditUser::class, ['record' => $manager->id])
+            ->assertActionVisible('delete');
+        Livewire::actingAs($super)->test(EditRole::class, ['record' => $super->roles->first()->id])
+            ->assertActionHidden('delete');
+    }
+
     public function test_manager_cannot_reset_a_stronger_accounts_credentials(): void
     {
         $manager = $this->admin();

@@ -206,7 +206,7 @@ class UserResource extends Resource
                 //
             ])
             ->recordActions([
-                Actions\EditAction::make(),
+                Actions\EditAction::make()->authorize(fn (User $record): bool => static::canEdit($record)),
             ])
             ->toolbarActions([]);
     }
