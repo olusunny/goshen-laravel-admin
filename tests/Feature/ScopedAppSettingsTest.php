@@ -147,6 +147,15 @@ class ScopedAppSettingsTest extends TestCase
         $this->assertSame('1', $setting->fresh()->value);
     }
 
+    public function test_maintenance_cache_action_is_unavailable_after_super_admin_revocation(): void
+    {
+        $user = $this->admin(super: true);
+        $page = Livewire::actingAs($user)->test(\App\Filament\Resources\AppSettingResource\Pages\ListAppSettings::class);
+        $user->removeRole('super_admin');
+        Auth::setUser($user->fresh());
+        $page->assertActionDisabled('clearCache');
+    }
+
     public function test_other_settings_preserves_blank_secrets_and_rejects_protected_known_keys(): void
     {
         AppSetting::create(['key' => 'custom_secret', 'group' => 'custom', 'value' => 'KEEP_SECRET', 'is_secret' => true]);

@@ -16,6 +16,7 @@ class ListAppSettings extends ListRecords
     {
         return [
             Actions\Action::make('clearCache')
+                ->authorize(fn (): bool => AppSettingResource::canViewAny())
                 ->label('Clear cache')
                 ->icon('heroicon-o-trash')
                 ->color('warning')
@@ -23,6 +24,7 @@ class ListAppSettings extends ListRecords
                 ->modalHeading('Clear server cache?')
                 ->modalDescription('This clears Laravel application, config, route, event, and view caches. It is useful after content, settings, or deployment changes.')
                 ->action(function (): void {
+                    abort_unless(AppSettingResource::canViewAny(), 403);
                     Artisan::call('optimize:clear');
 
                     Notification::make()

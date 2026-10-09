@@ -30,6 +30,10 @@ class AppSettingResource extends Resource
 
     protected static ?string $navigationLabel = 'System Settings Maintenance';
 
+    protected static ?string $modelLabel = 'system setting';
+
+    protected static ?string $pluralModelLabel = 'System Settings Maintenance';
+
     public static function adminCanManageResource(): bool
     {
         return \App\Services\AdminAccessService::isSuperAdmin();
