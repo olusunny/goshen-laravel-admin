@@ -45,25 +45,27 @@
         @media (max-width:980px) { .ash-layout { grid-template-columns:1fr; } .ash-tabs { padding-right:0; border-right:0; } .ash-grid, .ash-checks, .ash-links { grid-template-columns:1fr; padding:18px; } .ash-panel-head, .ash-actions { padding:18px; } }
     </style>
 
-    <form wire:submit.prevent="save" class="ash-page" x-data="{ tab: 'general' }">
+    <form x-on:submit.prevent="$wire.save(tab)" class="ash-page" x-data="{ tab: @js(array_key_first($sections)) }">
         <section class="ash-hero">
             <h2 class="ash-title">App settings</h2>
             <p class="ash-copy">Manage the public app, social links, feature switches, support details, and integration shortcuts from one focused settings page.</p>
         </section>
 
+        @if ($errors->any())
+            <div role="alert">
+                <p>Please correct these settings before saving:</p>
+                <ul>
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <div class="ash-layout">
             <aside class="ash-tabs" aria-label="Settings sections">
-                @foreach ([
-                    'general' => ['General', 'Name, website, currency', 'heroicon-o-cog-6-tooth'],
-                    'branding' => ['Branding', 'Logo and app identity', 'heroicon-o-photo'],
-                    'social' => ['Social links', 'Public contact channels', 'heroicon-o-share'],
-                    'features' => ['Activation', 'Mobile app feature switches', 'heroicon-o-adjustments-horizontal'],
-                    'performance' => ['Performance', 'Application cache control', 'heroicon-o-bolt'],
-                    'payments' => ['Giving & payments', 'PayPal and Stripe setup', 'heroicon-o-credit-card'],
-                    'support' => ['Support', 'Accommodation support contact', 'heroicon-o-lifebuoy'],
-                    'integrations' => ['Integrations', 'Gateways and credentials', 'heroicon-o-squares-plus'],
-                    'other' => ['Other settings', 'Additional app settings', 'heroicon-o-ellipsis-horizontal-circle'],
-                ] as $key => [$label, $note, $icon])
+                @foreach ($sections as $key => $section)
+                    @php(['label' => $label, 'note' => $note, 'icon' => $icon] = $section)
                     <button type="button" class="ash-tab" :class="{ 'active': tab === '{{ $key }}' }" :aria-pressed="tab === '{{ $key }}'" x-on:click="tab = '{{ $key }}'">
                         <span class="ash-tab-icon"><x-filament::icon :icon="$icon" /></span>
                         <span>
@@ -75,6 +77,7 @@
             </aside>
 
             <div>
+                @if (isset($sections['general']))
                 <section class="ash-panel" x-show="tab === 'general'">
                     <div class="ash-panel-head">
                         <h2 class="ash-h2">General</h2>
@@ -95,7 +98,9 @@
                         </label>
                     </div>
                 </section>
+                @endif
 
+                @if (isset($sections['branding']))
                 <section class="ash-panel" x-show="tab === 'branding'" x-cloak>
                     <div class="ash-panel-head">
                         <h2 class="ash-h2">Branding</h2>
@@ -112,7 +117,9 @@
                         </label>
                     </div>
                 </section>
+                @endif
 
+                @if (isset($sections['social']))
                 <section class="ash-panel" x-show="tab === 'social'" x-cloak>
                     <div class="ash-panel-head">
                         <h2 class="ash-h2">Social Links</h2>
@@ -136,7 +143,9 @@
                         @endforeach
                     </div>
                 </section>
+                @endif
 
+                @if (isset($sections['features']))
                 <section class="ash-panel" x-show="tab === 'features'" x-cloak>
                     <div class="ash-panel-head">
                         <h2 class="ash-h2">Activation</h2>
@@ -144,14 +153,12 @@
                     </div>
                     <div class="ash-checks">
                         @foreach ([
-                            'googleLoginEnabled' => ['Google login', 'Show Google sign-in and registration buttons.'],
                             'testimoniesEnabled' => ['Testimonies & Thanksgiving', 'Enable the public testimony wall.'],
                             'counselingEnabled' => ['Private counseling', 'Show counseling discovery and allow verified members to submit private requests.'],
                             'goshenRetreatEnabled' => ['Goshen Retreat', 'Show Goshen Retreat in the app and web experience.'],
                             'goshenScannerEnabled' => ['Goshen scanner', 'Allow authorized check-in scanner access.'],
                             'goshenWalletEnabled' => ['Goshen wallet', 'Enable wallet balance, transfers, and wallet payments.'],
                             'goshenStripeGivingEnabled' => ['Stripe giving', 'Allow Giving payments through Stripe.'],
-                            'goshenReferralsEnabled' => ['Goshen referrals', 'Allow referral codes and wallet conversion.'],
                             'fundraisingEnabled' => ['Project support', 'Show fundraising/project support campaigns.'],
                             'prayerPointsEnabled' => ['Prayer points', 'Show church prayer points content.'],
                             'interactivePrayerWallEnabled' => ['Interactive prayer wall', 'Allow prayer wall reading, posting, and responses.'],
@@ -178,7 +185,9 @@
                         @endforeach
                     </div>
                 </section>
+                @endif
 
+                @if (isset($sections['performance']))
                 <section class="ash-panel" x-show="tab === 'performance'" x-cloak>
                     <div class="ash-panel-head">
                         <h2 class="ash-h2">Cache performance</h2>
@@ -194,7 +203,9 @@
                         </label>
                     </div>
                 </section>
+                @endif
 
+                @if (isset($sections['payments']))
                 <section class="ash-panel" x-show="tab === 'payments'" x-cloak>
                     <div class="ash-panel-head">
                         <h2 class="ash-h2">Giving & Payments</h2>
@@ -207,7 +218,9 @@
                         </label>
                     </div>
                 </section>
+                @endif
 
+                @if (isset($sections['support']))
                 <section class="ash-panel" x-show="tab === 'support'" x-cloak>
                     <div class="ash-panel-head">
                         <h2 class="ash-h2">Support</h2>
@@ -236,17 +249,13 @@
                         </label>
                     </div>
                 </section>
+                @endif
 
+                @if (isset($sections['integrations']))
                 <section class="ash-panel" x-show="tab === 'integrations'" x-cloak>
                     <div class="ash-panel-head">
-                        <h2 class="ash-h2">Integrations</h2>
+                        <h2 class="ash-h2">Settings pages</h2>
                         <p class="ash-muted">Open focused setup pages for credentials and operational tooling.</p>
-                    </div>
-                    <div class="ash-grid" style="padding-bottom:0;">
-                        <label class="ash-field ash-field-full">
-                            <span class="ash-label">Legacy Firebase service account path</span>
-                            <input class="ash-input" type="password" wire:model.defer="serviceAccountPath" placeholder="Leave blank to keep saved value">
-                        </label>
                     </div>
                     <div class="ash-links">
                         @foreach ($quickLinks as $link)
@@ -260,11 +269,13 @@
                         @endforeach
                     </div>
                 </section>
+                @endif
 
+                @if (isset($sections['other']))
                 <section class="ash-panel" x-show="tab === 'other'" x-cloak>
                     <div class="ash-panel-head">
                         <h2 class="ash-h2">Other Settings</h2>
-                        <p class="ash-muted">Any app settings not already handled by the grouped tabs or focused setup pages appear here automatically.</p>
+                        <p class="ash-muted">Super Admin maintenance for settings without a dedicated editor. Secret values are never shown.</p>
                     </div>
                     @forelse ($additionalSettingGroups as $group => $settings)
                         <div class="ash-panel-head" style="border-top:1px solid var(--ash-line);">
@@ -300,9 +311,10 @@
                         </div>
                     @endforelse
                 </section>
+                @endif
 
-                <div class="ash-actions">
-                    <button type="submit" class="ash-button">Save settings</button>
+                <div class="ash-actions" x-show="tab !== 'integrations'" x-cloak>
+                    <button type="submit" class="ash-button">Save this section</button>
                 </div>
             </div>
         </div>

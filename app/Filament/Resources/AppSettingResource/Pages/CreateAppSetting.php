@@ -9,6 +9,8 @@ class CreateAppSetting extends CreateRecord
 {
     protected static string $resource = AppSettingResource::class;
 
+    protected ?bool $hasDatabaseTransactions = true;
+
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         return AppSettingResource::collapseVirtualValueFields($data);

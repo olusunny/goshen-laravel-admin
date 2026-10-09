@@ -121,7 +121,12 @@ class AdminPermissions
                     true,
                 ),
             )
+            ->except(\App\Filament\Resources\AppSettingResource::class)
             ->mapWithKeys(fn ($meta) => [$meta['permission'] => "{$meta['group']} - {$meta['label']}"])
+            ->put(AppSettingsSections::HUB_PERMISSION, 'App Settings - Open hub')
+            ->merge(collect(AppSettingsSections::sections())->mapWithKeys(fn (array $section, string $key): array => [
+                AppSettingsSections::permission($key) => 'App Settings - '.$section['label'],
+            ]))
             ->put(self::GOOGLE_FIREBASE, 'Settings - Google & Firebase')
             ->put(self::REFERRAL_SETTINGS, 'Settings - Referral Settings')
             ->put(self::TICKET_PDF_SETTINGS, 'Settings - Ticket PDF Templates')

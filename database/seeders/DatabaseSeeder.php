@@ -34,7 +34,7 @@ class DatabaseSeeder extends Seeder
             'super_admin' => ['*'],
             'content_manager' => [
                 'manage_content_page',
-                'manage_app_setting',
+                \App\Support\AppSettingsSections::HUB_PERMISSION,
                 AdminPermissions::resourcePermission(MediaItemResource::class),
                 AdminPermissions::resourcePermission(VideoAudioMediaResource::class),
             ],

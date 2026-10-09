@@ -28,7 +28,12 @@ class AppSettingResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'Settings';
 
-    protected static ?string $navigationLabel = 'Advanced Settings';
+    protected static ?string $navigationLabel = 'System Settings Maintenance';
+
+    public static function adminCanManageResource(): bool
+    {
+        return \App\Services\AdminAccessService::isSuperAdmin();
+    }
 
     protected static ?int $navigationSort = 99;
 
@@ -70,22 +75,23 @@ class AppSettingResource extends Resource
                                     ->maxSize(4096)
                                     ->downloadable()
                                     ->previewable()
-                                    ->visible(fn ($get): bool => $get('key') === 'app_logo')
+                                    ->visible(fn ($get): bool => ! $get('is_secret') && $get('key') === 'app_logo')
                                     ->columnSpanFull(),
                                 Forms\Components\Textarea::make('text_value')
                                     ->label('Value')
-                                    ->hidden(fn ($get): bool => $get('key') === 'app_logo' || in_array($get('key'), self::urlKeys(), true) || self::isToggleKey($get('key')))
+                                    ->helperText(fn ($get): ?string => $get('is_secret') ? 'Saved secrets are never shown. Leave blank to keep the current value.' : null)
+                                    ->hidden(fn ($get): bool => ! $get('is_secret') && ($get('key') === 'app_logo' || in_array($get('key'), self::urlKeys(), true) || self::isToggleKey($get('key'))))
                                     ->columnSpanFull(),
                                 Forms\Components\Toggle::make('boolean_value')
                                     ->label(fn ($get): string => self::friendlyLabel($get('key')))
                                     ->helperText(fn ($get): ?string => self::helperText($get('key')))
-                                    ->visible(fn ($get): bool => self::isToggleKey($get('key')))
+                                    ->visible(fn ($get): bool => ! $get('is_secret') && self::isToggleKey($get('key')))
                                     ->columnSpanFull(),
                                 Forms\Components\TextInput::make('url_value')
                                     ->label(fn ($get): string => self::friendlyLabel($get('key')))
                                     ->url()
                                     ->helperText(fn ($get): ?string => self::helperText($get('key')))
-                                    ->visible(fn ($get): bool => in_array($get('key'), self::urlKeys(), true))
+                                    ->visible(fn ($get): bool => ! $get('is_secret') && in_array($get('key'), self::urlKeys(), true))
                                     ->columnSpanFull(),
                             ]),
                         Tab::make('Security')
@@ -95,6 +101,7 @@ class AppSettingResource extends Resource
                                     ->description('Use these controls only for credentials and private configuration values.')
                                     ->schema([
                                         Forms\Components\Toggle::make('is_secret')
+                                            ->live()
                                             ->label('Treat value as secret')
                                             ->helperText('Enable this for API keys, SMTP passwords, Firebase credentials, AI keys, and other private settings.')
                                             ->required(),
@@ -118,6 +125,7 @@ class AppSettingResource extends Resource
                     ->formatStateUsing(fn (string $state): string => self::friendlyLabel($state))
                     ->toggleable(),
                 Tables\Columns\ImageColumn::make('value')
+                    ->getStateUsing(fn (AppSetting $record) => $record->key === 'app_logo' && ! $record->is_secret ? $record->value : null)
                     ->label('Logo')
                     ->disk('public')
                     ->height(36)
@@ -191,6 +199,9 @@ class AppSettingResource extends Resource
 
     public static function prepareVirtualValueFields(array $data): array
     {
+        if ($data['is_secret'] ?? false) {
+            $data['value'] = null;
+        }
         $key = $data['key'] ?? null;
 
         $data['logo_value'] = $key === 'app_logo' ? ($data['value'] ?? null) : null;
@@ -202,6 +213,8 @@ class AppSettingResource extends Resource
             ? ($data['value'] ?? null)
             : null;
 
+        unset($data['value']);
+
         return $data;
     }
 
@@ -209,7 +222,9 @@ class AppSettingResource extends Resource
     {
         $key = $data['key'] ?? null;
 
-        if ($key === 'app_logo') {
+        if ($data['is_secret'] ?? false) {
+            $data['value'] = $data['text_value'] ?? '';
+        } elseif ($key === 'app_logo') {
             $data['value'] = $data['logo_value'] ?? null;
         } elseif (self::isToggleKey($key)) {
             $data['value'] = filter_var($data['boolean_value'] ?? false, FILTER_VALIDATE_BOOLEAN) ? '1' : '0';

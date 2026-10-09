@@ -1,136 +1,62 @@
 <script>
     (() => {
-        if (window.goshenAdminNavigationEnhancerLoaded) {
-            return
-        }
-
+        if (window.goshenAdminNavigationEnhancerLoaded) return
         window.goshenAdminNavigationEnhancerLoaded = true
 
-        const collapseVersionKey = 'goshenSidebarCollapsedDefaults:v1'
-        const collapsedGroupsKey = 'goshenSidebarCollapsedGroups:v1'
-
-        const normalize = (value) => (value || '')
-            .toString()
-            .toLowerCase()
-            .replace(/\s+/g, ' ')
-            .trim()
-
+        const normalize = value => (value || '').toString().toLowerCase().replace(/\s+/g, ' ').trim()
         const groups = () => Array.from(document.querySelectorAll('.fi-sidebar-group[data-group-label]'))
+        const sidebarStore = () => window.Alpine?.store('sidebar')
+        let collapsedBeforeSearch = null
 
-        const safeStorage = {
-            get: (key) => {
-                try {
-                    return window.localStorage.getItem(key)
-                } catch {
-                    return null
-                }
-            },
-            set: (key, value) => {
-                try {
-                    window.localStorage.setItem(key, value)
-                } catch {
-                    // Sidebar search and navigation remain usable without storage.
-                }
-            },
-        }
-
-        const updateSearchStatus = (query, visibleItems) => {
-            const status = document.querySelector('[data-goshen-menu-search-status]')
-
-            if (!status) {
-                return
+        const restoreGroups = () => {
+            if (collapsedBeforeSearch !== null && sidebarStore()) {
+                sidebarStore().collapsedGroups = collapsedBeforeSearch
+                collapsedBeforeSearch = null
             }
-
-            status.textContent = query.length === 0
-                ? ''
-                : visibleItems === 0
-                    ? 'No matching menu items.'
-                    : `${visibleItems} menu item${visibleItems === 1 ? '' : 's'} shown.`
-        }
-
-        const collapseDefaults = () => {
-            const allGroups = groups()
-
-            if (!allGroups.length || safeStorage.get(collapseVersionKey)) {
-                return
-            }
-
-            const collapsedLabels = allGroups
-                .filter((group) => !group.classList.contains('fi-active'))
-                .map((group) => group.dataset.groupLabel)
-                .filter(Boolean)
-
-            safeStorage.set(collapsedGroupsKey, JSON.stringify(collapsedLabels))
-            safeStorage.set(collapseVersionKey, '1')
-
-            allGroups.forEach((group) => {
-                if (!collapsedLabels.includes(group.dataset.groupLabel)) {
-                    return
-                }
-
-                group.classList.add('fi-collapsed')
-                group.querySelector('.fi-sidebar-group-items')?.style.setProperty('display', 'none')
-            })
         }
 
         const filterMenu = () => {
-            const input = document.querySelector('[data-goshen-menu-search]')
-            const sidebar = document.querySelector('.fi-sidebar')
-            const query = normalize(input?.value)
+            const query = normalize(document.querySelector('[data-goshen-menu-search]')?.value)
+            const store = sidebarStore()
+            if (query && collapsedBeforeSearch === null && Array.isArray(store?.collapsedGroups)) {
+                collapsedBeforeSearch = [...store.collapsedGroups]
+            }
+            if (!query) restoreGroups()
             let visibleItems = 0
-
-            sidebar?.classList.toggle('goshen-searching', query.length > 0)
-
-            groups().forEach((group) => {
-                const groupLabel = normalize(group.querySelector('.fi-sidebar-group-label')?.textContent)
-                let groupMatches = query.length === 0 || groupLabel.includes(query)
-
-                group.querySelectorAll('.fi-sidebar-item').forEach((item) => {
-                    const itemLabel = normalize(item.querySelector('.fi-sidebar-item-label')?.textContent)
-                    const itemMatches = query.length === 0 || groupMatches || itemLabel.includes(query)
-
-                    item.classList.toggle('goshen-nav-hidden', !itemMatches)
-
-                    if (itemMatches && query.length > 0) {
-                        groupMatches = true
-                        visibleItems += 1
+            document.querySelector('.fi-sidebar')?.classList.toggle('goshen-searching', !!query)
+            groups().forEach(group => {
+                const groupLabelMatches = normalize(group.dataset.groupLabel).includes(query)
+                let groupHasMatches = false
+                group.querySelectorAll('.fi-sidebar-item').forEach(item => {
+                    const label = normalize(item.querySelector('.fi-sidebar-item-label')?.textContent)
+                    const matches = !query || groupLabelMatches || label.includes(query)
+                    item.classList.toggle('goshen-nav-hidden', !matches)
+                    if (matches) {
+                        groupHasMatches = true
+                        visibleItems++
                     }
                 })
-
-                group.classList.toggle('goshen-nav-hidden', query.length > 0 && !groupMatches)
-
-                const list = group.querySelector('.fi-sidebar-group-items')
-
-                if (!list) {
-                    return
-                }
-
-                if (query.length > 0 && groupMatches) {
-                    list.style.display = 'grid'
-                    group.classList.remove('fi-collapsed')
-                } else if (query.length === 0) {
-                    list.style.removeProperty('display')
+                group.classList.toggle('goshen-nav-hidden', !!query && !groupHasMatches)
+                if (query && groupHasMatches && store?.groupIsCollapsed(group.dataset.groupLabel)) {
+                    store.toggleCollapsedGroup(group.dataset.groupLabel)
                 }
             })
-
-            updateSearchStatus(query, visibleItems)
+            const status = document.querySelector('[data-goshen-menu-search-status]')
+            if (status) status.textContent = !query ? '' : visibleItems
+                ? `${visibleItems} menu item${visibleItems === 1 ? '' : 's'} shown.`
+                : 'No matching menu items.'
         }
 
         const bind = () => {
-            collapseDefaults()
-            filterMenu()
-
             const input = document.querySelector('[data-goshen-menu-search]')
-
-            if (!input || input.dataset.goshenMenuSearchBound === 'true') {
-                return
-            }
-
+            if (!input || input.dataset.goshenMenuSearchBound === 'true') return
             input.dataset.goshenMenuSearchBound = 'true'
             input.addEventListener('input', filterMenu)
+            filterMenu()
         }
-
         document.addEventListener('DOMContentLoaded', bind)
+        document.addEventListener('alpine:initialized', bind)
+        document.addEventListener('livewire:navigate', restoreGroups)
         document.addEventListener('livewire:navigated', bind)
         setTimeout(bind, 80)
     })()

@@ -39,9 +39,8 @@ class AdminAccessReport
             'permissions' => $effective,
             'addon_system_enabled' => (bool) config('addons.enabled', true),
             'addons' => $addons,
-            'hidden_menus' => AdminMenuRoleVisibility::whereIn('role_id', $roles->pluck('id'))
-                ->where('is_visible', false)->get(['role_id', 'menu_key'])->toArray(),
-            'note' => 'Permissions are additive. Any assigned role can hide a menu without revoking access. Feature switches and enabled add-ons can also limit availability. Super Admin bypasses feature permission checks.',
+            'hidden_menus' => [],
+            'note' => 'Permissions are additive. Role and individual grants determine both menu visibility and access. Legacy menu hides are ignored. Feature switches and enabled add-ons can also limit availability. Super Admin bypasses feature permission checks.',
         ];
     }
 }

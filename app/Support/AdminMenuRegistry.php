@@ -5,11 +5,9 @@ namespace App\Support;
 use App\Filament\Pages\AppSettings;
 use App\Filament\Pages\GoshenRetreatConsole;
 use App\Filament\Resources\Concerns\AuthorizesResourceAccess;
-use App\Models\AdminMenuRoleVisibility;
 use App\Models\User;
 use BackedEnum;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Schema;
 use ReflectionClass;
 use Throwable;
 use UnitEnum;
@@ -100,36 +98,8 @@ class AdminMenuRegistry
 
     public static function visibleForUser(User $user, string $menuKey): bool
     {
-        try {
-            if (! Schema::hasTable('admin_menu_role_visibilities')) {
-                return true;
-            }
-
-            $roleIds = $user->roles()
-                ->where('guard_name', 'web')
-                ->pluck('roles.id')
-                ->map(fn ($id): int => (int) $id)
-                ->all();
-
-            if ($roleIds === []) {
-                return true;
-            }
-
-            $visibilityByRole = AdminMenuRoleVisibility::query()
-                ->where('menu_key', $menuKey)
-                ->whereIn('role_id', $roleIds)
-                ->pluck('is_visible', 'role_id');
-
-            foreach ($visibilityByRole as $isVisible) {
-                if (! (bool) $isVisible) {
-                    return false;
-                }
-            }
-
-            return true;
-        } catch (Throwable) {
-            return true;
-        }
+        // Legacy visibility rows remain for rollback; permissions decide navigation.
+        return true;
     }
 
     /**
@@ -156,8 +126,8 @@ class AdminMenuRegistry
                 'label' => 'Add-ons', 'description' => 'Installed add-ons, lifecycle status, and package health.'],
             ['type' => 'resource', 'class' => \App\Filament\Resources\RoleResource::class,
                 'label' => 'Role Permissions', 'description' => 'Admin roles and feature permissions.'],
-            ['type' => 'page', 'class' => \App\Filament\Pages\AdminMenuSettings::class,
-                'label' => 'Admin Menu Settings', 'description' => 'Role-based visibility for admin navigation items.'],
+            ['type' => 'resource', 'class' => \App\Filament\Resources\AppSettingResource::class,
+                'label' => 'System Settings Maintenance', 'description' => 'Super Admin configuration and secret replacement.'],
         ];
     }
 

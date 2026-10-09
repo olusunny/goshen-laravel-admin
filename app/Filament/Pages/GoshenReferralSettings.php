@@ -16,7 +16,7 @@ class GoshenReferralSettings extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Goshen Retreat';
+    protected static string|UnitEnum|null $navigationGroup = 'Settings';
 
     protected static ?string $navigationLabel = 'Referral Settings';
 

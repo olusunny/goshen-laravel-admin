@@ -36,7 +36,7 @@ class AppSettingsRedisCacheControlTest extends TestCase
             ->assertSee('Sessions, queues, payments, wallet balances, tickets, and audit records are unchanged.')
             ->assertSet('redisCacheEnabled', false)
             ->set('redisCacheEnabled', true)
-            ->call('save')
+            ->call('save', 'performance')
             ->assertHasNoErrors();
 
         $this->assertSame('1', AppSetting::value('redis_cache_enabled'));

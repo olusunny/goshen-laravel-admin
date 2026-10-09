@@ -35,14 +35,14 @@ class AdminAccessSecurityTest extends TestCase
     public function test_manager_can_edit_profile_but_cannot_submit_individual_grants(): void
     {
         $manager = $this->admin();
-        $extra = Permission::findOrCreate('manage_app_setting', 'web');
+        $extra = Permission::findOrCreate(\App\Support\AppSettingsSections::HUB_PERMISSION, 'web');
         Livewire::actingAs($manager)->test(EditUser::class, ['record' => $manager->id])
             ->fillForm(['name' => 'Updated manager'])->call('save')->assertHasNoFormErrors();
         $this->assertSame('Updated manager', $manager->fresh()->name);
 
         Livewire::actingAs($manager)->test(EditUser::class, ['record' => $manager->id])
             ->set('data.permissions', [$extra->id])->call('save')->assertHasFormErrors(['permissions']);
-        $this->assertFalse($manager->fresh()->can('manage_app_setting'));
+        $this->assertFalse($manager->fresh()->can(\App\Support\AppSettingsSections::HUB_PERMISSION));
     }
 
     public function test_manager_cannot_assign_a_role_or_edit_role_permissions(): void
@@ -92,7 +92,7 @@ class AdminAccessSecurityTest extends TestCase
     {
         $super = $this->admin(true);
         $target = $this->admin();
-        $extra = Permission::findOrCreate('manage_app_setting', 'web');
+        $extra = Permission::findOrCreate(\App\Support\AppSettingsSections::HUB_PERMISSION, 'web');
         $legacy = Permission::findOrCreate('legacy_external_access', 'web');
         $target->givePermissionTo($legacy);
         Livewire::actingAs($super)->test(EditUser::class, ['record' => $target->id])

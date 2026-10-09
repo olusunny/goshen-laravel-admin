@@ -27,7 +27,7 @@ class DelegatedSettingsAccessTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_each_settings_destination_is_independent_of_the_hub_and_respects_visibility(): void
+    public function test_each_settings_destination_is_independent_of_the_hub_and_ignores_legacy_hides(): void
     {
         $user = User::factory()->create();
         $role = Role::findOrCreate('selected_settings', 'web');
@@ -52,8 +52,8 @@ class DelegatedSettingsAccessTest extends TestCase
             $key = $isPage ? AdminMenuRegistry::pageKey($class) : AdminMenuRegistry::resourceKey($class);
             $this->assertContains($key, array_column(AdminMenuRegistry::items(), 'key'));
             AdminMenuRoleVisibility::create(['role_id' => $role->id, 'menu_key' => $key, 'is_visible' => false]);
-            $this->assertFalse($class::shouldRegisterNavigation());
-            $this->assertNotContains($class::getUrl(), array_column(AdminMenuRegistry::settingsQuickLinks(), 'url'));
+            $this->assertTrue($class::shouldRegisterNavigation());
+            $this->assertContains($class::getUrl(), array_column(AdminMenuRegistry::settingsQuickLinks(), 'url'));
             $this->assertTrue($isPage ? $class::canAccess() : $class::canViewAny());
             $role->syncPermissions([]);
             $this->actingAs($user->fresh());

@@ -31,7 +31,7 @@ class AdminMenuVisibilityTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_menu_visibility_hides_resource_navigation_without_revoking_permission(): void
+    public function test_legacy_menu_hides_do_not_override_resource_permissions(): void
     {
         [$admin, $role] = $this->adminWithRolePermission(
             AdminPermissions::resourcePermission(DonationResource::class),
@@ -49,10 +49,10 @@ class AdminMenuVisibilityTest extends TestCase
         ]);
 
         $this->assertTrue(DonationResource::canViewAny());
-        $this->assertFalse(DonationResource::shouldRegisterNavigation());
+        $this->assertTrue(DonationResource::shouldRegisterNavigation());
     }
 
-    public function test_menu_visibility_hides_custom_page_navigation_without_revoking_access(): void
+    public function test_legacy_menu_hides_do_not_override_page_permissions(): void
     {
         [$admin, $role] = $this->adminWithRolePermission(AdminPermissions::CRON_MONITOR);
 
@@ -68,10 +68,10 @@ class AdminMenuVisibilityTest extends TestCase
         ]);
 
         $this->assertTrue(CronJobs::canAccess());
-        $this->assertFalse(CronJobs::shouldRegisterNavigation());
+        $this->assertTrue(CronJobs::shouldRegisterNavigation());
     }
 
-    public function test_explicit_hidden_visibility_is_not_reopened_by_an_unconfigured_second_role(): void
+    public function test_legacy_hides_do_not_override_access_with_multiple_roles(): void
     {
         [$admin, $role] = $this->adminWithRolePermission(
             AdminPermissions::resourcePermission(DonationResource::class),
@@ -91,10 +91,10 @@ class AdminMenuVisibilityTest extends TestCase
         $this->actingAs($admin);
 
         $this->assertTrue(DonationResource::canViewAny());
-        $this->assertFalse(DonationResource::shouldRegisterNavigation());
+        $this->assertTrue(DonationResource::shouldRegisterNavigation());
     }
 
-    public function test_menu_visibility_hides_super_admin_navigation_without_revoking_access(): void
+    public function test_super_admin_navigation_ignores_legacy_hides(): void
     {
         $role = Role::query()->firstOrCreate([
             'name' => 'super_admin',
@@ -115,10 +115,10 @@ class AdminMenuVisibilityTest extends TestCase
         ]);
 
         $this->assertTrue(DonationResource::canViewAny());
-        $this->assertFalse(DonationResource::shouldRegisterNavigation());
+        $this->assertTrue(DonationResource::shouldRegisterNavigation());
     }
 
-    public function test_explicit_hidden_visibility_takes_precedence_over_an_explicitly_visible_second_role(): void
+    public function test_conflicting_legacy_visibility_rows_do_not_override_permissions(): void
     {
         [$admin, $hiddenRole] = $this->adminWithRolePermission(
             AdminPermissions::resourcePermission(DonationResource::class),
@@ -137,42 +137,22 @@ class AdminMenuVisibilityTest extends TestCase
 
         $this->actingAs($admin);
 
-        $this->assertFalse(DonationResource::shouldRegisterNavigation());
+        $this->assertTrue(DonationResource::shouldRegisterNavigation());
     }
 
-    public function test_admin_menu_settings_save_super_admin_visibility_and_refresh_the_sidebar(): void
+    public function test_retired_menu_settings_redirects_and_rejects_stale_saves(): void
     {
-        $role = Role::query()->firstOrCreate([
-            'name' => 'super_admin',
-            'guard_name' => 'web',
-        ]);
         $admin = User::factory()->create();
-        $admin->assignRole($role);
-        $menuKey = AdminMenuRegistry::resourceKey(DonationResource::class);
-        $hash = sha1($menuKey);
-
-        Livewire::actingAs($admin)
-            ->test(AdminMenuSettings::class)
-            ->assertSet('roles', fn (array $roles): bool => collect($roles)->contains('id', $role->id))
-            ->assertSee('Role-Based Admin Menu Visibility')
-            ->assertSee('Donation')
-            ->assertSee('Super Admin')
-            ->assertSeeHtml('wire:submit.prevent="save"')
-            ->assertDontSeeHtml('wire:model.defer=')
-            ->assertSeeHtml('type="submit"')
-            ->assertSee('Save menu visibility')
-            ->assertDontSee('Create at least one web admin role before configuring menu visibility.')
-            ->assertDontSee('No admin menu items were found.')
-            ->set("visibility.{$role->id}.{$hash}", false)
-            ->call('save')
-            ->assertDispatched('refresh-sidebar');
-
-        $this->assertDatabaseHas('admin_menu_role_visibilities', [
-            'role_id' => $role->id,
-            'menu_key' => $menuKey,
-            'is_visible' => false,
-        ]);
-        $this->assertFalse(DonationResource::shouldRegisterNavigation());
+        $admin->assignRole(Role::findOrCreate('super_admin', 'web'));
+        Livewire::actingAs($admin)->test(AdminMenuSettings::class)
+            ->assertRedirect(RoleResource::getUrl());
+        $this->assertFalse(AdminMenuSettings::shouldRegisterNavigation());
+        try {
+            Livewire::new(AdminMenuSettings::class)->save();
+            $this->fail('A stale menu form must not save.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
     }
 
     public function test_menu_matrix_excludes_entries_that_cannot_register_sidebar_navigation(): void
@@ -191,7 +171,7 @@ class AdminMenuVisibilityTest extends TestCase
     public function test_settings_quick_links_hide_pages_without_permission(): void
     {
         [$admin] = $this->adminWithRolePermission(
-            AdminPermissions::resourcePermission(AppSettingResource::class),
+            \App\Support\AppSettingsSections::HUB_PERMISSION,
         );
 
         $this->actingAs($admin);
@@ -206,7 +186,7 @@ class AdminMenuVisibilityTest extends TestCase
     public function test_settings_quick_links_show_pages_with_permission(): void
     {
         [$admin] = $this->adminWithRolePermissions([
-            AdminPermissions::resourcePermission(AppSettingResource::class),
+            \App\Support\AppSettingsSections::HUB_PERMISSION,
             AdminPermissions::PAYMENT_GATEWAYS,
             AdminPermissions::CLOUD_BACKUPS,
             AdminPermissions::resourcePermission(RoleResource::class),
@@ -221,10 +201,10 @@ class AdminMenuVisibilityTest extends TestCase
         $this->assertContains('Role Permissions', $labels);
     }
 
-    public function test_settings_quick_links_honor_admin_menu_visibility(): void
+    public function test_settings_quick_links_ignore_legacy_menu_visibility(): void
     {
         [$admin, $role] = $this->adminWithRolePermissions([
-            AdminPermissions::resourcePermission(AppSettingResource::class),
+            \App\Support\AppSettingsSections::HUB_PERMISSION,
             AdminPermissions::PAYMENT_GATEWAYS,
             AdminPermissions::CLOUD_BACKUPS,
         ]);
@@ -240,10 +220,10 @@ class AdminMenuVisibilityTest extends TestCase
         $labels = $this->settingsQuickLinkLabels();
 
         $this->assertContains('Payment Gateways', $labels);
-        $this->assertNotContains('Cloud Backups', $labels);
+        $this->assertContains('Cloud Backups', $labels);
     }
 
-    public function test_goshen_console_cards_honor_admin_menu_visibility(): void
+    public function test_goshen_console_cards_ignore_legacy_menu_visibility(): void
     {
         [$admin, $role] = $this->adminWithRolePermission(
             AdminPermissions::resourcePermission(GoshenBookingResource::class),
@@ -259,7 +239,7 @@ class AdminMenuVisibilityTest extends TestCase
             'is_visible' => false,
         ]);
 
-        $this->assertNotContains('Bookings', $this->goshenConsoleCardTitles());
+        $this->assertContains('Bookings', $this->goshenConsoleCardTitles());
     }
 
     public function test_non_super_admin_cannot_see_or_assign_super_admin(): void

@@ -2,10 +2,11 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\AppSettingResource;
+use App\Support\AppSettingsSections;
+use App\Services\AdminAccessService;
+use Illuminate\Support\Facades\DB;
 use App\Models\AppSetting;
 use App\Support\AdminMenuRegistry;
-use App\Support\AdminPermissions;
 use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -56,10 +57,6 @@ class AppSettings extends Page
 
     public string $paypalLink = '';
 
-    public string $serviceAccountPath = '';
-
-    public bool $googleLoginEnabled = false;
-
     public bool $testimoniesEnabled = false;
 
     public bool $counselingEnabled = true;
@@ -71,8 +68,6 @@ class AppSettings extends Page
     public bool $goshenWalletEnabled = true;
 
     public bool $goshenStripeGivingEnabled = true;
-
-    public bool $goshenReferralsEnabled = true;
 
     public bool $fundraisingEnabled = true;
 
@@ -123,279 +118,96 @@ class AppSettings extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canAccess()
-            && AdminMenuRegistry::visibleForPage(static::class);
+        return static::canAccess();
     }
 
     public static function canAccess(): bool
     {
-        $user = Auth::user();
-
-        return $user && (
-            $user->hasRole('super_admin', 'web')
-            || $user->can(AdminPermissions::resourcePermission(AppSettingResource::class))
-        );
+        return AdminAccessService::isSuperAdmin()
+            || (bool) Auth::user()?->can(AppSettingsSections::HUB_PERMISSION);
     }
 
     public function mount(): void
     {
-        $this->appName = (string) AppSetting::value('app_name', '');
-        $this->appLogo = (string) AppSetting::value('app_logo', '');
-        $this->websiteUrl = (string) AppSetting::value('website_url', '');
-        $this->currency = (string) AppSetting::value('currency', '£');
-        $this->adsInterval = (string) AppSetting::value('ads_interval', '0');
+        abort_unless(static::canAccess(), 403);
+        $this->reset(array_keys(AppSettingsSections::fields()));
+        foreach (AppSettingsSections::fields() as $property => $field) {
+            if (! AppSettingsSections::canManage($field['section'])) {
+                continue;
+            }
+            $setting = AppSetting::where('key', $field['key'])->first();
+            if ($setting?->is_secret) {
+                continue;
+            }
+            $value = $setting?->value ?? $this->{$property};
+            $this->{$property} = is_bool($this->{$property})
+                ? filter_var($value, FILTER_VALIDATE_BOOLEAN) : (string) $value;
+        }
+        $this->additionalSettings = AdminAccessService::isSuperAdmin() ? $this->loadAdditionalSettings() : [];
+    }
 
-        $this->facebookPage = (string) AppSetting::value('facebook_page', '');
-        $this->youtubePage = (string) AppSetting::value('youtube_page', '');
-        $this->tiktokPage = (string) AppSetting::value('tiktok_page', '');
-        $this->instagramPage = (string) AppSetting::value('instagram_page', '');
-        $this->telegramPage = (string) AppSetting::value('telegram_page', '');
-        $this->mixlrPage = (string) AppSetting::value('mixlr_page', '');
-        $this->whatsappPage = (string) AppSetting::value('whatsapp_page', '');
-        $this->twitterPage = (string) AppSetting::value('twitter_page', '');
+    public function hydrate(): void
+    {
+        abort_unless(static::canAccess(), 403);
+        foreach (AppSettingsSections::fields() as $property => $field) {
+            if (! AppSettingsSections::canManage($field['section'])) {
+                $this->reset($property);
+            }
+        }
+        if (! AdminAccessService::isSuperAdmin()) {
+            $this->additionalSettings = [];
+        }
+    }
 
-        $this->paypalLink = (string) AppSetting::value('paypal_link', '');
-        $this->serviceAccountPath = '';
-
-        $this->googleLoginEnabled = filter_var(AppSetting::value('google_login_enabled', '0'), FILTER_VALIDATE_BOOLEAN);
-        $this->testimoniesEnabled = filter_var(AppSetting::value('testimonies_enabled', '0'), FILTER_VALIDATE_BOOLEAN);
-        $this->counselingEnabled = filter_var(AppSetting::value('counseling_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->goshenRetreatEnabled = filter_var(AppSetting::value('goshen_retreat_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->goshenScannerEnabled = filter_var(AppSetting::value('goshen_scanner_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->goshenWalletEnabled = filter_var(AppSetting::value('goshen_wallet_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->goshenStripeGivingEnabled = filter_var(AppSetting::value('goshen_stripe_giving_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->goshenReferralsEnabled = filter_var(AppSetting::value('goshen_referrals_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->fundraisingEnabled = filter_var(AppSetting::value('fundraising_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->prayerPointsEnabled = filter_var(AppSetting::value('prayer_points_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->interactivePrayerWallEnabled = filter_var(AppSetting::value('interactive_prayer_wall_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->hymnsEnabled = filter_var(AppSetting::value('hymns_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->devotionalsEnabled = filter_var(AppSetting::value('devotionals_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->verseOfDayEnabled = filter_var(AppSetting::value('verse_of_day_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->transportationArrangementsEnabled = filter_var(AppSetting::value('transportation_arrangements_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->churchGroupsEnabled = filter_var(AppSetting::value('church_groups_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->dynamicFormsEnabled = filter_var(AppSetting::value('dynamic_forms_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->goshenQuizEnabled = filter_var(AppSetting::value('goshen_quiz_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->goshenWalletWithdrawalsEnabled = filter_var(AppSetting::value('goshen_wallet_withdrawals_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->goshenWalletAutoTopupEnabled = filter_var(AppSetting::value('goshen_wallet_auto_topup_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->goshenWalletAdminTopupEnabled = filter_var(AppSetting::value('goshen_wallet_admin_topup_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->branchesEnabled = filter_var(AppSetting::value('branches_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->mobilePhoneOtpLoginEnabled = filter_var(AppSetting::value('mobile_phone_otp_login_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
-        $this->redisCacheEnabled = filter_var(AppSetting::value('redis_cache_enabled', '0'), FILTER_VALIDATE_BOOLEAN);
-
-        $this->accommodationSupportName = (string) AppSetting::value('accommodation_booking_support_name', '');
-        $this->accommodationSupportEmail = (string) AppSetting::value('accommodation_booking_support_email', '');
-        $this->accommodationSupportPhone = (string) AppSetting::value('accommodation_booking_support_phone', '');
-        $this->accommodationSupportWhatsapp = (string) AppSetting::value('accommodation_booking_support_whatsapp', '');
-        $this->accommodationSupportInstructions = (string) AppSetting::value('accommodation_booking_support_instructions', '');
-        $this->additionalSettings = $this->loadAdditionalSettings();
+    public function updating(string $property): void
+    {
+        if (str_starts_with($property, 'additionalSettings')) {
+            abort_unless(AdminAccessService::isSuperAdmin(), 403);
+            return;
+        }
+        $field = AppSettingsSections::fields()[$property] ?? null;
+        abort_unless($field && AppSettingsSections::canManage($field['section']), 403);
     }
 
     public function getViewData(): array
     {
-        return [
-            'quickLinks' => $this->visibleQuickLinks(),
-            'additionalSettingGroups' => $this->additionalSettingGroups(),
-        ];
-    }
-
-    /**
-     * @return array<int, array{label: string, description: string, url: string}>
-     */
-    private function visibleQuickLinks(): array
-    {
-        return AdminMenuRegistry::settingsQuickLinks();
-    }
-
-    public function save(): void
-    {
-        $validated = validator($this->payload(), [
-            'app_name' => ['nullable', 'string', 'max:190'],
-            'app_logo' => ['nullable', 'string', 'max:2048'],
-            'website_url' => ['nullable', 'url', 'max:2048'],
-            'currency' => ['required', 'string', 'max:12'],
-            'ads_interval' => ['required', 'integer', 'min:0', 'max:3600'],
-            'facebook_page' => ['nullable', 'url', 'max:2048'],
-            'youtube_page' => ['nullable', 'url', 'max:2048'],
-            'tiktok_page' => ['nullable', 'url', 'max:2048'],
-            'instagram_page' => ['nullable', 'url', 'max:2048'],
-            'telegram_page' => ['nullable', 'url', 'max:2048'],
-            'mixlr_page' => ['nullable', 'url', 'max:2048'],
-            'whatsapp_page' => ['nullable', 'url', 'max:2048'],
-            'twitter_page' => ['nullable', 'url', 'max:2048'],
-            'paypal_link' => ['nullable', 'url', 'max:2048'],
-            'service_account_path' => ['nullable', 'string', 'max:2048'],
-            'google_login_enabled' => ['required', 'boolean'],
-            'testimonies_enabled' => ['required', 'boolean'],
-            'counseling_enabled' => ['required', 'boolean'],
-            'goshen_retreat_enabled' => ['required', 'boolean'],
-            'goshen_scanner_enabled' => ['required', 'boolean'],
-            'goshen_wallet_enabled' => ['required', 'boolean'],
-            'goshen_stripe_giving_enabled' => ['required', 'boolean'],
-            'goshen_referrals_enabled' => ['required', 'boolean'],
-            'fundraising_enabled' => ['required', 'boolean'],
-            'prayer_points_enabled' => ['required', 'boolean'],
-            'interactive_prayer_wall_enabled' => ['required', 'boolean'],
-            'hymns_enabled' => ['required', 'boolean'],
-            'devotionals_enabled' => ['required', 'boolean'],
-            'verse_of_day_enabled' => ['required', 'boolean'],
-            'transportation_arrangements_enabled' => ['required', 'boolean'],
-            'church_groups_enabled' => ['required', 'boolean'],
-            'dynamic_forms_enabled' => ['required', 'boolean'],
-            'goshen_quiz_enabled' => ['required', 'boolean'],
-            'goshen_wallet_withdrawals_enabled' => ['required', 'boolean'],
-            'goshen_wallet_auto_topup_enabled' => ['required', 'boolean'],
-            'goshen_wallet_admin_topup_enabled' => ['required', 'boolean'],
-            'branches_enabled' => ['required', 'boolean'],
-            'mobile_phone_otp_login_enabled' => ['required', 'boolean'],
-            'redis_cache_enabled' => ['required', 'boolean'],
-            'accommodation_booking_support_name' => ['nullable', 'string', 'max:120'],
-            'accommodation_booking_support_email' => ['nullable', 'email', 'max:190'],
-            'accommodation_booking_support_phone' => ['nullable', 'string', 'max:80'],
-            'accommodation_booking_support_whatsapp' => ['nullable', 'url', 'max:2048'],
-            'accommodation_booking_support_instructions' => ['nullable', 'string', 'max:5000'],
-        ])->validate();
-
-        $validated['currency'] = trim((string) $validated['currency']);
-
-        foreach ($this->settingDefinitions($validated) as $definition) {
-            $this->saveSetting(...$definition);
+        $sections = array_filter(AppSettingsSections::sections(), fn ($key) => AppSettingsSections::canManage($key), ARRAY_FILTER_USE_KEY);
+        $sections['integrations'] = ['label' => 'Settings pages', 'note' => 'Pages you can access', 'icon' => 'heroicon-o-squares-plus'];
+        if (AdminAccessService::isSuperAdmin()) {
+            $sections['other'] = ['label' => 'Other settings', 'note' => 'Super Admin maintenance', 'icon' => 'heroicon-o-ellipsis-horizontal-circle'];
         }
-
-        $this->saveAdditionalSettings();
-        $this->mount();
-
-        Notification::make()
-            ->title('App settings saved')
-            ->success()
-            ->send();
+        return ['sections' => $sections, 'quickLinks' => AdminMenuRegistry::settingsQuickLinks(),
+            'additionalSettingGroups' => AdminAccessService::isSuperAdmin() ? $this->additionalSettingGroups() : []];
     }
 
-    private function payload(): array
+    public function save(string $section): void
     {
-        return [
-            'app_name' => $this->appName,
-            'app_logo' => $this->appLogo,
-            'website_url' => $this->websiteUrl,
-            'currency' => $this->currency,
-            'ads_interval' => $this->adsInterval,
-            'facebook_page' => $this->facebookPage,
-            'youtube_page' => $this->youtubePage,
-            'tiktok_page' => $this->tiktokPage,
-            'instagram_page' => $this->instagramPage,
-            'telegram_page' => $this->telegramPage,
-            'mixlr_page' => $this->mixlrPage,
-            'whatsapp_page' => $this->whatsappPage,
-            'twitter_page' => $this->twitterPage,
-            'paypal_link' => $this->paypalLink,
-            'service_account_path' => $this->serviceAccountPath,
-            'google_login_enabled' => $this->googleLoginEnabled,
-            'testimonies_enabled' => $this->testimoniesEnabled,
-            'counseling_enabled' => $this->counselingEnabled,
-            'goshen_retreat_enabled' => $this->goshenRetreatEnabled,
-            'goshen_scanner_enabled' => $this->goshenScannerEnabled,
-            'goshen_wallet_enabled' => $this->goshenWalletEnabled,
-            'goshen_stripe_giving_enabled' => $this->goshenStripeGivingEnabled,
-            'goshen_referrals_enabled' => $this->goshenReferralsEnabled,
-            'fundraising_enabled' => $this->fundraisingEnabled,
-            'prayer_points_enabled' => $this->prayerPointsEnabled,
-            'interactive_prayer_wall_enabled' => $this->interactivePrayerWallEnabled,
-            'hymns_enabled' => $this->hymnsEnabled,
-            'devotionals_enabled' => $this->devotionalsEnabled,
-            'verse_of_day_enabled' => $this->verseOfDayEnabled,
-            'transportation_arrangements_enabled' => $this->transportationArrangementsEnabled,
-            'church_groups_enabled' => $this->churchGroupsEnabled,
-            'dynamic_forms_enabled' => $this->dynamicFormsEnabled,
-            'goshen_quiz_enabled' => $this->goshenQuizEnabled,
-            'goshen_wallet_withdrawals_enabled' => $this->goshenWalletWithdrawalsEnabled,
-            'goshen_wallet_auto_topup_enabled' => $this->goshenWalletAutoTopupEnabled,
-            'goshen_wallet_admin_topup_enabled' => $this->goshenWalletAdminTopupEnabled,
-            'branches_enabled' => $this->branchesEnabled,
-            'mobile_phone_otp_login_enabled' => $this->mobilePhoneOtpLoginEnabled,
-            'redis_cache_enabled' => $this->redisCacheEnabled,
-            'accommodation_booking_support_name' => $this->accommodationSupportName,
-            'accommodation_booking_support_email' => $this->accommodationSupportEmail,
-            'accommodation_booking_support_phone' => $this->accommodationSupportPhone,
-            'accommodation_booking_support_whatsapp' => $this->accommodationSupportWhatsapp,
-            'accommodation_booking_support_instructions' => $this->accommodationSupportInstructions,
-        ];
-    }
-
-    /**
-     * @return array<int, array{0: string, 1: string, 2: mixed, 3: string}>
-     */
-    private function settingDefinitions(array $values): array
-    {
-        return [
-            ['branding', 'app_name', $values['app_name'] ?? '', 'Public app name used by mobile and web clients.'],
-            ['branding', 'app_logo', $values['app_logo'] ?? '', 'Stored logo path used for app/admin branding.'],
-            ['general', 'website_url', $values['website_url'] ?? '', 'Public church website shown in the mobile app.'],
-            ['general', 'currency', $values['currency'], 'Default payment currency for public app transactions.'],
-            ['general', 'ads_interval', (string) $values['ads_interval'], 'Interval in seconds used by app ad/media rotation.'],
-            ['social', 'facebook_page', $values['facebook_page'] ?? '', 'Public Facebook page URL.'],
-            ['social', 'youtube_page', $values['youtube_page'] ?? '', 'Public YouTube page URL.'],
-            ['social', 'tiktok_page', $values['tiktok_page'] ?? '', 'Public TikTok page URL.'],
-            ['social', 'instagram_page', $values['instagram_page'] ?? '', 'Public Instagram page URL.'],
-            ['social', 'telegram_page', $values['telegram_page'] ?? '', 'Public Telegram page URL.'],
-            ['social', 'mixlr_page', $values['mixlr_page'] ?? '', 'Public Mixlr page URL.'],
-            ['social', 'whatsapp_page', $values['whatsapp_page'] ?? '', 'Public WhatsApp contact URL.'],
-            ['social', 'twitter_page', $values['twitter_page'] ?? '', 'Public X/Twitter page URL.'],
-            ['payments', 'paypal_link', $values['paypal_link'] ?? '', 'Optional PayPal donation/payment URL.'],
-            ['firebase', 'service_account_path', $values['service_account_path'] ?? '', 'Legacy Firebase service account path. Prefer server environment credentials for production.', true],
-            ['features', 'google_login_enabled', $values['google_login_enabled'] ? '1' : '0', 'Turn on Google sign-in and registration in the mobile app.'],
-            ['features', 'testimonies_enabled', $values['testimonies_enabled'] ? '1' : '0', 'Turn the Testimonies & Thanksgiving Wall on or off.'],
-            ['features', 'counseling_enabled', $values['counseling_enabled'] ? '1' : '0', 'Turn private Counseling requests and pastoral care chat on or off in the app and admin.'],
-            ['features', 'goshen_retreat_enabled', $values['goshen_retreat_enabled'] ? '1' : '0', 'Show or hide Goshen Retreat in the app.'],
-            ['features', 'goshen_scanner_enabled', $values['goshen_scanner_enabled'] ? '1' : '0', 'Allow authorized scanner users to access check-in features.'],
-            ['features', 'goshen_wallet_enabled', $values['goshen_wallet_enabled'] ? '1' : '0', 'Allow members to use Goshen wallet features.'],
-            ['features', 'goshen_stripe_giving_enabled', $values['goshen_stripe_giving_enabled'] ? '1' : '0', 'Allow Giving payments through Stripe.'],
-            ['features', 'goshen_referrals_enabled', $values['goshen_referrals_enabled'] ? '1' : '0', 'Allow referral code entry and wallet conversion.'],
-            ['features', 'fundraising_enabled', $values['fundraising_enabled'] ? '1' : '0', 'Show Project support/Fundraising features in the mobile and web apps.'],
-            ['features', 'prayer_points_enabled', $values['prayer_points_enabled'] ? '1' : '0', 'Show Prayer Points content in the mobile and web apps.'],
-            ['features', 'interactive_prayer_wall_enabled', $values['interactive_prayer_wall_enabled'] ? '1' : '0', 'Show the Interactive Prayer Wall module.'],
-            ['features', 'hymns_enabled', $values['hymns_enabled'] ? '1' : '0', 'Show Hymns in the mobile app.'],
-            ['features', 'devotionals_enabled', $values['devotionals_enabled'] ? '1' : '0', 'Show Devotional content in the mobile app.'],
-            ['features', 'verse_of_day_enabled', $values['verse_of_day_enabled'] ? '1' : '0', 'Show Verse of the Day in the mobile app.'],
-            ['features', 'transportation_arrangements_enabled', $values['transportation_arrangements_enabled'] ? '1' : '0', 'Show transportation arrangement information.'],
-            ['features', 'church_groups_enabled', $values['church_groups_enabled'] ? '1' : '0', 'Show Church Groups and group requests.'],
-            ['features', 'dynamic_forms_enabled', $values['dynamic_forms_enabled'] ? '1' : '0', 'Show On-demand Forms in the mobile and web apps.'],
-            ['features', 'goshen_quiz_enabled', $values['goshen_quiz_enabled'] ? '1' : '0', 'Show Goshen Quiz in the mobile app.'],
-            ['features', 'goshen_wallet_withdrawals_enabled', $values['goshen_wallet_withdrawals_enabled'] ? '1' : '0', 'Allow wallet withdrawal requests.'],
-            ['features', 'goshen_wallet_auto_topup_enabled', $values['goshen_wallet_auto_topup_enabled'] ? '1' : '0', 'Allow recurring wallet auto top-up plans.'],
-            ['features', 'goshen_wallet_admin_topup_enabled', $values['goshen_wallet_admin_topup_enabled'] ? '1' : '0', 'Allow authorized admins to add funds directly to member wallets from the admin panel.'],
-            ['features', 'branches_enabled', $values['branches_enabled'] ? '1' : '0', 'Show Branches module in the mobile app.'],
-            ['features', 'mobile_phone_otp_login_enabled', $values['mobile_phone_otp_login_enabled'] ? '1' : '0', 'Allow Firebase phone OTP sign-in in the mobile app.'],
-            ['performance', 'redis_cache_enabled', $values['redis_cache_enabled'] ? '1' : '0', 'Use Redis for application cache only. Database cache remains available as the fallback; sessions, queues, payments, and wallet records are unchanged.'],
-            ['support', 'accommodation_booking_support_name', $values['accommodation_booking_support_name'] ?? '', 'Accommodation support contact name.'],
-            ['support', 'accommodation_booking_support_email', $values['accommodation_booking_support_email'] ?? '', 'Accommodation support email address.'],
-            ['support', 'accommodation_booking_support_phone', $values['accommodation_booking_support_phone'] ?? '', 'Accommodation support phone number.'],
-            ['support', 'accommodation_booking_support_whatsapp', $values['accommodation_booking_support_whatsapp'] ?? '', 'Accommodation support WhatsApp URL.'],
-            ['support', 'accommodation_booking_support_instructions', $values['accommodation_booking_support_instructions'] ?? '', 'Accommodation booking support instructions.'],
-        ];
-    }
-
-    private function saveSetting(string $group, string $key, mixed $value, string $description, bool $isSecret = false): void
-    {
-        if ($isSecret && blank($value) && AppSetting::query()->where('key', $key)->exists()) {
-            AppSetting::query()
-                ->where('key', $key)
-                ->update([
-                    'group' => $group,
-                    'is_secret' => true,
-                    'description' => $description,
+        abort_unless(static::canAccess() && AppSettingsSections::canManage($section), 403);
+        abort_unless(isset(AppSettingsSections::sections()[$section]) || $section === 'other', 403);
+        DB::transaction(function () use ($section): void {
+            if ($section === 'other') {
+                $this->saveAdditionalSettings();
+                return;
+            }
+            $fields = array_filter(AppSettingsSections::fields(), fn ($field) => $field['section'] === $section);
+            $payload = $rules = [];
+            foreach ($fields as $property => $field) {
+                abort_if(AppSetting::where('key', $field['key'])->where('is_secret', true)->exists(), 403,
+                    'Secret settings must be changed through System Settings Maintenance.');
+                $payload[$property] = $this->{$property};
+                $rules[$property] = $field['rules'];
+            }
+            $validated = validator($payload, $rules)->validate();
+            foreach ($fields as $property => $field) {
+                $value = $validated[$property];
+                AppSetting::updateOrCreate(['key' => $field['key']], [
+                    'group' => $field['group'], 'description' => $field['description'], 'is_secret' => false,
+                    'value' => is_bool($value) ? ($value ? '1' : '0') : trim((string) $value),
                 ]);
-
-            return;
-        }
-
-        AppSetting::query()->updateOrCreate(
-            ['key' => $key],
-            [
-                'group' => $group,
-                'value' => (string) ($value ?? ''),
-                'is_secret' => $isSecret,
-                'description' => $description,
-            ],
-        );
+            }
+        });
+        $this->mount();
+        Notification::make()->title('Settings section saved')->success()->send();
     }
 
     /**
@@ -449,76 +261,23 @@ class AppSettings extends Page
 
     private function saveAdditionalSettings(): void
     {
+        abort_unless(AdminAccessService::isSuperAdmin(), 403);
+        validator($this->additionalSettings, ['*' => ['array'], '*.value' => ['nullable', 'string', 'max:65535']])->validate();
+        $allowed = $this->loadAdditionalSettings();
+        abort_if(array_diff(array_keys($this->additionalSettings), array_keys($allowed)) !== [], 403);
         foreach ($this->additionalSettings as $key => $setting) {
-            $record = AppSetting::query()->where('key', $key)->first();
-
-            if (! $record) {
-                continue;
-            }
-
+            $record = AppSetting::where('key', $key)->lockForUpdate()->firstOrFail();
             $value = (string) ($setting['value'] ?? '');
-
             if ($record->is_secret && $value === '') {
                 continue;
             }
-
-            $record->forceFill([
-                'value' => $value,
-            ])->save();
+            $record->update(['value' => $value]);
         }
     }
 
-    /**
-     * @return array<int, string>
-     */
     private function managedSettingKeys(): array
     {
-        return [
-            'app_name',
-            'app_logo',
-            'website_url',
-            'currency',
-            'ads_interval',
-            'facebook_page',
-            'youtube_page',
-            'tiktok_page',
-            'instagram_page',
-            'telegram_page',
-            'mixlr_page',
-            'whatsapp_page',
-            'twitter_page',
-            'paypal_link',
-            'service_account_path',
-            'google_login_enabled',
-            'testimonies_enabled',
-            'counseling_enabled',
-            'goshen_retreat_enabled',
-            'goshen_scanner_enabled',
-            'goshen_wallet_enabled',
-            'goshen_stripe_giving_enabled',
-            'goshen_referrals_enabled',
-            'fundraising_enabled',
-            'prayer_points_enabled',
-            'interactive_prayer_wall_enabled',
-            'hymns_enabled',
-            'devotionals_enabled',
-            'verse_of_day_enabled',
-            'transportation_arrangements_enabled',
-            'church_groups_enabled',
-            'dynamic_forms_enabled',
-            'goshen_quiz_enabled',
-            'goshen_wallet_withdrawals_enabled',
-            'goshen_wallet_auto_topup_enabled',
-            'goshen_wallet_admin_topup_enabled',
-            'branches_enabled',
-            'mobile_phone_otp_login_enabled',
-            'redis_cache_enabled',
-            'accommodation_booking_support_name',
-            'accommodation_booking_support_email',
-            'accommodation_booking_support_phone',
-            'accommodation_booking_support_whatsapp',
-            'accommodation_booking_support_instructions',
-        ];
+        return array_column(AppSettingsSections::fields(), 'key');
     }
 
     /**
@@ -527,6 +286,8 @@ class AppSettings extends Page
     private function linkedSettingKeys(): array
     {
         return [
+            'google_login_enabled',
+            'goshen_referrals_enabled',
             'google_android_client_id',
             'google_client_secret',
             'google_ios_client_id',

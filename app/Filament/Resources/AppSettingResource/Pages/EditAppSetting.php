@@ -10,6 +10,13 @@ class EditAppSetting extends EditRecord
 {
     protected static string $resource = AppSettingResource::class;
 
+    protected ?bool $hasDatabaseTransactions = true;
+
+    protected function afterSave(): void
+    {
+        $this->fillForm();
+    }
+
     protected function mutateFormDataBeforeFill(array $data): array
     {
         return AppSettingResource::prepareVirtualValueFields($data);
@@ -17,7 +24,11 @@ class EditAppSetting extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        return AppSettingResource::collapseVirtualValueFields($data);
+        $data = AppSettingResource::collapseVirtualValueFields($data);
+        if ($this->getRecord()->is_secret && blank($data['value'] ?? null)) {
+            unset($data['value']);
+        }
+        return $data;
     }
 
     protected function getHeaderActions(): array
