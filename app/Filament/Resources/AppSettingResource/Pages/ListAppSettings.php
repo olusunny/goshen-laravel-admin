@@ -12,6 +12,16 @@ class ListAppSettings extends ListRecords
 {
     protected static string $resource = AppSettingResource::class;
 
+    protected function authorizeAccess(): void
+    {
+        abort_unless(AppSettingResource::canViewAny(), 403);
+    }
+
+    public function hydrate(): void
+    {
+        $this->authorizeAccess();
+    }
+
     protected function getHeaderActions(): array
     {
         return [

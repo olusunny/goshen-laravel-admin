@@ -81,6 +81,7 @@ class ScopedAppSettingsTest extends TestCase
         $user->givePermissionTo(Permission::findOrCreate('manage_app_setting', 'web'));
         $this->actingAs($user);
         $this->assertFalse(AppSettingResource::canViewAny());
+        Livewire::actingAs($user)->test(\App\Filament\Resources\AppSettingResource\Pages\ListAppSettings::class)->assertForbidden();
         Livewire::actingAs($user)->test(EditAppSetting::class, ['record' => $setting->id])->assertForbidden();
         $page = Livewire::actingAs($this->admin(super: true))->test(EditAppSetting::class, ['record' => $setting->id])
             ->assertSet('data.text_value', null)->assertSet('data.value', null)->assertDontSee('DO_NOT_EXPOSE');
@@ -154,6 +155,7 @@ class ScopedAppSettingsTest extends TestCase
         $user->removeRole('super_admin');
         Auth::setUser($user->fresh());
         $page->assertActionDisabled('clearCache');
+        $page->call('$refresh')->assertForbidden();
     }
 
     public function test_other_settings_preserves_blank_secrets_and_rejects_protected_known_keys(): void
