@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\UserResource\Pages\CreateUser;
+use App\Filament\Resources\UserResource\Pages\EditUser;
 use App\Models\MobileUser;
 use App\Models\User;
 use App\Services\TriumphantIdService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -68,7 +71,74 @@ class TriumphantIdServiceTest extends TestCase
         $this->assertSame(3, (int) $replacement->triumphant_id_sequence);
     }
 
-    public function test_reserved_roles_are_limited_to_one_active_mobile_and_web_holder(): void
+    public function test_it_manager_web_role_can_be_assigned_to_multiple_admin_users(): void
+    {
+        $service = app(TriumphantIdService::class);
+        $service->ensureRoles();
+        $role = Role::findByName(TriumphantIdService::IT_MANAGER_ROLE, 'web');
+        $first = $this->adminUser('first-it-manager@example.test', 'First IT Manager');
+        $second = $this->adminUser('second-it-manager@example.test', 'Second IT Manager');
+
+        $first->assignRole($role);
+        $service->assertReservedWebRolesAvailable([$role->id], $second);
+        $second->syncRoles([$role]);
+
+        $this->assertTrue($first->fresh()->hasRole($role));
+        $this->assertTrue($second->fresh()->hasRole($role));
+    }
+
+    public function test_super_admin_can_create_and_edit_additional_it_manager_admins(): void
+    {
+        $service = app(TriumphantIdService::class);
+        $service->ensureRoles();
+        $role = Role::findByName(TriumphantIdService::IT_MANAGER_ROLE, 'web');
+        $superAdmin = $this->adminUser('super-admin@example.test', 'Super Admin');
+        $superAdmin->assignRole(Role::findOrCreate('super_admin', 'web'));
+        $existing = $this->adminUser('existing-it-manager@example.test', 'Existing IT Manager');
+        $existing->assignRole($role);
+
+        Livewire::actingAs($superAdmin)->test(CreateUser::class)
+            ->fillForm([
+                'name' => 'Additional IT Manager',
+                'email' => 'additional-it-manager@example.test',
+                'password' => 'test-password',
+                'roles' => [$role->id],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $created = User::where('email', 'additional-it-manager@example.test')->firstOrFail();
+        $this->assertTrue($created->hasRole($role));
+
+        $another = $this->adminUser('another-admin@example.test', 'Another Admin');
+        Livewire::actingAs($superAdmin)->test(EditUser::class, ['record' => $another->id])
+            ->fillForm(['roles' => [$role->id]])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertTrue($another->fresh()->hasRole($role));
+        $this->assertTrue($existing->fresh()->hasRole($role));
+    }
+
+    public function test_it_manager_mobile_role_still_preserves_its_unique_member_id(): void
+    {
+        $service = app(TriumphantIdService::class);
+        $service->ensureRoles();
+        $role = Role::findByName(TriumphantIdService::IT_MANAGER_ROLE, 'mobile');
+        $holder = $this->mobileUser('mobile-it-manager@example.test', 'Mobile IT Manager');
+        $holder->assignRole($role);
+        $service->assignFor($holder);
+        $contender = $this->mobileUser('other-mobile-it-manager@example.test', 'Other Mobile IT Manager');
+
+        $this->assertValidationExceptionContains(
+            fn () => $contender->assignRole($role),
+            'Only one user can hold this role.',
+        );
+        $this->assertSame('T002', $holder->fresh()->triumphant_id);
+        $this->assertFalse($contender->fresh()->hasRole($role));
+    }
+
+    public function test_main_pastor_role_is_limited_to_one_active_mobile_and_web_holder(): void
     {
         $service = app(TriumphantIdService::class);
         $service->ensureRoles();

@@ -145,7 +145,7 @@ class TriumphantIdService
 
         $reservedRoles = Role::query()
             ->where('guard_name', 'web')
-            ->whereIn('name', [self::MAIN_PASTOR_ROLE, self::IT_MANAGER_ROLE])
+            ->where('name', self::MAIN_PASTOR_ROLE)
             ->whereIn('id', $roleIds)
             ->pluck('name')
             ->all();
