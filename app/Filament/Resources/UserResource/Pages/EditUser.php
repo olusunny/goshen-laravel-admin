@@ -34,6 +34,16 @@ class EditUser extends EditRecord
         }
     }
 
+    protected function afterSave(): void
+    {
+        // Relationship loading restored the old grants before the service saved them.
+        foreach (['roles', 'permissions'] as $relation) {
+            if (array_key_exists($relation, $this->submittedAccess)) {
+                $this->data[$relation] = $this->submittedAccess[$relation];
+            }
+        }
+    }
+
     protected function getHeaderActions(): array
     {
         return [

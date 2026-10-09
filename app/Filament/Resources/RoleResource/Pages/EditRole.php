@@ -34,6 +34,12 @@ class EditRole extends EditRecord
         }
     }
 
+    protected function afterSave(): void
+    {
+        // Relationship loading restored the old grants before the service saved them.
+        $this->data['permissions'] = $this->submittedAccess['permissions'] ?? [];
+    }
+
     protected function getHeaderActions(): array
     {
         return [

@@ -206,4 +206,48 @@ class AdminAccessSecurityTest extends TestCase
             ->fillForm(['permissions' => []])->call('save')->assertHasNoFormErrors();
         $this->assertFalse($target->fresh()->can($permission->name));
     }
+
+    public function test_role_editor_keeps_saved_selections_across_repeated_saves(): void
+    {
+        $super = $this->admin(true);
+        $role = Role::findOrCreate('Triumphant IT Manager', 'web');
+        $first = Permission::findOrCreate('manage_payment_gateways', 'web');
+        $second = Permission::findOrCreate('manage_user', 'web');
+        $legacy = Permission::findOrCreate('legacy_external_access', 'web');
+        $role->givePermissionTo([$first, $legacy]);
+        $page = Livewire::actingAs($super)->test(EditRole::class, ['record' => $role->id]);
+        $page->set('data.permissions', [(string) $second->id])->call('save')
+            ->assertHasNoFormErrors()->assertSet('data.permissions', [(string) $second->id]);
+        $this->assertEqualsCanonicalizing([$second->id, $legacy->id], $role->fresh()->permissions->modelKeys());
+        $page->call('save')->assertHasNoFormErrors();
+        $this->assertEqualsCanonicalizing([$second->id, $legacy->id], $role->fresh()->permissions->modelKeys());
+        Livewire::actingAs($super)->test(EditRole::class, ['record' => $role->id])
+            ->assertSet('data.permissions', [(string) $second->id]);
+        $page->set('data.permissions', [])->call('save')->assertHasNoFormErrors()
+            ->assertSet('data.permissions', []);
+        $page->call('save')->assertHasNoFormErrors();
+        $this->assertSame([$legacy->id], $role->fresh()->permissions->modelKeys());
+    }
+
+    public function test_user_editor_keeps_saved_access_across_repeated_saves(): void
+    {
+        $super = $this->admin(true);
+        $target = $this->admin();
+        $role = Role::findOrCreate('ordinary', 'web');
+        $permission = Permission::findOrCreate('manage_payment_gateways', 'web');
+        $page = Livewire::actingAs($super)->test(EditUser::class, ['record' => $target->id]);
+        $page->set('data.roles', [(string) $role->id])
+            ->set('data.permissions', [(string) $permission->id])->call('save')
+            ->assertHasNoFormErrors()
+            ->assertSet('data.roles', [(string) $role->id])
+            ->assertSet('data.permissions', [(string) $permission->id]);
+        $page->call('save')->assertHasNoFormErrors();
+        $this->assertSame([$role->id], $target->fresh()->roles->modelKeys());
+        $this->assertSame([$permission->id], $target->fresh()->permissions->modelKeys());
+        $page->set('data.permissions', [])->call('save')
+            ->assertHasNoFormErrors()->assertSet('data.roles', [(string) $role->id])->assertSet('data.permissions', []);
+        $page->call('save')->assertHasNoFormErrors();
+        $this->assertSame([$role->id], $target->fresh()->roles->modelKeys());
+        $this->assertSame([], $target->fresh()->permissions->modelKeys());
+    }
 }
