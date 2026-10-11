@@ -21,9 +21,9 @@ class AdminAccessService
             ->where('guard_name', 'web')->where('name', 'super_admin')->exists();
     }
 
-    public static function canEditUser(User $target): bool
+    public static function canEditUser(User $target, ?User $actor = null): bool
     {
-        $actor = Auth::user();
+        $actor ??= Auth::user();
         if (! $actor instanceof User) {
             return false;
         }
@@ -39,6 +39,18 @@ class AdminAccessService
         // A password/email reset must not become a route into a stronger account.
         return $target->fresh()->getAllPermissions()->pluck('id')
             ->diff($actor->fresh()->getAllPermissions()->pluck('id'))->isEmpty();
+    }
+
+    public static function assertCanManageMobileIdentity(?\App\Models\MobileUser $target, ?string $email, ?User $actor): void
+    {
+        $credentials = app(MergedAccountCredentialService::class);
+        foreach (array_unique([$target?->getRawOriginal('email'), $email]) as $candidate) {
+            $admin = $credentials->adminForEmail($candidate);
+            if ($admin) {
+                abort_unless($actor && ($actor->is($admin) || self::canEditUser($admin, $actor)), 403,
+                    'This member is linked to a protected admin account.');
+            }
+        }
     }
 
     public static function isReservedRoleName(string $name): bool

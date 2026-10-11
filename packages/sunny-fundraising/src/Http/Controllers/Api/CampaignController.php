@@ -38,7 +38,7 @@ class CampaignController extends Controller
     {
         $record = $this->findCampaign($campaign);
 
-        if (! $record) {
+        if (! $record || ! app(\Sunny\Fundraising\Contracts\CampaignVisibilityContract::class)->visibleTo(null, $record)) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Fundraising campaign not found.',

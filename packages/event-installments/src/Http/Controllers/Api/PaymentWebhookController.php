@@ -24,6 +24,7 @@ class PaymentWebhookController extends Controller
         PaymentGatewayManager $gateways,
         PaymentSettlementService $settlements,
     ) {
+        abort_unless($gateway === 'stripe', 404);
         $paymentGateway = $gateways->driver($gateway);
         $webhook = $paymentGateway->verifyWebhook($request);
         abort_unless($webhook->gateway === $gateway, 400, 'Gateway mismatch.');

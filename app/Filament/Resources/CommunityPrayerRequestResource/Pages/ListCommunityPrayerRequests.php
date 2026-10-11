@@ -37,11 +37,11 @@ class ListCommunityPrayerRequests extends ListRecords
 
         return response()->streamDownload(function () {
             $output = fopen('php://output', 'w');
-            fputcsv($output, ['id', 'type', 'anonymous', 'submitted_by', 'text', 'audio_path', 'duration', 'flags', 'comments', 'hidden_reason', 'created_at', 'expires_at']);
+            \App\Support\SafeCsv::write($output, ['id', 'type', 'anonymous', 'submitted_by', 'text', 'audio_path', 'duration', 'flags', 'comments', 'hidden_reason', 'created_at', 'expires_at']);
 
             CommunityPrayerRequest::with('mobileUser')->latest()->chunk(200, function ($requests) use ($output) {
                 foreach ($requests as $request) {
-                    fputcsv($output, [
+                    \App\Support\SafeCsv::write($output, [
                         $request->id,
                         $request->type,
                         $request->is_anonymous ? 'yes' : 'no',

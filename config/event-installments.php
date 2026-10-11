@@ -31,7 +31,7 @@ return [
     'payments' => [
         // Release policy: Stripe is the only externally callable package gateway.
         'enabled_external_gateways' => ['stripe'],
-        'default_gateway' => env('EVENT_INSTALLMENTS_PAYMENT_GATEWAY', 'null'),
+        'default_gateway' => env('EVENT_INSTALLMENTS_PAYMENT_GATEWAY', 'stripe'),
         'currency' => env('EVENT_INSTALLMENTS_CURRENCY', 'NGN'),
         'deposit_mode' => env('EVENT_INSTALLMENTS_DEPOSIT_MODE', 'percentage'),
         'deposit_value' => (float) env('EVENT_INSTALLMENTS_DEPOSIT_VALUE', 50),

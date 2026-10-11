@@ -28,7 +28,7 @@ class ListGoshenExperienceResponses extends ListRecords
 
         return response()->streamDownload(function (): void {
             $output = fopen('php://output', 'w');
-            fputcsv($output, [
+            \App\Support\SafeCsv::write($output, [
                 'Response ID',
                 'Survey',
                 'Retreat edition',
@@ -56,7 +56,7 @@ class ListGoshenExperienceResponses extends ListRecords
                         }
 
                         foreach ($rows as $row) {
-                            fputcsv($output, [
+                            \App\Support\SafeCsv::write($output, [
                                 $response->id,
                                 $response->survey?->title,
                                 $response->event?->name,

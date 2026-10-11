@@ -12,7 +12,7 @@ class PaymentGatewayManager
 {
     public function default(): PaymentGateway
     {
-        return $this->driver((string) config('event-installments.payments.default_gateway', 'null'));
+        return $this->driver((string) config('event-installments.payments.default_gateway', 'stripe'));
     }
 
     public function driver(string $gateway): PaymentGateway
@@ -27,7 +27,7 @@ class PaymentGatewayManager
         return match ($gateway) {
             'stripe' => new StripeGateway,
             'paystack' => new PaystackGateway,
-            'null' => new NullGateway,
+            'null' => app()->environment('testing') ? new NullGateway : throw new InvalidArgumentException('The test payment gateway is unavailable.'),
             default => throw new InvalidArgumentException("Unsupported payment gateway [{$gateway}]."),
         };
     }

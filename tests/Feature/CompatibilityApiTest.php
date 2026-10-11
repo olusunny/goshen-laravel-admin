@@ -755,6 +755,7 @@ class CompatibilityApiTest extends TestCase
 
     public function test_content_page_endpoint_exposes_structured_about_page(): void
     {
+        ContentPage::where('type', 'about')->delete();
         ContentPage::create([
             'type' => 'about',
             'title' => 'About MFM Triumphant Church',

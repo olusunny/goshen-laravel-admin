@@ -1260,11 +1260,15 @@ class CompatibilityController extends Controller
             return response()->json(['status' => 'error', 'msg' => 'Password reset code has expired.', 'message' => 'Password reset code has expired.']);
         }
 
-        $user->forceFill([
-            'password' => Hash::make($data['password']),
-            'password_reset_code_hash' => null,
-            'password_reset_expires_at' => null,
-        ])->save();
+        \Illuminate\Support\Facades\DB::transaction(function () use ($user, $data): void {
+            $user->forceFill([
+                'password' => Hash::make($data['password']),
+                'password_reset_code_hash' => null,
+                'password_reset_expires_at' => null,
+                'api_token_hash' => null,
+            ])->save();
+            $user->tokens()->delete();
+        });
 
         try {
             app(DynamicSmtpMailer::class)->sendRaw(
@@ -1305,8 +1309,18 @@ class CompatibilityController extends Controller
             return response()->json(['status' => 'ok', 'msg' => 'No FCM token available yet.']);
         }
 
+        validator($data, ['token' => ['required', 'string', 'max:4096'], 'channel' => ['nullable', 'string', 'max:100'],
+            'app_version' => ['nullable', 'string', 'max:100'], 'version' => ['nullable', 'string', 'max:100']])->validate();
+        $user = $this->mobileUserFromToken($request);
+        if ((filled($data['email'] ?? null) || filled($data['api_token'] ?? $request->bearerToken())) && ! $user?->canUseCommunity()) {
+            abort(401);
+        }
+        if (! $user && FcmToken::where('token', $token)->whereNotNull('email')->exists()) {
+            return response()->json(['status' => 'ok', 'msg' => 'Token already registered.']);
+        }
+
         FcmToken::updateOrCreate(['token' => $token], [
-            'email' => $data['email'] ?? null,
+            'email' => $user?->email,
             'app_version' => $data['app_version'] ?? $data['version'] ?? 'v1',
             'channel' => $data['channel'] ?? 'general',
             'last_seen_at' => now(),
@@ -1998,11 +2012,12 @@ class CompatibilityController extends Controller
 
         if ($token) {
             $user = MobileUser::where('api_token_hash', hash('sha256', $token))->first();
-        } elseif (! empty($data['email'])) {
-            $user = MobileUser::where('email', $data['email'])->first();
+        }
+        if (! $user?->canUseCommunity()) {
+            return null;
         }
 
-        $user?->markApiSeen();
+        $user->markApiSeen();
 
         return $user;
     }
@@ -2613,12 +2628,12 @@ class CompatibilityController extends Controller
             'type' => $page->type,
             'title' => $page->title,
             'slug' => $page->slug,
-            'body' => $page->body ?? '',
+            'body' => Str::sanitizeHtml($page->body ?? ''),
             'hero_image' => $page->hero_image_url,
             'sections' => collect($page->sections ?? [])
                 ->map(fn (array $section) => [
                     'title' => $section['title'] ?? '',
-                    'body' => $section['body'] ?? '',
+                    'body' => Str::sanitizeHtml($section['body'] ?? ''),
                     'image' => MediaUrl::resolve($section['image'] ?? null),
                     'sort_order' => (int) ($section['sort_order'] ?? 0),
                 ])
@@ -2666,21 +2681,10 @@ class CompatibilityController extends Controller
     {
         $data = $this->payload($request);
         $token = $data['api_token'] ?? $request->bearerToken();
-        $query = MobileUser::query();
-
-        if ($token) {
-            $query->where('api_token_hash', hash('sha256', $token));
-        } elseif (! empty($data['email'])) {
-            $query->where('email', $data['email']);
-        } else {
+        if (! is_string($token) || $token === '') {
             return null;
         }
-
-        $user = $query->first();
-
-        if (! $user && $token && ! empty($data['email'])) {
-            $user = MobileUser::where('email', $data['email'])->first();
-        }
+        $user = MobileUser::where('api_token_hash', hash('sha256', $token))->first();
 
         if (! $user?->canUseCommunity()) {
             return null;

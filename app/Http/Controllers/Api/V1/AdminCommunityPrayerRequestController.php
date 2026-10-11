@@ -59,7 +59,7 @@ class AdminCommunityPrayerRequestController extends Controller
 
         return response()->streamDownload(function () {
             $output = fopen('php://output', 'w');
-            fputcsv($output, [
+            \App\Support\SafeCsv::write($output, [
                 'id',
                 'type',
                 'text',
@@ -76,7 +76,7 @@ class AdminCommunityPrayerRequestController extends Controller
                 ->latest()
                 ->chunk(200, function ($requests) use ($output) {
                     foreach ($requests as $request) {
-                        fputcsv($output, [
+                        \App\Support\SafeCsv::write($output, [
                             $request->id,
                             $request->type,
                             $request->text,

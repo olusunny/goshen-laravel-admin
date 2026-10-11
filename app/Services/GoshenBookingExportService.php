@@ -115,7 +115,7 @@ class GoshenBookingExportService
     {
         $registrationFields = $this->registrationFields();
 
-        fputcsv($output, $this->headings($registrationFields));
+        \App\Support\SafeCsv::write($output, $this->headings($registrationFields));
 
         $query
             ->with([
@@ -141,7 +141,7 @@ class GoshenBookingExportService
                     }
 
                     foreach ($this->rowsForBooking($booking, $registrationFields, $familiesByAttendee, $familiesByBooking[$booking->id] ?? null) as $row) {
-                        fputcsv($output, $row);
+                        \App\Support\SafeCsv::write($output, $row);
                     }
                 }
             });

@@ -85,7 +85,7 @@ class GoshenWalletService
         }
 
         $amount = isset($data['goal_amount']) ? round((float) $data['goal_amount'], 2) : null;
-        $currency = strtoupper((string) ($data['currency'] ?? $wallet->currency ?: $this->defaultCurrency()));
+        $currency = $wallet->assertCurrency($data['currency'] ?? null);
         $label = trim((string) ($data['goal_label'] ?? ''));
 
         if ($amount === null || $amount <= 0) {
@@ -139,7 +139,7 @@ class GoshenWalletService
             $this->walletSecurityResets->assertWalletActionsAllowed($wallet->user);
         }
 
-        $currency = strtoupper((string) ($data['currency'] ?? $wallet->currency ?: $this->defaultCurrency()));
+        $currency = $wallet->assertCurrency($data['currency'] ?? null);
         $makePrimary = filter_var($data['is_primary'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         return DB::transaction(function () use ($wallet, $data, $currency, $makePrimary): GoshenWalletGoal {
@@ -224,7 +224,7 @@ class GoshenWalletService
         $senderWallet->loadMissing('user');
         $sender = $senderWallet->user;
         $recipient = $this->findTransferRecipient($recipientIdentifier);
-        $currency = strtoupper($currency ?: (string) $senderWallet->currency ?: $this->defaultCurrency());
+        $currency = $senderWallet->assertCurrency($currency ?: null);
         $amount = round($amount, 2);
         $note = trim((string) $note);
 
@@ -343,7 +343,7 @@ class GoshenWalletService
         $this->walletSecurityResets->assertWalletActionsAllowed($user);
 
         $amount = round((float) ($data['amount'] ?? 0), 2);
-        $currency = strtoupper((string) ($data['currency'] ?? $wallet->currency ?: $this->defaultCurrency()));
+        $currency = $wallet->assertCurrency($data['currency'] ?? null);
 
         if ($amount < 1) {
             throw new RuntimeException('Please enter a withdrawal amount of at least 1.');
@@ -536,7 +536,7 @@ class GoshenWalletService
             'frequency' => $frequency,
             'interval_count' => $interval,
             'amount' => (float) $data['amount'],
-            'currency' => strtoupper((string) ($data['currency'] ?? $wallet->currency ?: $this->defaultCurrency())),
+            'currency' => $wallet->assertCurrency($data['currency'] ?? null),
             'remaining_cycles' => isset($data['remaining_cycles']) ? max(1, (int) $data['remaining_cycles']) : null,
             'next_charge_at' => $hasReusableMethod ? $this->nextChargeAt($frequency, $interval) : null,
             'metadata' => [
@@ -561,7 +561,7 @@ class GoshenWalletService
         }
 
         $amount = (float) $data['amount'];
-        $currency = strtoupper((string) ($data['currency'] ?? $wallet->currency ?: $this->defaultCurrency()));
+        $currency = $wallet->assertCurrency($data['currency'] ?? null);
         $reference = 'gw_' . Str::ulid();
         $saveMethod = (bool) ($data['save_payment_method'] ?? false);
 
@@ -650,7 +650,7 @@ class GoshenWalletService
             throw new RuntimeException('Wallet top-up amount must be greater than zero.');
         }
 
-        $currency = strtoupper((string) ($data['currency'] ?? $wallet->currency ?: $this->defaultCurrency()));
+        $currency = $wallet->assertCurrency($data['currency'] ?? null);
         $note = trim((string) ($data['note'] ?? ''));
         if ($note === '') {
             throw new RuntimeException('A wallet top-up note is required.');
@@ -736,7 +736,9 @@ class GoshenWalletService
                 ? ((float) $amountTotal) / $this->minorUnitMultiplier((string) $entry->currency)
                 : (float) $entry->amount;
 
-            if ($currency !== strtoupper((string) $entry->currency) || $paidAmount + 0.01 < (float) $entry->amount) {
+            if ($currency !== 'GBP' || strtoupper((string) $wallet->currency) !== 'GBP'
+                || $currency !== strtoupper((string) $entry->currency) || $amountTotal === null
+                || abs($paidAmount - (float) $entry->amount) > 0.001) {
                 $entry->forceFill([
                     'status' => 'failed',
                     'metadata' => array_merge($entry->metadata ?? [], [
@@ -818,6 +820,8 @@ class GoshenWalletService
             return null;
         }
 
+        $wallet->assertCurrency($plan->currency);
+
         $dueAt = $plan->next_charge_at->copy();
         $reference = $this->scheduledTopUpReference($plan, $dueAt);
 
@@ -880,6 +884,13 @@ class GoshenWalletService
                 ->whereKey($wallet->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            $lockedWallet->assertCurrency($lockedPlan->currency);
+            if (strtoupper((string) ($payload['currency'] ?? '')) !== 'GBP'
+                || ($payload['status'] === 'succeeded' && (! isset($payload['amount_received'])
+                    || abs($received - (float) $lockedPlan->amount) > 0.001))) {
+                throw new RuntimeException('Stripe amount or currency did not match the savings plan.');
+            }
 
             $entry = GoshenWalletLedgerEntry::query()->firstOrNew([
                 'provider_reference' => $reference,
@@ -1091,7 +1102,7 @@ class GoshenWalletService
 
     private function activateSetupRequiredPlans(GoshenWallet $wallet, ?int $planId = null): void
     {
-        $query = $wallet->savingsPlans()->where('status', 'setup_required');
+        $query = $wallet->savingsPlans()->where('status', 'setup_required')->where('currency', 'GBP');
         if ($planId !== null && $planId > 0) {
             $query->whereKey($planId);
         }
@@ -1110,6 +1121,9 @@ class GoshenWalletService
 
     private function syncLegacyGoal(GoshenWallet $wallet): void
     {
+        if (strtoupper((string) $wallet->currency) !== 'GBP') {
+            return;
+        }
         if ($wallet->relationLoaded('goals')) {
             return;
         }
@@ -1158,7 +1172,7 @@ class GoshenWalletService
         }
 
         $wallet->forceFill([
-            'currency' => strtoupper((string) ($goal->currency ?: $wallet->currency ?: $this->defaultCurrency())),
+            'currency' => $wallet->assertCurrency($goal->currency),
             'goal_amount' => (float) $goal->target_amount,
             'goal_label' => $goal->label,
             'goal_target_at' => $goal->target_at,
@@ -1423,7 +1437,7 @@ class GoshenWalletService
 
     private function defaultCurrency(): string
     {
-        return strtoupper((string) config('event-installments.currency', 'GBP'));
+        return 'GBP';
     }
 
     private function toMinorUnits(float $amount, string $currency): int

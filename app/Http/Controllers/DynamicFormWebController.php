@@ -91,7 +91,7 @@ class DynamicFormWebController extends Controller
             ->where('visibility', DynamicForm::VISIBILITY_PUBLIC)
             ->when(
                 ctype_digit($key),
-                fn ($query) => $query->whereKey((int) $key)->orWhere('slug', $key),
+                fn ($query) => $query->where(fn ($lookup) => $lookup->whereKey((int) $key)->orWhere('slug', $key)),
                 fn ($query) => $query->where('slug', $key),
             )
             ->first();

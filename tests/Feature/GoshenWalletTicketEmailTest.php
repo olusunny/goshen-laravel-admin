@@ -149,6 +149,9 @@ class GoshenWalletTicketEmailTest extends TestCase
             'country_of_residence' => 'Nigeria',
             'state_county_province' => 'Lagos',
             'address' => '1 Mercy Road, Lagos',
+            'birthday_month' => 5,
+            'birthday_day' => 20,
+            'adult_confirmed_at' => now(),
             'is_verified' => true,
             'email_verified_at' => now(),
         ]);
@@ -182,7 +185,7 @@ class GoshenWalletTicketEmailTest extends TestCase
             'event_id' => $event->id,
             'name' => 'Adult',
             'sku' => 'ADULT',
-            'currency' => 'NGN',
+            'currency' => 'GBP',
             'price' => $price,
             'min_per_booking' => 1,
             'max_per_booking' => 10,
@@ -205,7 +208,7 @@ class GoshenWalletTicketEmailTest extends TestCase
             'customer_name' => $member->name,
             'customer_email' => $member->email,
             'customer_phone' => $member->phone,
-            'currency' => 'NGN',
+            'currency' => 'GBP',
             'subtotal' => 300,
             'total' => 300,
             'paid_total' => 0,
@@ -217,7 +220,7 @@ class GoshenWalletTicketEmailTest extends TestCase
             'booking_id' => $booking->id,
             'ticket_type_id' => $ticketType->id,
             'quantity' => 1,
-            'currency' => 'NGN',
+            'currency' => 'GBP',
             'unit_price' => 300,
             'line_total' => 300,
         ]);
@@ -234,7 +237,7 @@ class GoshenWalletTicketEmailTest extends TestCase
         $installment = PaymentInstallment::query()->create([
             'booking_id' => $booking->id,
             'sequence' => 1,
-            'currency' => 'NGN',
+            'currency' => 'GBP',
             'amount' => 300,
             'paid_amount' => 0,
             'due_on' => now()->addWeek()->toDateString(),
@@ -249,7 +252,7 @@ class GoshenWalletTicketEmailTest extends TestCase
         return GoshenWallet::query()->updateOrCreate(
             ['mobile_user_id' => $member->id],
             [
-                'currency' => 'NGN',
+                'currency' => 'GBP',
                 'balance' => $balance,
             ],
         );

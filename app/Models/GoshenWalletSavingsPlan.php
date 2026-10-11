@@ -16,6 +16,17 @@ class GoshenWalletSavingsPlan extends Model
         'last_charge_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        static::saving(function (self $record): void {
+            if ($record->exists && in_array($record->status, ['paused', 'cancelled'], true)
+                && array_diff(array_keys($record->getDirty()), ['status', 'updated_at']) === []) {
+                return;
+            }
+            $record->wallet()->firstOrFail()->assertCurrency($record->currency);
+        });
+    }
+
     public function wallet(): BelongsTo
     {
         return $this->belongsTo(GoshenWallet::class, 'wallet_id');

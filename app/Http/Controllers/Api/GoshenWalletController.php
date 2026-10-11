@@ -115,7 +115,7 @@ class GoshenWalletController extends Controller
             'goal_amount' => ['nullable', 'numeric', 'min:1', 'max:99999999'],
             'goal_label' => ['nullable', 'string', 'max:180'],
             'goal_target_at' => ['nullable', 'date', 'after_or_equal:today'],
-            'currency' => ['nullable', 'string', 'size:3'],
+            'currency' => ['nullable', 'string', 'in:GBP'],
         ])->validate();
 
         $wallet = $this->wallets->walletFor($user);
@@ -151,7 +151,7 @@ class GoshenWalletController extends Controller
             'goal_amount' => ['required', 'numeric', 'min:1', 'max:99999999'],
             'goal_label' => ['nullable', 'string', 'max:180'],
             'goal_target_at' => ['nullable', 'date', 'after_or_equal:today'],
-            'currency' => ['nullable', 'string', 'size:3'],
+            'currency' => ['nullable', 'string', 'in:GBP'],
             'is_primary' => ['nullable', 'boolean'],
         ])->validate();
 
@@ -192,7 +192,7 @@ class GoshenWalletController extends Controller
             'goal_amount' => ['nullable', 'numeric', 'min:1', 'max:99999999'],
             'goal_label' => ['nullable', 'string', 'max:180'],
             'goal_target_at' => ['nullable', 'date', 'after_or_equal:today'],
-            'currency' => ['nullable', 'string', 'size:3'],
+            'currency' => ['nullable', 'string', 'in:GBP'],
         ])->validate();
 
         $wallet = $this->wallets->updateGoal($wallet, $validated, $goal);
@@ -274,7 +274,7 @@ class GoshenWalletController extends Controller
         $validated = validator($data, [
             'recipient' => ['required', 'string', 'max:255'],
             'amount' => ['required', 'numeric', 'min:1', 'max:99999999'],
-            'currency' => ['nullable', 'string', 'size:3'],
+            'currency' => ['nullable', 'string', 'in:GBP'],
             'note' => ['nullable', 'string', 'max:240'],
         ])->validate();
 
@@ -316,7 +316,7 @@ class GoshenWalletController extends Controller
         $data = $this->payload($request);
         $validated = validator($data, [
             'amount' => ['required', 'numeric', 'min:1', 'max:99999999'],
-            'currency' => ['nullable', 'string', 'size:3'],
+            'currency' => ['nullable', 'string', 'in:GBP'],
             'save_payment_method' => ['nullable', 'boolean'],
             'savings_plan_id' => ['nullable', 'integer'],
             'return_to_app' => ['nullable', 'boolean'],
@@ -402,7 +402,7 @@ class GoshenWalletController extends Controller
 
         $validated = validator($this->payload($request), [
             'amount' => ['required', 'numeric', 'min:1', 'max:99999999'],
-            'currency' => ['nullable', 'string', 'size:3'],
+            'currency' => ['nullable', 'string', 'in:GBP'],
             'bank_name' => ['required', 'string', 'max:180'],
             'account_name' => ['required', 'string', 'max:180'],
             'account_number' => ['required', 'string', 'max:80'],
@@ -540,7 +540,7 @@ class GoshenWalletController extends Controller
         $data = $this->payload($request);
         $validated = validator($data, [
             'amount' => ['required', 'numeric', 'min:1', 'max:99999999'],
-            'currency' => ['nullable', 'string', 'size:3'],
+            'currency' => ['nullable', 'string', 'in:GBP'],
             'frequency' => ['required', 'string', 'in:daily,weekly,monthly'],
             'interval_count' => ['nullable', 'integer', 'min:1', 'max:52'],
             'remaining_cycles' => ['nullable', 'integer', 'min:1', 'max:520'],

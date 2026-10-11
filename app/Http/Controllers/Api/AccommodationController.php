@@ -208,9 +208,9 @@ class AccommodationController extends Controller
 
         $callback = function () use ($rows) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Reference', 'Name', 'Email', 'Phone', 'Accommodation', 'Unit', 'Check-in', 'Checkout', 'Nights', 'Adults', 'Children', 'Amount', 'Payment', 'Booking', 'Check-in status', 'Checkout status', 'Created']);
+            \App\Support\SafeCsv::write($handle, ['Reference', 'Name', 'Email', 'Phone', 'Accommodation', 'Unit', 'Check-in', 'Checkout', 'Nights', 'Adults', 'Children', 'Amount', 'Payment', 'Booking', 'Check-in status', 'Checkout status', 'Created']);
             foreach ($rows as $booking) {
-                fputcsv($handle, [
+                \App\Support\SafeCsv::write($handle, [
                     $booking->booking_reference,
                     $booking->user?->name,
                     $booking->user?->email,

@@ -55,6 +55,13 @@ class AppServiceProvider extends ServiceProvider
             //
         }
 
+        MobileUser::saving(function (MobileUser $user): void {
+            if (Auth::user() instanceof User && ! app(MergedAccountCredentialService::class)->isSyncing()
+                && $user->isDirty(['email', 'password', 'is_verified', 'email_verified_at', 'is_blocked', 'is_deleted'])) {
+                \App\Services\AdminAccessService::assertCanManageMobileIdentity($user, $user->email, Auth::user());
+            }
+        });
+
         MobileUser::created(function (MobileUser $user): void {
             $this->syncMergedAdminCredentialsFromMobile($user, created: true);
 

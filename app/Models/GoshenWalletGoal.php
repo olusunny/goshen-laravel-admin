@@ -20,6 +20,11 @@ class GoshenWalletGoal extends Model
         'metadata' => 'array',
     ];
 
+    protected static function booted(): void
+    {
+        static::saving(fn (self $record) => $record->wallet()->firstOrFail()->assertCurrency($record->currency));
+    }
+
     public function wallet(): BelongsTo
     {
         return $this->belongsTo(GoshenWallet::class, 'wallet_id');

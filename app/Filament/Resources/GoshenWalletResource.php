@@ -164,7 +164,9 @@ class GoshenWalletResource extends Resource
                 ->default($currency)
                 ->maxLength(3)
                 ->required()
-                ->helperText('Must match the wallet currency.'),
+                ->readOnly()
+                ->in(['GBP'])
+                ->helperText('Wallets use pounds sterling (GBP).'),
             Forms\Components\Select::make('purpose_type')
                 ->label('Purpose')
                 ->options([

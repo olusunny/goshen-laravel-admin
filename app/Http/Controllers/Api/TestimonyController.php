@@ -135,20 +135,10 @@ class TestimonyController extends Controller
 
         $data = $this->payload($request);
         $token = $data['api_token'] ?? $request->bearerToken();
-        $query = MobileUser::query();
-
-        if ($token) {
-            $query->where('api_token_hash', hash('sha256', $token));
-        } elseif (! empty($data['email'])) {
-            $query->where('email', $data['email']);
-        } else {
+        if (! is_string($token) || $token === '') {
             return null;
         }
-
-        $user = $query->first();
-        if (! $user && $token && ! empty($data['email'])) {
-            $user = MobileUser::where('email', $data['email'])->first();
-        }
+        $user = MobileUser::where('api_token_hash', hash('sha256', $token))->first();
 
         if (! $user?->canUseCommunity()) {
             return null;

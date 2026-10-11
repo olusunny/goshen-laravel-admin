@@ -473,24 +473,10 @@ class PrayerCommunityController extends Controller
 
         $data = $this->payload($request);
         $token = $data['api_token'] ?? $request->bearerToken();
-        $query = MobileUser::query();
-
-        if ($token) {
-            $query->where('api_token_hash', hash('sha256', $token));
-        } elseif (! empty($data['email'])) {
-            $query->where('email', $data['email']);
-        } else {
+        if (! is_string($token) || $token === '') {
             return null;
         }
-
-        $user = $query->first();
-
-        if (! $user && $token && ! empty($data['email'])) {
-            // Legacy mobile installs may keep an old token after an in-place APK
-            // upgrade. Fall back to the saved account email so verified users are
-            // not locked out of community actions until their next login refresh.
-            $user = MobileUser::where('email', $data['email'])->first();
-        }
+        $user = MobileUser::where('api_token_hash', hash('sha256', $token))->first();
 
         if (! $user?->canUseCommunity()) {
             return null;

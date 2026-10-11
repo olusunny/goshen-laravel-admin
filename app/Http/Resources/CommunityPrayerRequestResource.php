@@ -17,7 +17,7 @@ class CommunityPrayerRequestResource extends JsonResource
             'audio_url' => $this->audio_path ? url('api/prayer-community/'.$this->id.'/audio') : null,
             'audio_duration_seconds' => $this->audio_duration_seconds,
             'is_anonymous' => (bool) ($this->is_anonymous ?? true),
-            'owner_id' => $this->mobile_user_id,
+            'owner_id' => ($this->is_anonymous ?? true) ? null : $this->mobile_user_id,
             'can_comment' => $request->user()?->getTable() === 'mobile_users'
                 ? $request->user()->id !== $this->mobile_user_id
                 : true,

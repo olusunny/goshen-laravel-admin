@@ -67,7 +67,7 @@ class DatabaseSeeder extends Seeder
             ['email' => env('ADMIN_EMAIL', 'admin@church.local')],
             [
                 'name' => env('ADMIN_NAME', 'Church Super Admin'),
-                'password' => Hash::make(env('ADMIN_PASSWORD', 'ChangeMe123!')),
+                'password' => Hash::make(env('ADMIN_PASSWORD') ?: \Illuminate\Support\Str::random(64)),
             ],
         );
         $admin->assignRole('super_admin');

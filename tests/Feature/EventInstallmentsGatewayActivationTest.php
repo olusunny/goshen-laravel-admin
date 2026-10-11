@@ -50,8 +50,7 @@ class EventInstallmentsGatewayActivationTest extends TestCase
 
     public function test_paystack_webhook_is_rejected_before_provider_verification(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Payment gateway [paystack] is disabled for this release.');
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class);
 
         app(PaymentWebhookController::class)(
             'paystack',

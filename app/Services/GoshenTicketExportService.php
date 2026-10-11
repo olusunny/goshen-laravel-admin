@@ -192,7 +192,7 @@ class GoshenTicketExportService
     {
         $registrationFields = $this->bookingExporter->registrationFields();
 
-        fputcsv($output, $this->headings($registrationFields));
+        \App\Support\SafeCsv::write($output, $this->headings($registrationFields));
 
         $query
             ->with([
@@ -216,7 +216,7 @@ class GoshenTicketExportService
                         continue;
                     }
 
-                    fputcsv($output, $this->rowForTicket($ticket, $registrationFields, $familiesByAttendee[$ticket->attendee_id] ?? null));
+                    \App\Support\SafeCsv::write($output, $this->rowForTicket($ticket, $registrationFields, $familiesByAttendee[$ticket->attendee_id] ?? null));
                 }
             });
     }

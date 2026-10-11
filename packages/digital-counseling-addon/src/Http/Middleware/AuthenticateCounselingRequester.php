@@ -14,7 +14,7 @@ class AuthenticateCounselingRequester
     {
         $user = $this->authenticatedUser($request);
 
-        if (! $user instanceof Model) {
+        if (! $user instanceof Model || (method_exists($user, 'canUseCommunity') && ! $user->canUseCommunity())) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 

@@ -116,7 +116,7 @@
             <p class="eyebrow">MFM Triumphant Church</p>
             <h1>{{ $page?->title ?? ucfirst($type) }}</h1>
             <article>
-            {!! $page?->body ?: '<p>This page is being prepared.</p>' !!}
+            {!! \Illuminate\Support\Str::sanitizeHtml($page?->body ?: '<p>This page is being prepared.</p>') !!}
             </article>
         </section>
     </main>

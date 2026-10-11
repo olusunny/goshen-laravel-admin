@@ -89,6 +89,8 @@ class ControlHubMobileUserController extends Controller
         }
 
         $validated = $validator->validated();
+        \App\Services\AdminAccessService::assertCanManageMobileIdentity(null, $validated['email'],
+            app(\App\Services\MergedAccountCredentialService::class)->adminForEmail($this->mobileUserFromToken($request)?->email));
         $user = MobileUser::query()->create(array_merge($this->profileAttributes($validated), [
             'email' => strtolower($validated['email']),
             'password' => filled($validated['password'] ?? null) ? Hash::make($validated['password']) : null,
@@ -119,6 +121,8 @@ class ControlHubMobileUserController extends Controller
         }
 
         $validated = $validator->validated();
+        \App\Services\AdminAccessService::assertCanManageMobileIdentity($mobileUser, $validated['email'],
+            app(\App\Services\MergedAccountCredentialService::class)->adminForEmail($this->mobileUserFromToken($request)?->email));
         $attributes = $this->profileAttributes($validated);
         $attributes['email'] = strtolower($validated['email']);
         $attributes['login_type'] = $validated['login_type'] ?? $mobileUser->login_type;

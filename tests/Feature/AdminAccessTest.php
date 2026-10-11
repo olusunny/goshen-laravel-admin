@@ -134,6 +134,7 @@ class AdminAccessTest extends TestCase
             ->assertForbidden();
 
         $mediaManager->givePermissionTo($permission);
+        \Illuminate\Support\Facades\Auth::logout();
         $authorizedUser = User::factory()->create();
         $authorizedUser->assignRole($mediaManager);
 

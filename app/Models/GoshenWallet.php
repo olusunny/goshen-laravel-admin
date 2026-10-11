@@ -16,6 +16,27 @@ class GoshenWallet extends Model
         'goal_target_at' => 'datetime',
     ];
 
+    public function assertCurrency(?string $currency = null): string
+    {
+        if (strtoupper((string) $this->currency) !== 'GBP'
+            || ($currency !== null && strtoupper($currency) !== 'GBP')) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['currency' => 'Wallets use pounds sterling (GBP).']);
+        }
+
+        return 'GBP';
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $wallet): void {
+            $wallet->currency ??= 'GBP';
+            $wallet->assertCurrency();
+            if ($wallet->exists && $wallet->isDirty('currency') && $wallet->getRawOriginal('currency') !== 'GBP') {
+                throw \Illuminate\Validation\ValidationException::withMessages(['currency' => 'Existing wallet funds cannot be converted by changing their currency.']);
+            }
+        });
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(MobileUser::class, 'mobile_user_id');

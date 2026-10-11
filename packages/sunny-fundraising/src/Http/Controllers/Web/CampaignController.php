@@ -23,11 +23,15 @@ class CampaignController extends Controller
     {
         $record = Campaign::query()
             ->with('media')
-            ->where('slug', $campaign)
-            ->orWhereKey((int) $campaign)
+            ->where(function ($query) use ($campaign): void {
+                $query->where('slug', $campaign);
+                if (ctype_digit($campaign)) {
+                    $query->orWhere('id', (int) $campaign);
+                }
+            })
             ->first();
 
-        if (! $record) {
+        if (! $record || ! app(\Sunny\Fundraising\Contracts\CampaignVisibilityContract::class)->visibleTo(null, $record)) {
             abort(404);
         }
 

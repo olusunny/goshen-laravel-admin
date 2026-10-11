@@ -4327,7 +4327,7 @@
                         <form class="form wallet-topup-form">
                             <div class="wallet-mini-grid">
                                 <div class="field"><label>Amount (${escapeHtml(currency)})</label><input class="input" name="amount" type="number" min="1" step="0.01" required></div>
-                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="${escapeHtml(currency)}" required></div>
+                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="GBP" readonly required></div>
                             </div>
                             <label class="choice"><input name="save_payment_method" type="checkbox" value="1"><span>Save card for auto top-up</span></label>
                             <button class="button" type="submit">Top up with Stripe</button>
@@ -4355,7 +4355,7 @@
                             <div class="field"><label>Goal name</label><input class="input" name="goal_label" value="${escapeHtml(primaryGoal?.label || wallet.goal_label || 'Goshen Retreat savings')}" required></div>
                             <div class="wallet-mini-grid">
                                 <div class="field"><label>Target amount</label><input class="input" name="goal_amount" type="number" min="1" step="0.01" value="${escapeHtml(primaryGoal?.target_amount || wallet.goal_amount || '')}" required></div>
-                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="${escapeHtml(primaryGoal?.currency || currency)}" required></div>
+                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="GBP" readonly required></div>
                             </div>
                             <div class="progress-track" aria-label="Savings goal progress"><span style="--progress:${goalPercent}%"></span></div>
                             <button class="button" type="submit">Save selected goal</button>
@@ -4387,7 +4387,7 @@
                             <div class="field"><label>Recipient</label><input class="input" name="recipient" required></div>
                             <div class="wallet-mini-grid">
                                 <div class="field"><label>Amount</label><input class="input" name="amount" type="number" min="1" step="0.01" required></div>
-                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="${escapeHtml(currency)}" required></div>
+                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="GBP" readonly required></div>
                             </div>
                             <div class="field"><label>Note (optional)</label><input class="input" name="note" maxlength="240"></div>
                             <button class="button" type="submit">Send transfer</button>
@@ -4402,7 +4402,7 @@
                         <form class="form wallet-withdrawal-form">
                             <div class="wallet-mini-grid">
                                 <div class="field"><label>Amount</label><input class="input" name="amount" type="number" min="1" step="0.01" required></div>
-                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="${escapeHtml(currency)}" required></div>
+                                <div class="field"><label>Currency</label><input class="input" name="currency" maxlength="3" value="GBP" readonly required></div>
                             </div>
                             <div class="field"><label>Bank name</label><input class="input" name="bank_name" required></div>
                             <div class="field"><label>Account name</label><input class="input" name="account_name" required></div>
