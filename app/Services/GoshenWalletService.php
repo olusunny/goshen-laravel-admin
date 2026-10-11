@@ -1307,24 +1307,41 @@ class GoshenWalletService
 
         $email = Str::lower($identifier);
         if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return MobileUser::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+            $matches = MobileUser::query()->whereRaw('LOWER(email) = ?', [$email])->limit(2)->get();
+
+            return $matches->count() === 1 && $matches->first()->is_verified && $matches->first()->email_verified_at
+                ? $matches->first()
+                : null;
         }
 
-        $digits = preg_replace('/\D+/', '', $identifier) ?: '';
-        if (strlen($digits) < 7) {
+        $digits = $this->canonicalTransferPhone($identifier);
+        if ($digits === null) {
             return null;
         }
 
-        return MobileUser::query()
-            ->whereNotNull('phone')
+        $matches = MobileUser::query()
+            ->whereNotNull('phone_normalized')
+            ->whereNotNull('phone_verified_at')
             ->get()
-            ->first(function (MobileUser $user) use ($digits): bool {
-                $phoneDigits = preg_replace('/\D+/', '', (string) $user->phone) ?: '';
+            ->filter(fn (MobileUser $user): bool => $this->canonicalTransferPhone((string) $user->phone_normalized) === $digits);
 
-                return $phoneDigits === $digits
-                    || str_ends_with($phoneDigits, $digits)
-                    || str_ends_with($digits, $phoneDigits);
-            });
+        return $matches->count() === 1 && $matches->first()->is_verified ? $matches->first() : null;
+    }
+
+    private function canonicalTransferPhone(string $phone): ?string
+    {
+        $phone = trim($phone);
+        if (! preg_match('/^\+?[0-9][0-9\s().-]*$/D', $phone)) {
+            return null;
+        }
+
+        $digits = preg_replace('/[^0-9]/', '', $phone);
+        if (str_starts_with($digits, '00')) {
+            $digits = substr($digits, 2);
+        }
+
+        // Never infer a country code or match a suffix of another member's number.
+        return strlen($digits) >= 7 && strlen($digits) <= 15 ? $digits : null;
     }
 
     private function notifyTransfer(MobileUser $sender, MobileUser $recipient, float $amount, string $currency, string $note, string $reference): void

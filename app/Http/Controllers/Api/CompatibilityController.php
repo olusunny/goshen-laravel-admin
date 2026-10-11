@@ -44,6 +44,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -729,7 +730,10 @@ class CompatibilityController extends Controller
     public function loginUser(Request $request)
     {
         $data = $this->payload($request) ?: $request->all();
-        $user = MobileUser::where('email', $data['email'] ?? null)->first();
+        if ($response = $this->authThrottle($request, $data, 'login', 5)) {
+            return $response;
+        }
+        $user = $this->authAccount($data);
         $password = (string) ($data['password'] ?? '');
         $credentialsValid = $user
             ? app(MergedAccountCredentialService::class)->validateMobileCredentials($user, $password)
@@ -754,16 +758,22 @@ class CompatibilityController extends Controller
         }
 
         if (! $user->is_verified || ! $user->email_verified_at) {
-            $this->sendMobileVerificationCode($user);
+            // A signup may have just issued a code. Keep the sign-in guidance usable
+            // without rotating that code or sending another email during its cooldown.
+            if (! $this->authThrottle($request, $data, 'verification-send', 1, 60, true)) {
+                $this->sendMobileVerificationCode($user);
+            }
 
             return response()->json([
                 'status' => 'error',
-                'msg' => 'Please verify your email address before signing in. A new verification code has been sent.',
-                'message' => 'Please verify your email address before signing in. A new verification code has been sent.',
+                'msg' => 'Please verify your email address before signing in. Check your email for the verification code.',
+                'message' => 'Please verify your email address before signing in. Check your email for the verification code.',
                 'needs_verification' => true,
                 'email' => $user->email,
             ]);
         }
+
+        RateLimiter::clear($this->authThrottleKey($request, $data, 'login'));
 
         return response()->json([
             'status' => 'ok',
@@ -841,61 +851,46 @@ class CompatibilityController extends Controller
 
         $birthday = app(MembershipProfileService::class)->birthdayAttributes($data);
 
-        $existingUser = MobileUser::where('email', $data['email'] ?? null)->first();
+        $data['email'] = $this->authEmail($data);
+        $existingUser = $this->authAccount($data);
         if ($existingUser) {
-            if ($existingUser->is_verified && $existingUser->email_verified_at) {
-                return response()->json([
-                    'status' => 'error',
-                    'msg' => 'An account already exists for this email. Please sign in.',
-                    'message' => 'An account already exists for this email. Please sign in.',
-                ]);
-            }
-
-            $existingUser->forceFill([
-                'name' => $data['name'] ?? $existingUser->name,
-                'title' => $data['title'] ?? $data['profile_title'] ?? $data['salutation'] ?? $existingUser->title,
-                'first_name' => $data['first_name'],
-                'middle_name' => $data['middle_name'] ?? null,
-                'last_name' => $data['last_name'],
-                'phone' => $data['phone'],
-                'gender' => $data['gender'],
-                'marital_status' => $data['marital_status'] ?? $existingUser->marital_status,
-                'group_id' => $data['group_id'] ?? $existingUser->group_id,
-                'member_type' => $data['member_type'],
-                'country_of_residence' => $data['country_of_residence'] ?? $existingUser->country_of_residence,
-                'state_county_province' => $data['state_county_province'] ?? $existingUser->state_county_province,
-                'address' => $data['address'] ?? $existingUser->address,
-                'address_latitude' => $data['address_latitude'] ?? null,
-                'address_longitude' => $data['address_longitude'] ?? null,
-                ...$birthday,
-                'password' => Hash::make($data['password']),
-            ])->save();
-            $user = $existingUser;
-        } else {
-            $user = MobileUser::create([
-                'name' => $data['name'] ?? 'Mobile User',
-                'title' => $data['title'] ?? $data['profile_title'] ?? $data['salutation'] ?? null,
-                'first_name' => $data['first_name'],
-                'middle_name' => $data['middle_name'] ?? null,
-                'last_name' => $data['last_name'],
-                'email' => $data['email'],
-                'phone' => $data['phone'],
-                'gender' => $data['gender'],
-                'marital_status' => $data['marital_status'] ?? null,
-                'group_id' => $data['group_id'] ?? null,
-                'member_type' => $data['member_type'],
-                'country_of_residence' => $data['country_of_residence'] ?? null,
-                'state_county_province' => $data['state_county_province'] ?? null,
-                'address' => $data['address'] ?? null,
-                'address_latitude' => $data['address_latitude'] ?? null,
-                'address_longitude' => $data['address_longitude'] ?? null,
-                ...$birthday,
-                'password' => Hash::make($data['password'] ?? str()->random(24)),
-                'is_verified' => false,
-                'email_verified_at' => null,
+            return response()->json([
+                'status' => 'error',
+                'msg' => 'An account already exists for this email. Please sign in, verify your email, or use Forgot Password.',
+                'message' => 'An account already exists for this email. Please sign in, verify your email, or use Forgot Password.',
             ]);
         }
 
+        if ($response = $this->authThrottle($request, $data, 'verification-send', 1, 60, true)) {
+            return $response;
+        }
+
+        $user = MobileUser::create([
+            'name' => $data['name'] ?? 'Mobile User',
+            'title' => $data['title'] ?? $data['profile_title'] ?? $data['salutation'] ?? null,
+            'first_name' => $data['first_name'],
+            'middle_name' => $data['middle_name'] ?? null,
+            'last_name' => $data['last_name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'],
+            'gender' => $data['gender'],
+            'marital_status' => $data['marital_status'] ?? null,
+            'group_id' => $data['group_id'] ?? null,
+            'member_type' => $data['member_type'],
+            'country_of_residence' => $data['country_of_residence'] ?? null,
+            'state_county_province' => $data['state_county_province'] ?? null,
+            'address' => $data['address'] ?? null,
+            'address_latitude' => $data['address_latitude'] ?? null,
+            'address_longitude' => $data['address_longitude'] ?? null,
+            ...$birthday,
+            'password' => Hash::make($data['password'] ?? str()->random(24)),
+            'is_verified' => false,
+            'email_verified_at' => null,
+        ]);
+
+        // Signup was limited before this account existed. Carry its issuance cooldown
+        // over to the immutable identity key used by subsequent login/resend requests.
+        RateLimiter::hit($this->authThrottleKey($request, $data, 'verification-send', true), 60);
         $this->sendMobileVerificationCode($user);
 
         return response()->json([
@@ -1102,60 +1097,65 @@ class CompatibilityController extends Controller
             ], 422);
         }
 
-        $user = $this->mobileUserForFirebasePhone($firebaseUid, $phone);
-        $isNew = ! $user->exists;
+        return DB::transaction(function () use ($request, $firebaseUid, $phone) {
+            $user = $this->mobileUserForFirebasePhone($request, $firebaseUid, $phone);
+            $isNew = ! $user->exists;
 
-        if ($user->exists && ($user->is_blocked || $user->is_deleted)) {
+            if ($user->exists && ($user->is_blocked || $user->is_deleted)) {
+                return response()->json([
+                    'status' => 'error',
+                    'msg' => 'This account is not currently active.',
+                    'message' => 'This account is not currently active.',
+                ], 403);
+            }
+
+            if ($user->exists && filled($user->firebase_uid) && $user->firebase_uid !== $firebaseUid) {
+                return response()->json([
+                    'status' => 'error',
+                    'msg' => 'This phone number is already linked to another verified Firebase account.',
+                    'message' => 'This phone number is already linked to another verified Firebase account.',
+                ], 409);
+            }
+
+            $user->forceFill([
+                'firebase_uid' => $firebaseUid,
+                'phone' => $user->phone ?: $phone,
+                'phone_normalized' => $phone,
+                'name' => $user->name ?: 'Mobile user',
+                'email' => $user->email ?: $this->phonePlaceholderEmail($phone),
+                'login_type' => $isNew ? 'phone_otp' : $user->login_type,
+                'is_verified' => true,
+                'phone_verified_at' => now(),
+            ])->save();
+
+            if ($isNew) {
+                app(AutomaticNotificationService::class)->enqueue('welcome_verified_user', $user);
+            }
+
             return response()->json([
-                'status' => 'error',
-                'msg' => 'This account is not currently active.',
-                'message' => 'This account is not currently active.',
-            ], 403);
-        }
-
-        if ($user->exists && filled($user->firebase_uid) && $user->firebase_uid !== $firebaseUid) {
-            return response()->json([
-                'status' => 'error',
-                'msg' => 'This phone number is already linked to another verified Firebase account.',
-                'message' => 'This phone number is already linked to another verified Firebase account.',
-            ], 409);
-        }
-
-        $user->forceFill([
-            'firebase_uid' => $firebaseUid,
-            'phone' => $user->phone ?: $phone,
-            'phone_normalized' => $phone,
-            'name' => $user->name ?: 'Mobile user',
-            'email' => $user->email ?: $this->phonePlaceholderEmail($phone),
-            'login_type' => $isNew ? 'phone_otp' : $user->login_type,
-            'is_verified' => true,
-            'phone_verified_at' => now(),
-        ])->save();
-
-        if ($isNew) {
-            app(AutomaticNotificationService::class)->enqueue('welcome_verified_user', $user);
-        }
-
-        return response()->json([
-            'status' => 'ok',
-            'msg' => 'Signed in successfully.',
-            'message' => 'Signed in successfully.',
-            'user' => $this->mobileUserPayload($user->fresh(), $user->issueApiToken()),
-            'is_new_user' => $isNew,
-            'profile_needs_update' => $this->profileNeedsUpdate($user),
-        ]);
+                'status' => 'ok',
+                'msg' => 'Signed in successfully.',
+                'message' => 'Signed in successfully.',
+                'user' => $this->mobileUserPayload($user->fresh(), $user->issueApiToken()),
+                'is_new_user' => $isNew,
+                'profile_needs_update' => $this->profileNeedsUpdate($user),
+            ]);
+        });
     }
 
     public function verifyMobileEmail(Request $request)
     {
         $data = $this->payload($request) ?: $request->all();
+        if ($response = $this->authThrottle($request, $data, 'verification-attempt', 5, 300, true)) {
+            return $response;
+        }
         validator($data, [
             'email' => ['required', 'email:rfc', 'max:255'],
             'code' => ['required', 'string', 'min:4', 'max:12'],
         ])->validate();
 
-        $user = MobileUser::where('email', $data['email'])->first();
-        if (! $user || ! $this->validMobileCode($user->email_verification_code_hash, $data['code'])) {
+        $user = $this->authAccount($data);
+        if (! $user || $user->is_blocked || $user->is_deleted || ! $this->validMobileCode($user->email_verification_code_hash, $data['code'])) {
             return response()->json([
                 'status' => 'error',
                 'msg' => 'Invalid verification code.',
@@ -1163,7 +1163,7 @@ class CompatibilityController extends Controller
             ]);
         }
 
-        if ($user->email_verification_expires_at && $user->email_verification_expires_at->isPast()) {
+        if (! $user->email_verification_expires_at || $user->email_verification_expires_at->isPast()) {
             return response()->json([
                 'status' => 'error',
                 'msg' => 'Verification code has expired. Please request a new code.',
@@ -1191,12 +1191,15 @@ class CompatibilityController extends Controller
     public function resendMobileVerification(Request $request)
     {
         $data = $this->payload($request) ?: $request->all();
+        if ($response = $this->authThrottle($request, $data, 'verification-send', 1, 60, true)) {
+            return $response;
+        }
         validator($data, [
             'email' => ['required', 'email:rfc', 'max:255'],
         ])->validate();
 
-        $user = MobileUser::where('email', $data['email'])->first();
-        if (! $user) {
+        $user = $this->authAccount($data);
+        if (! $user || $user->is_blocked || $user->is_deleted) {
             return response()->json(['status' => 'ok', 'msg' => 'If the email exists, a verification code has been sent.', 'message' => 'If the email exists, a verification code has been sent.']);
         }
 
@@ -1212,12 +1215,15 @@ class CompatibilityController extends Controller
     public function requestPasswordReset(Request $request)
     {
         $data = $this->payload($request) ?: $request->all();
+        if ($response = $this->authThrottle($request, $data, 'password-reset-send', 1, 60, true)) {
+            return $response;
+        }
         validator($data, [
             'email' => ['required', 'email:rfc', 'max:255'],
         ])->validate();
 
-        $user = MobileUser::where('email', $data['email'])->first();
-        if ($user) {
+        $user = $this->authAccount($data);
+        if ($user && ! $user->is_blocked && ! $user->is_deleted) {
             $code = $this->newMobileCode();
             $user->forceFill([
                 'password_reset_code_hash' => Hash::make($code),
@@ -1245,18 +1251,21 @@ class CompatibilityController extends Controller
     public function resetMobilePassword(Request $request)
     {
         $data = $this->payload($request) ?: $request->all();
+        if ($response = $this->authThrottle($request, $data, 'password-reset-attempt', 5, 300, true)) {
+            return $response;
+        }
         validator($data, [
             'email' => ['required', 'email:rfc', 'max:255'],
             'code' => ['required', 'string', 'min:4', 'max:12'],
             'password' => ['required', 'string', 'min:8', 'max:255'],
         ])->validate();
 
-        $user = MobileUser::where('email', $data['email'])->first();
-        if (! $user || ! $this->validMobileCode($user->password_reset_code_hash, $data['code'])) {
+        $user = $this->authAccount($data);
+        if (! $user || $user->is_blocked || $user->is_deleted || ! $this->validMobileCode($user->password_reset_code_hash, $data['code'])) {
             return response()->json(['status' => 'error', 'msg' => 'Invalid password reset code.', 'message' => 'Invalid password reset code.']);
         }
 
-        if ($user->password_reset_expires_at && $user->password_reset_expires_at->isPast()) {
+        if (! $user->password_reset_expires_at || $user->password_reset_expires_at->isPast()) {
             return response()->json(['status' => 'error', 'msg' => 'Password reset code has expired.', 'message' => 'Password reset code has expired.']);
         }
 
@@ -1944,14 +1953,30 @@ class CompatibilityController extends Controller
         return '+'.$digits;
     }
 
-    private function mobileUserForFirebasePhone(string $firebaseUid, string $phone): MobileUser
+    private function mobileUserForFirebasePhone(Request $request, string $firebaseUid, string $phone): MobileUser
     {
-        return MobileUser::query()
-            ->where('firebase_uid', $firebaseUid)
-            ->orWhere('phone_normalized', $phone)
-            ->orWhere('phone', $phone)
-            ->first()
-            ?: new MobileUser;
+        // Contact fields (including imported normalized numbers) are not identity proof.
+        $boundUser = MobileUser::where('firebase_uid', $firebaseUid)->lockForUpdate()->first();
+        $phoneOwner = MobileUser::where('phone_normalized', $phone)->lockForUpdate()->first();
+        if ($boundUser) {
+            abort_if($phoneOwner && ! $phoneOwner->is($boundUser), 409, 'This verified phone is linked to another account.');
+
+            return $boundUser;
+        }
+
+        $authenticated = $this->mobileUserFromToken($request);
+        if ($authenticated?->canUseCommunity()) {
+            $authenticated = MobileUser::whereKey($authenticated->id)->lockForUpdate()->firstOrFail();
+            abort_if(filled($authenticated->firebase_uid), 409, 'This account already has a linked phone sign-in.');
+            abort_if($phoneOwner && ! $phoneOwner->is($authenticated), 409, 'This phone is already associated with another account.');
+
+            return $authenticated;
+        }
+
+        abort_if($phoneOwner || MobileUser::where('phone', $phone)->exists(), 409,
+            'Please sign in with email or Google first to link phone sign-in to your existing account.');
+
+        return new MobileUser;
     }
 
     private function phonePlaceholderEmail(string $phone): string
@@ -2452,6 +2477,51 @@ class CompatibilityController extends Controller
                 return [$key => filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false];
             })
             ->all();
+    }
+
+    private function authEmail(array $data): string
+    {
+        return is_string($data['email'] ?? null) ? strtolower(trim($data['email'])) : '';
+    }
+
+    protected function authAccount(array $data): ?MobileUser
+    {
+        return MobileUser::whereRaw('LOWER(email) = ?', [$this->authEmail($data)])->first();
+    }
+
+    private function authThrottleKey(Request $request, array $data, string $action, bool $accountOnly = false): string
+    {
+        // Match database identity semantics, including accent-insensitive collations.
+        // Input-byte hashes alone give equivalent email aliases separate budgets.
+        $account = $this->authAccount($data);
+        $identity = $account ? 'user:'.$account->getKey() : 'email:'.hash('sha256', $this->authEmail($data));
+
+        return 'mobile-auth:'.$action.':'.$identity
+            .($accountOnly ? '' : ':'.hash('sha256', (string) $request->ip()));
+    }
+
+    private function authThrottle(Request $request, array $data, string $action, int $attempts, int $seconds = 60, bool $accountOnly = false): ?\Illuminate\Http\JsonResponse
+    {
+        // Controller-owned keys cover every legacy route and nested payload alias.
+        $key = $this->authThrottleKey($request, $data, $action, $accountOnly);
+        $ipKey = 'mobile-auth:ip:'.hash('sha256', (string) $request->ip());
+        foreach ([$key => $attempts, $ipKey => 60] as $limitKey => $limit) {
+            if (RateLimiter::tooManyAttempts($limitKey, $limit)) {
+                $retryAfter = max(1, RateLimiter::availableIn($limitKey));
+
+                return response()->json([
+                    'status' => 'error',
+                    'msg' => 'Too many attempts. Please wait and try again.',
+                    'message' => 'Too many attempts. Please wait and try again.',
+                    'retry_after' => $retryAfter,
+                ], 429)->header('Retry-After', (string) $retryAfter);
+            }
+        }
+
+        RateLimiter::hit($key, $seconds);
+        RateLimiter::hit($ipKey, 60);
+
+        return null;
     }
 
     private function sendMobileVerificationCode(MobileUser $user): void

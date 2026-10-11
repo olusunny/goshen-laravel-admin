@@ -10,6 +10,7 @@ use RuntimeException;
 use Sunny\Fundraising\Contracts\WalletGatewayContract;
 use Sunny\Fundraising\DTOs\WalletDebitResult;
 use Sunny\Fundraising\Models\Campaign;
+use Sunny\Fundraising\Services\CampaignService;
 
 class FundraisingWalletGateway implements WalletGatewayContract
 {
@@ -33,6 +34,10 @@ class FundraisingWalletGateway implements WalletGatewayContract
         Campaign $campaign,
         array $metadata = [],
     ): WalletDebitResult {
+        if (! app(CampaignService::class)->walletEnabled()) {
+            return WalletDebitResult::failure('Wallet contributions are currently unavailable.', 'wallet_disabled');
+        }
+
         if (! $user instanceof MobileUser) {
             return WalletDebitResult::failure('Please sign in before contributing from your wallet.', 'unauthenticated');
         }

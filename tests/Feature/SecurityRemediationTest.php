@@ -198,10 +198,11 @@ class SecurityRemediationTest extends TestCase
     public function test_form_file_requires_permission_or_scoped_signature(): void
     {
         Storage::fake('local');
-        Storage::disk('local')->put('private/upload.txt', 'sensitive');
         $form = DynamicForm::create(['title' => 'Upload', 'slug' => 'upload', 'visibility' => 'public', 'payment_type' => 'free', 'currency' => 'GBP']);
+        $path = 'dynamic-forms/'.$form->id.'/'.\Illuminate\Support\Str::uuid().'.txt';
+        Storage::disk('local')->put($path, 'sensitive');
         $submission = DynamicFormSubmission::create(['dynamic_form_id' => $form->id, 'reference' => 'security-upload', 'status' => 'submitted', 'payment_status' => 'not_required',
-            'answers' => ['attachment' => ['answer' => ['disk' => 'local', 'file_path' => 'private/upload.txt', 'original_name' => 'upload.txt']]]]);
+            'answers' => ['attachment' => ['key' => 'attachment', 'type' => 'file', 'answer' => ['disk' => 'local', 'file_path' => $path, 'original_name' => 'upload.txt']]]]);
         $actor = User::factory()->create();
         $this->actingAs($actor)->get('/admin/dynamic-form-submissions/'.$submission->id.'/files/attachment')->assertForbidden();
         $actor->givePermissionTo(Permission::findOrCreate('manage_dynamic_form_submission', 'web'));

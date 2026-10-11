@@ -47,6 +47,29 @@ class DynamicFormSubmission extends Model
         });
     }
 
+    public function attachmentForField(string $field): ?array
+    {
+        $snapshot = $this->answers[$field] ?? null;
+        if (! is_array($snapshot) || ($snapshot['type'] ?? null) !== DynamicFormField::TYPE_FILE
+            || ($snapshot['key'] ?? null) !== $field) {
+            return null;
+        }
+
+        $attachment = $snapshot['answer'] ?? null;
+        if (! is_array($attachment) || ($attachment['disk'] ?? null) !== 'local'
+            || ! is_string($attachment['file_path'] ?? null)) {
+            return null;
+        }
+
+        // Use the saved field snapshot so deleting a form field preserves its genuine uploads.
+        $prefix = preg_quote('dynamic-forms/' . $this->dynamic_form_id . '/', '~');
+        if (! preg_match('~\A' . $prefix . '[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\.[a-z0-9]*\z~D', $attachment['file_path'])) {
+            return null;
+        }
+
+        return $attachment;
+    }
+
     public function dynamicForm(): BelongsTo
     {
         return $this->belongsTo(DynamicForm::class);

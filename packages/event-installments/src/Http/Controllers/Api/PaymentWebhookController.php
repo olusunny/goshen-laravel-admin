@@ -98,7 +98,9 @@ class PaymentWebhookController extends Controller
                 }
 
                 $settlements->markPaid($transaction, $webhook->amount, $webhook->currency);
-            } elseif ($transaction && in_array($webhook->status, ['failed', 'cancelled', 'canceled'], true)) {
+            } elseif ($transaction
+                && in_array($webhook->status, ['failed', 'cancelled', 'canceled'], true)
+                && in_array((string) $transaction->status, ['pending', 'processing', 'failed', 'expired'], true)) {
                 $transaction->forceFill([
                     'provider_event_id' => $webhook->eventId,
                     'payload' => $webhook->payload,
@@ -153,7 +155,7 @@ class PaymentWebhookController extends Controller
         $reconciliation['booking_status'] = $this->bookingStatusValue($booking);
         $reconciliation['previous_transaction_status'] ??= $transactionStatus;
 
-        if ($transactionStatus === 'refunded' || ($reconciliation['refund_reference'] ?? null)) {
+        if ($transactionStatus === 'refunded') {
             $transaction->forceFill([
                 'status' => 'refunded',
                 'provider_event_id' => $webhook->eventId,

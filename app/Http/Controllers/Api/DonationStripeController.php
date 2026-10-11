@@ -511,64 +511,67 @@ class DonationStripeController extends Controller
             return response()->json(['status' => 'ok']);
         }
 
-        $donation = Donation::query()
-            ->where('provider', 'stripe')
-            ->where('reference', $reference)
-            ->first();
+        return DB::transaction(function () use ($reference, $eventPayload, $object): JsonResponse {
+            $donation = Donation::query()
+                ->where('provider', 'stripe')
+                ->where('reference', $reference)
+                ->lockForUpdate()
+                ->first();
 
-        if (! $donation) {
-            return response()->json(['status' => 'ok', 'message' => 'Donation not found.']);
-        }
-
-        if (($donation->metadata['stripe_last_event_id'] ?? null) === ($eventPayload['id'] ?? null)) {
-            return response()->json(['status' => 'ok', 'message' => 'Stripe event already processed.']);
-        }
-
-        $status = match ((string) $eventPayload['type']) {
-            'checkout.session.completed',
-            'checkout.session.async_payment_succeeded',
-            'payment_intent.succeeded' => 'paid',
-            'checkout.session.async_payment_failed',
-            'payment_intent.payment_failed',
-            'checkout.session.expired' => 'failed',
-            default => null,
-        };
-
-        if ($donation->isCompleted()) {
-            return response()->json(['status' => 'ok', 'message' => 'Completed donation is locked.']);
-        }
-
-        $metadata = array_merge($donation->metadata ?? [], [
-            'stripe_last_event_id' => $eventPayload['id'] ?? null,
-            'stripe_last_event_type' => $eventPayload['type'] ?? null,
-            'stripe_last_event_at' => now()->toIso8601String(),
-        ]);
-
-        $updates = ['metadata' => $metadata];
-        if ($status === 'paid' && $donation->status !== 'paid') {
-            $verification = $this->verifyStripePaymentObject($donation, $object);
-            if (! $verification['valid']) {
-                $donation->forceFill([
-                    'metadata' => array_merge($metadata, [
-                        'stripe_verification_error' => $verification['message'],
-                    ]),
-                ])->save();
-
-                return response()->json([
-                    'status' => 'ok',
-                    'message' => 'Stripe payment event was received but did not match the donation.',
-                ]);
+            if (! $donation) {
+                return response()->json(['status' => 'ok', 'message' => 'Donation not found.']);
             }
 
-            $updates['status'] = 'paid';
-            $updates['paid_at'] = now();
-        } elseif ($status === 'failed' && $donation->status !== 'paid') {
-            $updates['status'] = 'failed';
-        }
+            if (($donation->metadata['stripe_last_event_id'] ?? null) === ($eventPayload['id'] ?? null)) {
+                return response()->json(['status' => 'ok', 'message' => 'Stripe event already processed.']);
+            }
 
-        $donation->forceFill($updates)->save();
+            $status = match ((string) $eventPayload['type']) {
+                'checkout.session.completed' => ($object['payment_status'] ?? null) === 'paid' ? 'paid' : null,
+                'checkout.session.async_payment_succeeded',
+                'payment_intent.succeeded' => 'paid',
+                'checkout.session.async_payment_failed',
+                'payment_intent.payment_failed',
+                'checkout.session.expired' => 'failed',
+                default => null,
+            };
 
-        return response()->json(['status' => 'ok']);
+            if ($donation->isCompleted()) {
+                return response()->json(['status' => 'ok', 'message' => 'Completed donation is locked.']);
+            }
+
+            $metadata = array_merge($donation->metadata ?? [], [
+                'stripe_last_event_id' => $eventPayload['id'] ?? null,
+                'stripe_last_event_type' => $eventPayload['type'] ?? null,
+                'stripe_last_event_at' => now()->toIso8601String(),
+            ]);
+
+            $updates = ['metadata' => $metadata];
+            if ($status === 'paid' && $donation->status !== 'paid') {
+                $verification = $this->verifyStripePaymentObject($donation, $object);
+                if (! $verification['valid']) {
+                    $donation->forceFill([
+                        'metadata' => array_merge($metadata, [
+                            'stripe_verification_error' => $verification['message'],
+                        ]),
+                    ])->save();
+
+                    return response()->json([
+                        'status' => 'ok',
+                        'message' => 'Stripe payment event was received but did not match the donation.',
+                    ]);
+                }
+
+                $updates['status'] = 'paid';
+                $updates['paid_at'] = now();
+            } elseif ($status === 'failed' && $donation->status !== 'paid') {
+                $updates['status'] = 'failed';
+            }
+
+            $donation->forceFill($updates)->save();
+
+            return response()->json(['status' => 'ok']);
+        });
     }
 
     private function payload(Request $request): array
@@ -703,7 +706,7 @@ class DonationStripeController extends Controller
     private function verifyStripePaymentObject(Donation $donation, array $object): array
     {
         $stripeCurrency = strtoupper((string) ($object['currency'] ?? ''));
-        if ($stripeCurrency !== '' && $stripeCurrency !== strtoupper((string) $donation->currency)) {
+        if ($stripeCurrency !== strtoupper((string) $donation->currency)) {
             return [
                 'valid' => false,
                 'message' => 'Stripe currency '.$stripeCurrency.' does not match donation currency '.$donation->currency.'.',
@@ -715,14 +718,16 @@ class DonationStripeController extends Controller
             ?? $object['amount']
             ?? null;
 
-        if ($stripeAmount !== null) {
-            $expected = $this->toMinorUnits((float) $donation->amount, (string) $donation->currency);
-            if ((int) $stripeAmount !== $expected) {
-                return [
-                    'valid' => false,
-                    'message' => 'Stripe amount '.$stripeAmount.' does not match expected amount '.$expected.'.',
-                ];
-            }
+        if ($stripeAmount === null) {
+            return ['valid' => false, 'message' => 'Stripe payment amount is missing.'];
+        }
+
+        $expected = $this->toMinorUnits((float) $donation->amount, (string) $donation->currency);
+        if ((int) $stripeAmount !== $expected) {
+            return [
+                'valid' => false,
+                'message' => 'Stripe amount '.$stripeAmount.' does not match expected amount '.$expected.'.',
+            ];
         }
 
         return ['valid' => true, 'message' => 'Stripe amount and currency verified.'];

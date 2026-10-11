@@ -14,12 +14,11 @@ class DynamicFormSubmissionFileController extends Controller
     {
         abort_unless(\App\Filament\Resources\DynamicFormSubmissionResource::canView($submission) || $request->hasValidSignature(), 403);
 
-        $answer = data_get($submission->answers, "{$field}.answer");
-        abort_unless(is_array($answer), 404);
+        $answer = $submission->attachmentForField($field);
+        abort_unless($answer !== null, 404);
 
-        $disk = (string) ($answer['disk'] ?? 'local');
-        $path = (string) ($answer['file_path'] ?? '');
-        abort_if($path === '', 404);
+        $disk = $answer['disk'];
+        $path = $answer['file_path'];
         abort_unless(Storage::disk($disk)->exists($path), 404);
 
         return Storage::disk($disk)->download(

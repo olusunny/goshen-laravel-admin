@@ -153,12 +153,20 @@ class ControlHubMobileUserController extends Controller
             return $response;
         }
 
-        $mobileUser->tokens()->delete();
-        $mobileUser->forceFill([
-            'api_token_hash' => null,
-            'is_deleted' => true,
-            'is_blocked' => true,
-        ])->save();
+        $actor = app(\App\Services\MergedAccountCredentialService::class)
+            ->adminForEmail($this->mobileUserFromToken($request)?->email);
+        $mobileUser = \Illuminate\Support\Facades\DB::transaction(function () use ($mobileUser, $actor): MobileUser {
+            $mobileUser = MobileUser::whereKey($mobileUser->id)->lockForUpdate()->firstOrFail();
+            \App\Services\AdminAccessService::assertCanManageMobileIdentity($mobileUser, $mobileUser->email, $actor);
+            $mobileUser->tokens()->delete();
+            $mobileUser->forceFill([
+                'api_token_hash' => null,
+                'is_deleted' => true,
+                'is_blocked' => true,
+            ])->save();
+
+            return $mobileUser;
+        });
 
         return response()->json([
             'status' => 'ok',

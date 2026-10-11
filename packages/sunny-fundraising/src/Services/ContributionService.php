@@ -53,6 +53,10 @@ class ContributionService
                 }
             }
 
+            if (! $this->campaigns->walletEnabled()) {
+                throw new RuntimeException('Wallet contributions are currently unavailable.');
+            }
+
             $contribution = $existing ?: CampaignContribution::query()->create([
                 'campaign_id' => $lockedCampaign->id,
                 'user_id' => $user?->getKey(),

@@ -126,7 +126,7 @@ class CampaignService
             ->all();
     }
 
-    private function paymentOptions(): array
+    public function walletEnabled(): bool
     {
         $walletEnabled = filter_var(config('fundraising.wallet.enabled', true), FILTER_VALIDATE_BOOLEAN);
         if (class_exists(AppSetting::class)) {
@@ -134,6 +134,12 @@ class CampaignService
                 && filter_var(AppSetting::value('goshen_wallet_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
         }
 
+        return $walletEnabled;
+    }
+
+    private function paymentOptions(): array
+    {
+        $walletEnabled = $this->walletEnabled();
         $stripeEnabled = filter_var(config('fundraising.payments.stripe.enabled', true), FILTER_VALIDATE_BOOLEAN);
         $stripeConfigured = false;
 

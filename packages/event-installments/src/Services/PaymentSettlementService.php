@@ -163,17 +163,33 @@ class PaymentSettlementService
     public function markFailed(PaymentTransaction $transaction, string $reason): void
     {
         DB::transaction(function () use ($transaction, $reason) {
+            $booking = $transaction->booking()->lockForUpdate()->firstOrFail();
+            $installment = $transaction->installment()
+                ->where('booking_id', $booking->id)
+                ->lockForUpdate()
+                ->first();
+            $transaction = PaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+
+            if (! in_array((string) $transaction->status, ['pending', 'processing', 'failed', 'expired'], true)) {
+                return;
+            }
+
             $transaction->forceFill(['status' => 'failed'])->save();
 
-            $transaction->installment?->forceFill([
+            if (in_array($booking->status, [BookingStatus::Paid, BookingStatus::Cancelled, BookingStatus::Refunded], true)
+                || in_array($installment?->status, [InstallmentStatus::Paid, InstallmentStatus::Cancelled, InstallmentStatus::Refunded], true)) {
+                return;
+            }
+
+            $installment?->forceFill([
                 'status' => InstallmentStatus::Failed,
                 'metadata' => array_filter(array_merge(
-                    $transaction->installment->metadata ?: [],
+                    $installment->metadata ?: [],
                     ['last_failure_reason' => $reason],
                 )),
             ])->save();
 
-            $transaction->booking?->forceFill([
+            $booking->forceFill([
                 'auto_charge_failed_at' => now(),
                 'auto_charge_failure_reason' => $reason,
             ])->save();

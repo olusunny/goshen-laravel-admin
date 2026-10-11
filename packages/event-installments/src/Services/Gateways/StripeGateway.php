@@ -213,13 +213,16 @@ class StripeGateway implements PaymentGateway
 
     public function refund(PaymentTransaction $transaction, float $amount, string $idempotencyKey): RefundResult
     {
-        $paymentIntent = $this->paymentIntentFromTransaction($transaction);
+        $refundReference = trim((string) data_get($transaction->payload, 'late_terminal_reconciliation.refund_reference', ''));
 
         try {
-            $refund = $this->createStripeRefund([
-                'payment_intent' => $paymentIntent,
-                'amount' => $this->toMinorUnits($amount, (string) $transaction->currency),
-            ], ['idempotency_key' => $idempotencyKey]);
+            // Replaying a create request returns Stripe's cached response, not the refund's current status.
+            $refund = $refundReference !== ''
+                ? $this->retrieveStripeRefund($refundReference)
+                : $this->createStripeRefund([
+                    'payment_intent' => $this->paymentIntentFromTransaction($transaction),
+                    'amount' => $this->toMinorUnits($amount, (string) $transaction->currency),
+                ], ['idempotency_key' => $idempotencyKey]);
         } catch (ApiErrorException $exception) {
             throw new RuntimeException('Stripe refund failed.', 0, $exception);
         }
@@ -230,6 +233,11 @@ class StripeGateway implements PaymentGateway
     protected function createStripeRefund(array $parameters, array $options): array
     {
         return $this->stripe()->refunds->create($parameters, $options)->toArray();
+    }
+
+    protected function retrieveStripeRefund(string $reference): array
+    {
+        return $this->stripe()->refunds->retrieve($reference)->toArray();
     }
 
     private function metadata(PaymentInstallment $installment, string $reference): array

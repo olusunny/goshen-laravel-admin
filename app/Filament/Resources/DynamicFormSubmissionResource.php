@@ -239,7 +239,10 @@ class DynamicFormSubmissionResource extends Resource
 
         if (is_array($answer) && array_key_exists('file_path', $answer)) {
             $label = e((string) ($answer['original_name'] ?? 'Uploaded file'));
-            $fieldKey = e((string) ($answer['key'] ?? ''));
+            $fieldKey = (string) ($answer['key'] ?? '');
+            if ($record->attachmentForField($fieldKey) === null) {
+                return $label;
+            }
             $url = e(route('dynamic-form-submissions.files.show', [
                 'submission' => $record,
                 'field' => $fieldKey,

@@ -553,7 +553,10 @@ class DynamicFormService
             }
 
             $key = (string) $field->key;
-            $value = $this->decodedAnswerValue($answers[$key] ?? $answers[$field->id] ?? null);
+            $value = $answers[$key] ?? $answers[$field->id] ?? null;
+            if ($field->type === DynamicFormField::TYPE_MULTI_CHOICE) {
+                $value = $this->decodedAnswerValue($value);
+            }
             $file = $this->fieldFile($request, $field);
 
             if ($field->type === DynamicFormField::TYPE_FILE) {
@@ -590,6 +593,13 @@ class DynamicFormService
     {
         $key = $field->key;
         $required = (bool) $field->is_required;
+
+        $validList = $field->type === DynamicFormField::TYPE_MULTI_CHOICE
+            && is_array($value) && array_is_list($value)
+            && collect($value)->every(fn ($item) => is_string($item) || is_numeric($item));
+        if ($value !== null && ! is_scalar($value) && ! $validList) {
+            throw ValidationException::withMessages([$key => "Please enter a valid answer for: {$field->label}"]);
+        }
 
         if ($required && $this->answerIsBlank($value, $field)) {
             throw ValidationException::withMessages([$key => "Please answer: {$field->label}"]);
@@ -849,8 +859,8 @@ class DynamicFormService
         }
 
         foreach ($answers as $key => $answer) {
-            $payload = data_get($answer, 'answer');
-            if (! is_array($payload) || blank($payload['file_path'] ?? null)) {
+            $payload = $submission->attachmentForField((string) $key);
+            if ($payload === null) {
                 continue;
             }
 
