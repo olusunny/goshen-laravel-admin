@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "approved_on": "2026-10-16",
+  "timezone": "Africa/Lagos",
+  "approval": "User approved this prototype as the required design baseline and authorized implementation and deployment.",
+  "laravel_start_commit": "bcbd635a86cefd41c23940b5f94cb09cbfb0ce95",
+  "flutter_start_commit": "9ccdfbe7e0d1072cb5516ed85366d1b3be5b9256",
+  "files": {
+    ".gitattributes": "26271c2bf85c1a1fd0e9a5465e752b82dedd3316aebdb68ba45bda51ba07e0b2",
+    "assets/triumphant.png": "1a2109d0af80fc564677b89c1f39b5bffd3d3eb2cce2e031bd50ec4ca9fa4064",
+    "assets/WorkSans-Bold.ttf": "1d61f4e0a6b17dbd3f981357bf5f395b42d10873afd4dbe11c8cfca4e615a2c2",
+    "assets/WorkSans-Medium.ttf": "356406b4ee68fb30a1bcbaf5af1d6f7f0c57324d93450498008c5ef61c957a3f",
+    "assets/WorkSans-Regular.ttf": "cdbbfbc5f418962864e20ebe30e6125b51df41d3f28822212d6eac137cfa395e",
+    "assets/WorkSans-SemiBold.ttf": "a82e584f5e0f73ebfc097fb85fc6e2a3b960ce70f6ad1e114f11a2eb4298bac5",
+    "hymn-availability-states.png": "75387c3f8c3707342016f6c17aaeb01fc616f44262633697d67797892c5b755d",
+    "hymn-reader-controls.png": "eb7e0241c5b0d6b7adef43443b601a7b3cb5c809e26c6600b08db139c2bbeff9",
+    "hymn-ui-overview.png": "c07dc473a7fdfe1802656dcca302c54329908ec923139c44860c89980336422c",
+    "hymns.js": "8adfc39c045b869ad61aea95cd8331659665d653879acc88589d379731a52cc4",
+    "index.html": "35a966a8298cc481d94817c64131f1ede695504dbbfa77e0513eb3a6c603f000",
+    "phone.css": "cb306ddf40fb3a6f6e9637eecce9426f953879a6f4db81eaa02dfcb544090c3b",
+    "phone.html": "2a16c286ab7c192891a08f1067ef0123153d6e1c40e1a534d876b2f6ef65d02c",
+    "phone.js": "0dc1a808694de4c8517c64de7e418860790911de5aa1b6f8a635312f96c66e62",
+    "README.md": "e5a94995ed2070f3de63754061ab98d5a6a1a205007dff3b5a31310ce9be312a",
+    "review.css": "ea1c77d3818087bb1eeb1b1234b5a797439548af37fd88c2bd4623a358cd3878"
+  }
+}

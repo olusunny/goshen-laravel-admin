@@ -1,0 +1,23 @@
+// Review fixtures only. Source: supplied MFM Hymn book.pdf, PDF pages 4–10 and 45.
+// Not the approved import dataset. The sample does not establish final book counts.
+window.previewHymns = [
+ {id:1,title:'Father, Son, and Holy Ghost',section:'Holy Trinity',author:'Charles Wesley',page:'4',verses:[
+ 'Father, Son, and Holy Ghost,\nOne in Three, and Three in One,\nAs by celestial host,\nLet Thy will on earth be done;\nPraise by all to Thee be given,\nGlorious Lord of earth and heaven.',
+ 'If a sinner such as I\nMay to Thy great glory live,\nAll my actions sanctify,\nAll my words and thoughts receive;\nClaim me for Thy service, claim\nAll I have, and all I am.',
+ "Take my soul and body's powers;\nTake my memory, mind, and will,\nAll my goods, and all my hours,\nAll I know, and all I feel,\nAll I think, or speak, or do;\nTake my heart; but make it new!",
+ "O my God, Thine own I am,\nLet me give Thee back Thine own;\nFreedom, friends, and health, and fame,\nconsecrate to Thee alone;\nThine to live, thrice happy I;\nHappier still if Thine I die.",
+ 'Father, Son, and Holy Ghost,\nOne in Three, and Three in One,\nAs by the celestial host,\nLet Thy will on earth be done;\nPraise by all to Thee be given,\nGlorious Lord of earth and heaven.']},
+ {id:2,title:'Three in One, and One in Three',section:'Holy Trinity',author:'G. Rorison',page:'5',verses:[
+ 'Three in One, and One in Three,\nRuler of the earth and sea,\nHear us, while we lift to thee\nHoly chant and psalm.',
+ 'Light of lights! With morning shine;\nLift on us thy light divine;\nAnd let charity begin\nBreathe on us her balm.',
+ 'Light of lights! when falls the even,\nLet it close on sin forgiven;\nFold us in the peace of heaven;\nShed a holy calm.',
+ 'Three in One and One in Three,\nDimly here we worship thee;\nWith the saints hereafter we\nHope to bear the palm.']},
+ {id:3,title:'We give immortal praise',section:'Holy Trinity',author:'Isaac Watts',page:'5–6',verses:['We give immortal praise\nTo God the Father\'s love,\nFor all our comforts here,\nAnd better hopes above.\nHe sent His own eternal Son,\nTo die for sins that man had done.']},
+ {id:4,title:'Glory be to God the Father',section:'Holy Trinity',author:'W. G. Whinfield',page:'6',verses:['Glory be to God the Father\nGlory be to God the Son,\nGlory be to God the Spirit,\nGreat Jehovah, Three in One:\nGlory, glory,\nWhile eternal ages run!']},
+ {id:5,title:'God is in His temple',section:'Holy Trinity',author:'William Tidd Matson',page:'6–7',verses:['God is in His temple\nThe Almighty Father;\nRound His footstool let us gather:\nHim with adoration\nServe, the Lord most holy,\nWho hath mercy on the lowly;\nLet us raise\nHymns of praise\nFor His great salvation:\nGod is in His temple']},
+ {id:6,title:'Hail! holy, holy, holy Lord!',section:'Holy Trinity',author:'Charles Wesley',page:'7–8',verses:['Hail! holy, holy, holy Lord!\nWhom One in Three we know;\nBy all Thy heavenly host adored,\nBy all Thy Church below.']},
+ {id:7,title:'Father of heaven, whose love profound',section:'Holy Trinity',author:'Edward Cooper',page:'8',verses:['Father of heaven, whose love profound\nA ransom for our souls hath found,\nBefore Thy throne we sinners bend;\nTo us Thy pardoning love extend.']},
+ {id:8,title:'Come, Thou Almighty King',section:'Holy Trinity',author:'Source unknown',page:'8–9',verses:['Come, Thou Almighty King,\nHelp us Thy name to sing,\nHelp us to praise:\nFather! all - glorious,\nO’er all victorious,\nCome, and reign over us,\nAncient of Days.']},
+ {id:9,title:'A mighty fortress is our God',section:'Worship and adoration',author:null,page:'9–10',verses:['A mighty fortress is our God,\nA bulwark never failing;\nOur helper He amid the flood\nOf mortal ills prevailing.']},
+ {id:55,title:'To God be the glory',section:'Praise and thanksgiving',author:'Fanny J. Crosby',page:'45',verses:['To God be the glory great things He hath done!\nSo loved He the world that He gave us His Son,\nWho yielded His life an atonement for sin\nAnd opened the Life-gate that all may go in.','O perfect redemption, the purchase of blood!\nTo ev’ry believer the promise of God;\nThe vilest offender who truly believes,\nThat moment from Jesus a pardon receives.','Great things He hath taught us, great things He hath done,\nAnd great our rejoicing thru Jesus the Son:\nBut purer and higher and greater will be\nOur wonder, our transport, when Jesus we see.'],chorus:'Praise the Lord, praise the Lord,\nLet the earth hear His voice!\nPraise the Lord, praise the Lord,\nLet the people rejoice!\nO come to the Father, thro’ Jesus the Son,\nAnd give Him the glory, great things He hath done.'}
+];
