@@ -1,8 +1,10 @@
 # Installable digital hymn add-on implementation plan
 
-Date: 2026-10-16. Status: design approved; implementation and production deployment authorized by the user. Ask the user to connect an Android phone when the implementation/build is ready for native acceptance. The supplied signed-in admin browser is available for admin acceptance.
+Date: 2026-10-16. Status: implemented, pushed and deployed; production admin/API and physical Android acceptance completed. Backend code release is `682bc18`; final installed Flutter release is `4960477`. Detailed results and remaining platform limits are in `docs/hymns/implementation-2026-10-16.md`. The sections below retain the approved implementation contract and original starting-point analysis.
 
 UI review v1 is available at `docs/design-previews/hymn-addon/index.html`, with screen exports and native handoff notes in the same directory. It demonstrates the approved Flutter library, A-Z, reader/chorus, preferences, saved hymns and download/availability states using ten sample hymns. The browser prototype passed 54 scoped checks. The user approved this exact design and requested no reduction in quality. Preserve the original prototype and its checksum manifest for comparison with native renders. Native implementation and full PDF-to-JSON conversion begin under this authorization.
+
+Owner amendment during physical Android review, 2026-10-16: remove the hymn-specific light/dark button and saved theme override. The main application's appearance setting is authoritative for the hymn library, reader and dialogs. The original frozen prototype remains historical evidence; this explicit amendment supersedes its independent theme control. Verify options-sheet text/background contrast in both app modes, including phones retaining the old hymn theme preference.
 
 ## Confirmed direction
 
@@ -11,6 +13,7 @@ UI review v1 is available at `docs/design-previews/hymn-addon/index.html`, with 
 - First convert the supplied PDF into validated, reviewed JSON. Complete this conversion stage before importing hymn records into Laravel.
 - Provide searchable lyrics, hymn-number lookup, and A-Z browsing.
 - Include adjustable font size and optional auto-scroll with speed and pause/resume controls in the Flutter reader.
+- Follow the main application's light/dark mode throughout the hymn feature, without a separate theme button.
 - Release lyrics first. Approved audio can be added later.
 - The supplied PDF is an import/reference source. An embedded PDF, PDF reader, and new PDF export are outside this plan following the user's clarification.
 - Hymn reading is available in the native Flutter apps only. Laravel provides administration, storage, publication, and API/download services; there is no member-facing web hymn reader or navigation. Offline reading follows the existing Bible download-to-SQLite approach.
@@ -224,6 +227,6 @@ When approved recordings are available, attach an optional existing `MediaItem` 
 
 Do not generate singing or treat Bible text-to-speech as a hymn recording. Multiple performances, synchronized karaoke lyrics, music notation, and bulk offline audio are not first-release requirements. The updated user request has removed PDF embedding and PDF export from scope.
 
-## Next authorization boundary
+## Completion and next authorization boundary
 
-The user approved the design and authorized implementation/deployment on 2026-10-16. Start with Stage 1: PDF-to-JSON conversion, validation, and editorial review, then build the installable backend and Flutter integration. Database import follows completion of Stage 1. Resolve uncertain lyrics and numbering against the source and present any remaining ambiguous corrections for editorial decision. Ask for a connected Android phone when ready for native acceptance. Keep the goal active until the required implementation, deployment, admin acceptance and native checks are evidenced.
+The user approved the design and authorized implementation/deployment on 2026-10-16. The PDF-to-JSON conversion and editorial decisions were approved before import/publication. Stages 1–5 have completed the production admin/API and Android acceptance gates, including offline reading, reconnect deactivation, reactivation without data loss, and the main-app appearance amendment. iOS/TalkBack and store publication are not certified. Approved audio remains a later phase requiring recordings and separate direction. No additional implementation is authorized by this completed plan.
