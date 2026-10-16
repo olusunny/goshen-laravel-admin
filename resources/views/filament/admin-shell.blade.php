@@ -94,6 +94,7 @@
 
         .fi-simple-main {
             width: min(100%, 29rem);
+            padding: 0;
             margin-block: clamp(1rem, 7vh, 3.25rem);
             border: 1px solid rgba(255, 255, 255, .64);
             border-radius: 1rem;
@@ -104,34 +105,33 @@
 
         .fi-simple-main .fi-simple-header {
             gap: .75rem;
-            padding: clamp(1.75rem, 5vw, 2.5rem) clamp(1.5rem, 5vw, 2.5rem) 0;
+            padding: 1.5rem;
+            background: #143c33;
         }
 
         .fi-simple-main .fi-logo {
             display: grid;
-            width: 4.25rem;
-            height: 4.25rem;
+            width: 8rem;
+            height: 7rem !important;
             place-items: center;
-            border: 1px solid rgba(198, 137, 17, .26);
-            border-radius: 50%;
-            background: #fffaf0;
-            box-shadow: 0 .75rem 1.75rem rgba(31, 52, 45, .14);
+            background: #143c33;
+            forced-color-adjust: none;
         }
 
         .fi-simple-main .fi-logo .com-admin-logo-image {
-            width: 3rem;
-            height: 3rem;
+            width: 100%;
+            height: 100%;
             object-fit: contain;
         }
 
         .fi-simple-main .fi-logo .com-admin-logo-mark {
-            color: #17352d;
+            color: #fff;
             font-size: .875rem;
             font-weight: 800;
         }
 
         .fi-simple-main .fi-simple-header-heading {
-            color: #17352d;
+            color: #fff;
             font-size: clamp(1.75rem, 5vw, 2.25rem);
             font-weight: 750;
             letter-spacing: 0;
@@ -880,6 +880,24 @@
         border-bottom: 1px solid var(--goshen-admin-topbar-border);
         background: var(--goshen-admin-topbar) !important;
         box-shadow: 0 1px 2px rgba(80, 56, 20, .04), 0 4px 16px rgba(80, 56, 20, .035);
+    }
+
+    .fi-topbar .fi-logo {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 3.25rem !important;
+        padding: .25rem .75rem;
+        border-radius: .5rem;
+        background: #143c33;
+        color: #fff;
+        forced-color-adjust: none;
+    }
+
+    .fi-topbar .fi-logo .com-admin-logo-image {
+        width: auto;
+        height: 100%;
+        object-fit: contain;
     }
 
     html:not(.dark) .fi-topbar .fi-icon-btn {
