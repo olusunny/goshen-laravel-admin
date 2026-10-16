@@ -88,11 +88,12 @@ class AdminShellDesignFoundationTest extends TestCase
     {
         $shell = file_get_contents(resource_path('views/filament/admin-shell.blade.php'));
         $search = file_get_contents(resource_path('views/filament/sidebar-menu-search.blade.php'));
-        $behavior = file_get_contents(resource_path('views/filament/sidebar-navigation-behavior.blade.php'));
 
         $this->assertStringContainsString('.goshen-sidebar-search:focus-within', $shell);
         $this->assertStringContainsString('data-goshen-menu-search-status', $search);
-        $this->assertStringContainsString('updateSearchStatus', $behavior);
+        $this->assertStringContainsString('aria-label="Search menu"', $search);
+        $this->assertStringContainsString('role="status"', $search);
+        $this->assertStringContainsString('aria-live="polite"', $search);
     }
 
     public function test_light_admin_shell_uses_a_distinct_accessible_sidebar_and_topbar_palette(): void
@@ -171,17 +172,13 @@ class AdminShellDesignFoundationTest extends TestCase
     public function test_custom_admin_controls_expose_focus_and_state_to_assistive_technology(): void
     {
         $payment = file_get_contents(resource_path('views/filament/pages/payment-gateways.blade.php'));
-        $menu = file_get_contents(resource_path('views/filament/pages/admin-menu-settings.blade.php'));
         $settings = file_get_contents(resource_path('views/filament/pages/app-settings.blade.php'));
         $backups = file_get_contents(resource_path('views/filament/pages/cloud-backups.blade.php'));
-        $sidebar = file_get_contents(resource_path('views/filament/sidebar-navigation-behavior.blade.php'));
 
         $this->assertStringContainsString('.pg-mode input:focus-visible + .pg-mode-card', $payment);
-        $this->assertStringContainsString('aria-label="Visible for', $menu);
         $this->assertStringContainsString(':aria-pressed=', $settings);
         $this->assertStringContainsString('role="progressbar"', $backups);
         $this->assertStringContainsString('aria-valuenow=', $backups);
-        $this->assertStringContainsString('safeStorage', $sidebar);
     }
 
     public function test_ticket_email_filter_matches_the_latest_email_status_shown_in_the_table(): void

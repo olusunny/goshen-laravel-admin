@@ -59,3 +59,14 @@ test('a failed search hides every group and announces no matches', () => {
     assert.equal(ui.status.textContent, 'No matching menu items.')
     assert.equal(ui.groups.every(group => group.classList.contains('goshen-nav-hidden')), true)
 })
+
+test('search announces a single result and clearing it restores the full menu', () => {
+    const ui = sidebar()
+    ui.search('Ticket PDF')
+    assert.equal(ui.status.textContent, '1 menu item shown.')
+    ui.search('   ')
+    assert.equal(ui.status.textContent, '')
+    assert.equal(ui.groups.every(group => !group.classList.contains('goshen-nav-hidden')), true)
+    assert.equal(ui.groups.flatMap(group => group.items).every(item => !item.classList.contains('goshen-nav-hidden')), true)
+    assert.equal(ui.store.collapsedGroups.join(','), 'Settings,Goshen Retreat')
+})
