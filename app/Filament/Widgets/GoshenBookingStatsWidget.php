@@ -21,7 +21,7 @@ class GoshenBookingStatsWidget extends Widget
 
     protected int|string|array $columnSpan = 'full';
 
-    protected static ?int $sort = -80;
+    protected static ?int $sort = -95;
 
     public static function canView(): bool
     {
