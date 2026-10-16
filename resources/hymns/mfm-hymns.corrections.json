@@ -1,0 +1,15 @@
+{
+  "source_sha256": "0d4114c3fe40d3333c6be3eb3133840e2ac856a7b4349c35df8735d6c5eb2b9b",
+  "corrections": [
+    {
+      "issue_id": "mfm-p0833-l036:printed_number",
+      "source_key": "mfm-p0833-l036",
+      "field": "number",
+      "original": "1064",
+      "proposed": "1115",
+      "source_page": 833,
+      "decision": "pending",
+      "reviewer": null
+    }
+  ]
+}

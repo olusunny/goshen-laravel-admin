@@ -26,6 +26,7 @@ class ListAddons extends ListRecords
             Actions\Action::make('uploadAddon')
                 ->label('Upload add-on ZIP')
                 ->icon('heroicon-o-arrow-up-tray')
+                ->authorize(fn (): bool => AddonResource::canViewAny())
                 ->form([
                     Forms\Components\FileUpload::make('zip')
                         ->label('Add-on ZIP')
@@ -35,13 +36,14 @@ class ListAddons extends ListRecords
                         ->required(),
                 ])
                 ->action(function (array $data): void {
+                    abort_unless(AddonResource::canViewAny(), 403);
                     try {
                         $absolutePath = $this->storeUploadedZipForInstall($data['zip'] ?? null);
 
-                        app(AddonLifecycleService::class)->installFromZip($absolutePath, Auth::user());
+                        $addon = app(AddonLifecycleService::class)->installFromZip($absolutePath, Auth::user());
 
                         Notification::make()
-                            ->title('Add-on installed and activated')
+                            ->title($addon->isActive() ? 'Add-on installed and activated' : 'Add-on installed; awaiting activation')
                             ->success()
                             ->send();
                     } catch (Throwable $exception) {

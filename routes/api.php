@@ -24,6 +24,16 @@ use App\Http\Controllers\Api\V1\CommunityPrayerRequestController;
 use App\Http\Middleware\AuthenticateMobileApiToken;
 use Illuminate\Support\Facades\Route;
 
+Route::prefix('v1/hymns')->name('hymns.')->middleware('throttle:120,1')->group(function (): void {
+    Route::get('status', [\App\Http\Controllers\Api\PublicHymnController::class, 'status'])->name('status');
+    Route::get('books', [\App\Http\Controllers\Api\PublicHymnController::class, 'books'])->name('books');
+    Route::get('books/{bookId}/manifest', [\App\Http\Controllers\Api\PublicHymnController::class, 'manifest'])->whereNumber('bookId')->name('manifest');
+    Route::get('books/{bookId}/download/{revision}', [\App\Http\Controllers\Api\PublicHymnController::class, 'download'])
+        ->whereNumber('bookId')->where('revision', '[A-Za-z0-9-]{1,80}')->name('download');
+    Route::get('/', [\App\Http\Controllers\Api\PublicHymnController::class, 'index'])->name('index');
+    Route::get('{id}', [\App\Http\Controllers\Api\PublicHymnController::class, 'show'])->whereNumber('id')->name('show');
+});
+
 Route::match(['get', 'post'], 'saveDonation', [RetiredFeatureController::class, 'manualDonation']);
 Route::match(['get', 'post'], 'donation_accounts', [RetiredFeatureController::class, 'manualDonation']);
 Route::match(['get', 'post'], 'accommodations/{any?}', [RetiredFeatureController::class, 'accommodationBooking'])

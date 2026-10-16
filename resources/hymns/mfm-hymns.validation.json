@@ -1,0 +1,1526 @@
+{
+  "schema_version": 1,
+  "source_sha256": "0d4114c3fe40d3333c6be3eb3133840e2ac856a7b4349c35df8735d6c5eb2b9b",
+  "hymns": 1505,
+  "sections": 33,
+  "stanzas": 6763,
+  "source_lines": 45073,
+  "assigned_lines": 45073,
+  "unassigned_lines": [],
+  "multiply_assigned_lines": [],
+  "empty_stanzas": 0,
+  "number_range": [
+    1,
+    1505
+  ],
+  "unique_source_keys": 1505,
+  "unique_numbers": 1505,
+  "issue_counts": {
+    "warning": 106,
+    "blocking": 1
+  },
+  "issues": [
+    {
+      "id": "mfm-p0030-l001:source_verse_numbering:0",
+      "hymn_number": 37,
+      "source_key": "mfm-p0030-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0087-l026:source_verse_numbering:0",
+      "hymn_number": 116,
+      "source_key": "mfm-p0087-l026",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1,
+        2,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0102-l008:source_verse_numbering:0",
+      "hymn_number": 138,
+      "source_key": "mfm-p0102-l008",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        1,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0142-l033:source_verse_numbering:0",
+      "hymn_number": 195,
+      "source_key": "mfm-p0142-l033",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0184-l001:source_verse_numbering:0",
+      "hymn_number": 253,
+      "source_key": "mfm-p0184-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0188-l025:source_verse_numbering:0",
+      "hymn_number": 259,
+      "source_key": "mfm-p0188-l025",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0205-l003:redundant_verse_marker:0",
+      "hymn_number": 281,
+      "source_key": "mfm-p0205-l003",
+      "code": "redundant_verse_marker",
+      "severity": "warning",
+      "page": 205,
+      "line": 19,
+      "text": "3"
+    },
+    {
+      "id": "mfm-p0205-l003:source_verse_numbering:1",
+      "hymn_number": 281,
+      "source_key": "mfm-p0205-l003",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0215-l025:source_verse_numbering:0",
+      "hymn_number": 296,
+      "source_key": "mfm-p0215-l025",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0217-l016:redundant_verse_marker:0",
+      "hymn_number": 298,
+      "source_key": "mfm-p0217-l016",
+      "code": "redundant_verse_marker",
+      "severity": "warning",
+      "page": 217,
+      "line": 38,
+      "text": "4"
+    },
+    {
+      "id": "mfm-p0219-l029:source_verse_numbering:0",
+      "hymn_number": 301,
+      "source_key": "mfm-p0219-l029",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0231-l015:redundant_verse_marker:0",
+      "hymn_number": 316,
+      "source_key": "mfm-p0231-l015",
+      "code": "redundant_verse_marker",
+      "severity": "warning",
+      "page": 231,
+      "line": 35,
+      "text": "3"
+    },
+    {
+      "id": "mfm-p0241-l001:source_verse_numbering:0",
+      "hymn_number": 329,
+      "source_key": "mfm-p0241-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0242-l034:source_verse_numbering:0",
+      "hymn_number": 331,
+      "source_key": "mfm-p0242-l034",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0252-l030:source_verse_numbering:0",
+      "hymn_number": 344,
+      "source_key": "mfm-p0252-l030",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1,
+        2,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0256-l001:redundant_verse_marker:0",
+      "hymn_number": 349,
+      "source_key": "mfm-p0256-l001",
+      "code": "redundant_verse_marker",
+      "severity": "warning",
+      "page": 256,
+      "line": 25,
+      "text": "4"
+    },
+    {
+      "id": "mfm-p0257-l016:stray_number:0",
+      "hymn_number": 351,
+      "source_key": "mfm-p0257-l016",
+      "code": "stray_number",
+      "severity": "warning",
+      "page": 257,
+      "line": 29,
+      "text": "132"
+    },
+    {
+      "id": "mfm-p0270-l028:source_verse_numbering:0",
+      "hymn_number": 368,
+      "source_key": "mfm-p0270-l028",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0280-l001:source_verse_numbering:0",
+      "hymn_number": 381,
+      "source_key": "mfm-p0280-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0282-l007:redundant_verse_marker:0",
+      "hymn_number": 384,
+      "source_key": "mfm-p0282-l007",
+      "code": "redundant_verse_marker",
+      "severity": "warning",
+      "page": 282,
+      "line": 17,
+      "text": "3"
+    },
+    {
+      "id": "mfm-p0284-l006:source_verse_numbering:0",
+      "hymn_number": 387,
+      "source_key": "mfm-p0284-l006",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0304-l028:redundant_verse_marker:0",
+      "hymn_number": 414,
+      "source_key": "mfm-p0304-l028",
+      "code": "redundant_verse_marker",
+      "severity": "warning",
+      "page": 305,
+      "line": 8,
+      "text": "3"
+    },
+    {
+      "id": "mfm-p0314-l036:redundant_verse_marker:0",
+      "hymn_number": 427,
+      "source_key": "mfm-p0314-l036",
+      "code": "redundant_verse_marker",
+      "severity": "warning",
+      "page": 315,
+      "line": 13,
+      "text": "4"
+    },
+    {
+      "id": "mfm-p0314-l036:source_verse_numbering:1",
+      "hymn_number": 427,
+      "source_key": "mfm-p0314-l036",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0332-l003:source_verse_numbering:0",
+      "hymn_number": 448,
+      "source_key": "mfm-p0332-l003",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        5,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0339-l013:source_verse_numbering:0",
+      "hymn_number": 457,
+      "source_key": "mfm-p0339-l013",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0348-l033:source_verse_numbering:0",
+      "hymn_number": 470,
+      "source_key": "mfm-p0348-l033",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0358-l032:source_verse_numbering:0",
+      "hymn_number": 483,
+      "source_key": "mfm-p0358-l032",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0359-l019:redundant_verse_marker:0",
+      "hymn_number": 484,
+      "source_key": "mfm-p0359-l019",
+      "code": "redundant_verse_marker",
+      "severity": "warning",
+      "page": 359,
+      "line": 33,
+      "text": "4"
+    },
+    {
+      "id": "mfm-p0371-l008:source_verse_numbering:0",
+      "hymn_number": 498,
+      "source_key": "mfm-p0371-l008",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0381-l014:redundant_verse_marker:0",
+      "hymn_number": 510,
+      "source_key": "mfm-p0381-l014",
+      "code": "redundant_verse_marker",
+      "severity": "warning",
+      "page": 381,
+      "line": 24,
+      "text": "2"
+    },
+    {
+      "id": "mfm-p0381-l014:source_verse_numbering:1",
+      "hymn_number": 510,
+      "source_key": "mfm-p0381-l014",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0383-l001:redundant_verse_marker:0",
+      "hymn_number": 512,
+      "source_key": "mfm-p0383-l001",
+      "code": "redundant_verse_marker",
+      "severity": "warning",
+      "page": 383,
+      "line": 20,
+      "text": "3"
+    },
+    {
+      "id": "mfm-p0390-l034:source_verse_numbering:0",
+      "hymn_number": 522,
+      "source_key": "mfm-p0390-l034",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0396-l034:redundant_verse_marker:0",
+      "hymn_number": 529,
+      "source_key": "mfm-p0396-l034",
+      "code": "redundant_verse_marker",
+      "severity": "warning",
+      "page": 397,
+      "line": 24,
+      "text": "4"
+    },
+    {
+      "id": "mfm-p0414-l028:source_verse_numbering:0",
+      "hymn_number": 554,
+      "source_key": "mfm-p0414-l028",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0419-l016:source_verse_numbering:0",
+      "hymn_number": 560,
+      "source_key": "mfm-p0419-l016",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0429-l035:source_verse_numbering:0",
+      "hymn_number": 575,
+      "source_key": "mfm-p0429-l035",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        1,
+        2,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0476-l026:source_verse_numbering:0",
+      "hymn_number": 633,
+      "source_key": "mfm-p0476-l026",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0481-l012:source_verse_numbering:0",
+      "hymn_number": 639,
+      "source_key": "mfm-p0481-l012",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        2,
+        2,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0481-l036:source_verse_numbering:0",
+      "hymn_number": 640,
+      "source_key": "mfm-p0481-l036",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0483-l025:source_verse_numbering:0",
+      "hymn_number": 643,
+      "source_key": "mfm-p0483-l025",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0489-l007:source_verse_numbering:0",
+      "hymn_number": 651,
+      "source_key": "mfm-p0489-l007",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0495-l001:source_verse_numbering:0",
+      "hymn_number": 658,
+      "source_key": "mfm-p0495-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1,
+        2,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0502-l032:source_verse_numbering:0",
+      "hymn_number": 667,
+      "source_key": "mfm-p0502-l032",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0506-l016:source_verse_numbering:0",
+      "hymn_number": 673,
+      "source_key": "mfm-p0506-l016",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0507-l003:source_verse_numbering:0",
+      "hymn_number": 674,
+      "source_key": "mfm-p0507-l003",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0575-l024:source_verse_numbering:0",
+      "hymn_number": 772,
+      "source_key": "mfm-p0575-l024",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0598-l017:source_verse_numbering:0",
+      "hymn_number": 805,
+      "source_key": "mfm-p0598-l017",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0599-l021:source_verse_numbering:0",
+      "hymn_number": 806,
+      "source_key": "mfm-p0599-l021",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1,
+        4,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0602-l001:source_verse_numbering:0",
+      "hymn_number": 809,
+      "source_key": "mfm-p0602-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0603-l031:source_verse_numbering:0",
+      "hymn_number": 811,
+      "source_key": "mfm-p0603-l031",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0645-l025:source_verse_numbering:0",
+      "hymn_number": 869,
+      "source_key": "mfm-p0645-l025",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0662-l028:source_verse_numbering:0",
+      "hymn_number": 893,
+      "source_key": "mfm-p0662-l028",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0664-l026:source_verse_numbering:0",
+      "hymn_number": 896,
+      "source_key": "mfm-p0664-l026",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        2,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0666-l025:source_verse_numbering:0",
+      "hymn_number": 899,
+      "source_key": "mfm-p0666-l025",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        2,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0684-l019:source_verse_numbering:0",
+      "hymn_number": 922,
+      "source_key": "mfm-p0684-l019",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0692-l011:source_verse_numbering:0",
+      "hymn_number": 933,
+      "source_key": "mfm-p0692-l011",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0714-l001:source_verse_numbering:0",
+      "hymn_number": 960,
+      "source_key": "mfm-p0714-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0716-l005:source_verse_numbering:0",
+      "hymn_number": 963,
+      "source_key": "mfm-p0716-l005",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0745-l029:source_verse_numbering:0",
+      "hymn_number": 999,
+      "source_key": "mfm-p0745-l029",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0765-l001:source_verse_numbering:0",
+      "hymn_number": 1026,
+      "source_key": "mfm-p0765-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0773-l001:source_verse_numbering:0",
+      "hymn_number": 1038,
+      "source_key": "mfm-p0773-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0775-l005:source_verse_numbering:0",
+      "hymn_number": 1041,
+      "source_key": "mfm-p0775-l005",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        5
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0777-l022:source_verse_numbering:0",
+      "hymn_number": 1044,
+      "source_key": "mfm-p0777-l022",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        1,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0800-l010:source_verse_numbering:0",
+      "hymn_number": 1073,
+      "source_key": "mfm-p0800-l010",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        3,
+        5
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0833-l036:printed_number",
+      "hymn_number": 1115,
+      "source_key": "mfm-p0833-l036",
+      "code": "printed_number_correction",
+      "severity": "blocking",
+      "page": 833,
+      "printed": "1064",
+      "proposed": "1115",
+      "message": "Second printed 1064 is between hymns 1114 and 1116; proposed 1115."
+    },
+    {
+      "id": "mfm-p0834-l026:source_verse_numbering:0",
+      "hymn_number": 1116,
+      "source_key": "mfm-p0834-l026",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0840-l001:source_verse_numbering:0",
+      "hymn_number": 1123,
+      "source_key": "mfm-p0840-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0844-l024:source_verse_numbering:0",
+      "hymn_number": 1129,
+      "source_key": "mfm-p0844-l024",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1,
+        2,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0851-l017:source_verse_numbering:0",
+      "hymn_number": 1138,
+      "source_key": "mfm-p0851-l017",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        2,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0888-l025:source_verse_numbering:0",
+      "hymn_number": 1188,
+      "source_key": "mfm-p0888-l025",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0898-l002:source_verse_numbering:0",
+      "hymn_number": 1202,
+      "source_key": "mfm-p0898-l002",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        1,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0904-l002:source_verse_numbering:0",
+      "hymn_number": 1211,
+      "source_key": "mfm-p0904-l002",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        1,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0905-l001:source_verse_numbering:0",
+      "hymn_number": 1212,
+      "source_key": "mfm-p0905-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        1,
+        2,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0910-l030:source_verse_numbering:0",
+      "hymn_number": 1220,
+      "source_key": "mfm-p0910-l030",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0912-l002:source_verse_numbering:0",
+      "hymn_number": 1222,
+      "source_key": "mfm-p0912-l002",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0923-l021:source_verse_numbering:0",
+      "hymn_number": 1239,
+      "source_key": "mfm-p0923-l021",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0928-l001:source_verse_numbering:0",
+      "hymn_number": 1246,
+      "source_key": "mfm-p0928-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0930-l001:source_verse_numbering:0",
+      "hymn_number": 1249,
+      "source_key": "mfm-p0930-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0930-l027:source_verse_numbering:0",
+      "hymn_number": 1250,
+      "source_key": "mfm-p0930-l027",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0939-l027:source_verse_numbering:0",
+      "hymn_number": 1266,
+      "source_key": "mfm-p0939-l027",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0957-l015:source_verse_numbering:0",
+      "hymn_number": 1293,
+      "source_key": "mfm-p0957-l015",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0965-l024:source_verse_numbering:0",
+      "hymn_number": 1304,
+      "source_key": "mfm-p0965-l024",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0969-l017:source_verse_numbering:0",
+      "hymn_number": 1308,
+      "source_key": "mfm-p0969-l017",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0974-l036:source_verse_numbering:0",
+      "hymn_number": 1316,
+      "source_key": "mfm-p0974-l036",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        1,
+        2,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0976-l025:source_verse_numbering:0",
+      "hymn_number": 1319,
+      "source_key": "mfm-p0976-l025",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        2,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p0997-l018:source_verse_numbering:0",
+      "hymn_number": 1345,
+      "source_key": "mfm-p0997-l018",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1015-l027:source_verse_numbering:0",
+      "hymn_number": 1367,
+      "source_key": "mfm-p1015-l027",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1020-l012:source_verse_numbering:0",
+      "hymn_number": 1373,
+      "source_key": "mfm-p1020-l012",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        5
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1024-l005:source_verse_numbering:0",
+      "hymn_number": 1379,
+      "source_key": "mfm-p1024-l005",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        3,
+        2,
+        2,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1034-l020:source_verse_numbering:0",
+      "hymn_number": 1391,
+      "source_key": "mfm-p1034-l020",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1050-l035:numbered_chorus:0",
+      "hymn_number": 1412,
+      "source_key": "mfm-p1050-l035",
+      "code": "numbered_chorus",
+      "severity": "warning",
+      "page": 1051,
+      "label": 5
+    },
+    {
+      "id": "mfm-p1050-l035:source_verse_numbering:1",
+      "hymn_number": 1412,
+      "source_key": "mfm-p1050-l035",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        6
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1061-l012:source_verse_numbering:0",
+      "hymn_number": 1425,
+      "source_key": "mfm-p1061-l012",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        2,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1062-l004:source_verse_numbering:0",
+      "hymn_number": 1426,
+      "source_key": "mfm-p1062-l004",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1072-l015:source_verse_numbering:0",
+      "hymn_number": 1439,
+      "source_key": "mfm-p1072-l015",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        2
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1075-l036:source_verse_numbering:0",
+      "hymn_number": 1443,
+      "source_key": "mfm-p1075-l036",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1080-l012:source_verse_numbering:0",
+      "hymn_number": 1449,
+      "source_key": "mfm-p1080-l012",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1090-l034:source_verse_numbering:0",
+      "hymn_number": 1462,
+      "source_key": "mfm-p1090-l034",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        1,
+        2,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1092-l034:source_verse_numbering:0",
+      "hymn_number": 1464,
+      "source_key": "mfm-p1092-l034",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        17
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1095-l005:source_verse_numbering:0",
+      "hymn_number": 1466,
+      "source_key": "mfm-p1095-l005",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1101-l006:source_verse_numbering:0",
+      "hymn_number": 1474,
+      "source_key": "mfm-p1101-l006",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        3,
+        4
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1101-l035:source_verse_numbering:0",
+      "hymn_number": 1475,
+      "source_key": "mfm-p1101-l035",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        1
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1117-l027:source_verse_numbering:0",
+      "hymn_number": 1497,
+      "source_key": "mfm-p1117-l027",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1121-l001:source_verse_numbering:0",
+      "hymn_number": 1501,
+      "source_key": "mfm-p1121-l001",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        1,
+        2,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    },
+    {
+      "id": "mfm-p1122-l031:source_verse_numbering:0",
+      "hymn_number": 1503,
+      "source_key": "mfm-p1122-l031",
+      "code": "source_verse_numbering",
+      "severity": "warning",
+      "labels": [
+        1,
+        2,
+        3,
+        4,
+        3
+      ],
+      "message": "Source order and printed stanza labels retained. Do not reorder silently."
+    }
+  ],
+  "publication_ready": false
+}

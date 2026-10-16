@@ -1,0 +1,2 @@
+# Keep the approved import bytes stable across Windows and Linux deployments.
+*.json -text

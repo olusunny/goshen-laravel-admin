@@ -14,6 +14,7 @@ class ListHymns extends ListRecords
     {
         return [
             Actions\CreateAction::make(),
+            ...HymnResource::administration()->actions(),
         ];
     }
 }

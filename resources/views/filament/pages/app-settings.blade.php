@@ -162,7 +162,6 @@
                             'fundraisingEnabled' => ['Project support', 'Show fundraising/project support campaigns.'],
                             'prayerPointsEnabled' => ['Prayer points', 'Show church prayer points content.'],
                             'interactivePrayerWallEnabled' => ['Interactive prayer wall', 'Allow prayer wall reading, posting, and responses.'],
-                            'hymnsEnabled' => ['Hymns', 'Show hymns in the mobile app.'],
                             'devotionalsEnabled' => ['Devotional', 'Show devotional content and devotional notifications.'],
                             'verseOfDayEnabled' => ['Verse of the day', 'Show the daily Bible verse card.'],
                             'transportationArrangementsEnabled' => ['Transportation arrangement', 'Show transport arrangement information.'],
@@ -183,6 +182,23 @@
                                 </span>
                             </label>
                         @endforeach
+                    </div>
+                    <div class="ash-field" style="margin-top: 1.25rem;">
+                        <strong class="ash-label">Digital Hymn Book</strong>
+                        <p class="ash-muted">
+                            @if (($hymnStatus['reason'] ?? '') === 'release_error')
+                                The published download needs recovery. A hymn publisher can create a new revision from the reviewed database records.
+                            @elseif ($hymnStatus['enabled'] ?? false)
+                                Available in the Flutter apps. Installation and activation are controlled in Add-ons.
+                            @elseif ($hymnStatus['addon_active'] ?? false)
+                                Active. Prepare and publish a reviewed book from Hymns to make it available in the Flutter apps.
+                            @else
+                                Inactive. Install or activate Digital Hymn Book from Add-ons.
+                            @endif
+                        </p>
+                        @if ($canManageAddons)
+                            <a class="ash-label" href="{{ \App\Filament\Resources\AddonResource::getUrl('index') }}">Manage add-ons →</a>
+                        @endif
                     </div>
                 </section>
                 @endif

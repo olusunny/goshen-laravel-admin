@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "package_key": "church-tools.digital-hymn-book",
+  "composer_name": "church-tools/digital-hymn-book-addon",
+  "name": "Digital Hymn Book",
+  "description": "Structured hymn editing, reviewed imports, publication and offline Flutter lyrics.",
+  "version": "1.0.0",
+  "minimum_php": "8.4",
+  "minimum_laravel": "12.0",
+  "maximum_laravel": "12.99.99",
+  "host_hymn_api_version": 1,
+  "provider": "ChurchTools\\DigitalHymnBook\\DigitalHymnBookServiceProvider",
+  "namespace": "ChurchTools\\DigitalHymnBook\\",
+  "autoload_psr4": { "ChurchTools\\DigitalHymnBook\\": "src/" },
+  "migrations_path": "database/migrations",
+  "seeders": ["ChurchTools\\DigitalHymnBook\\Database\\Seeders\\HymnPermissionSeeder"],
+  "permissions": ["manage_hymn", "publish_hymn"],
+  "capabilities": { "digital_hymn_book": { "permissions": [] } },
+  "activate_on_install": false,
+  "supports_disable": true,
+  "supports_uninstall": true,
+  "supports_update": true
+}

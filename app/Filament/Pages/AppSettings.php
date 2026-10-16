@@ -75,7 +75,8 @@ class AppSettings extends Page
 
     public bool $interactivePrayerWallEnabled = true;
 
-    public bool $hymnsEnabled = true;
+    /** Retained for stale client snapshots; the add-on owns availability now. */
+    public bool $hymnsEnabled = false;
 
     public bool $devotionalsEnabled = true;
 
@@ -177,6 +178,8 @@ class AppSettings extends Page
             $sections['other'] = ['label' => 'Other settings', 'note' => 'Super Admin maintenance', 'icon' => 'heroicon-o-ellipsis-horizontal-circle'];
         }
         return ['sections' => $sections, 'quickLinks' => AdminMenuRegistry::settingsQuickLinks(),
+            'hymnStatus' => AppSettingsSections::canManage('features') ? app(\App\Services\Hymns\HymnAddon::class)->adminStatus() : null,
+            'canManageAddons' => \App\Filament\Resources\AddonResource::canViewAny(),
             'additionalSettingGroups' => AdminAccessService::isSuperAdmin() ? $this->additionalSettingGroups() : []];
     }
 
@@ -278,7 +281,9 @@ class AppSettings extends Page
 
     private function managedSettingKeys(): array
     {
-        return array_column(AppSettingsSections::fields(), 'key');
+        // Preserve the old value as migration history; do not offer a second
+        // activation control through the generic advanced-settings editor.
+        return [...array_column(AppSettingsSections::fields(), 'key'), 'hymns_enabled'];
     }
 
     /**

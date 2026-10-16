@@ -84,6 +84,7 @@ class ScopedAppSettingsTest extends TestCase
 
     public function test_raw_editor_is_super_admin_only_and_never_hydrates_saved_secrets(): void
     {
+        $superAdmin = $this->admin(super: true);
         $setting = AppSetting::create(['key' => 'sample_secret', 'group' => 'custom', 'value' => 'DO_NOT_EXPOSE', 'is_secret' => true]);
         $user = $this->admin(['branding']);
         $user->givePermissionTo(Permission::findOrCreate('manage_app_setting', 'web'));
@@ -91,7 +92,7 @@ class ScopedAppSettingsTest extends TestCase
         $this->assertFalse(AppSettingResource::canViewAny());
         Livewire::actingAs($user)->test(\App\Filament\Resources\AppSettingResource\Pages\ListAppSettings::class)->assertForbidden();
         Livewire::actingAs($user)->test(EditAppSetting::class, ['record' => $setting->id])->assertForbidden();
-        $page = Livewire::actingAs($this->admin(super: true))->test(EditAppSetting::class, ['record' => $setting->id])
+        $page = Livewire::actingAs($superAdmin)->test(EditAppSetting::class, ['record' => $setting->id])
             ->assertSet('data.text_value', null)->assertSet('data.value', null)->assertDontSee('DO_NOT_EXPOSE');
         $page->call('save')->assertHasNoFormErrors();
         $this->assertSame('DO_NOT_EXPOSE', $setting->fresh()->value);

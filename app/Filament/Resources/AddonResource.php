@@ -137,8 +137,10 @@ class AddonResource extends Resource
             ->label('Activate')
             ->icon('heroicon-o-play')
             ->color('success')
+            ->authorize(fn (): bool => static::canViewAny())
             ->visible(fn (Addon $record): bool => in_array($record->status, [Addon::STATUS_INSTALLED, Addon::STATUS_INACTIVE], true))
             ->action(function (Addon $record): void {
+                abort_unless(static::canViewAny(), 403);
                 app(AddonLifecycleService::class)->activate($record, Auth::user());
                 Notification::make()->title('Add-on activated')->success()->send();
             });
@@ -150,9 +152,11 @@ class AddonResource extends Resource
             ->label('Deactivate')
             ->icon('heroicon-o-pause')
             ->color('warning')
+            ->authorize(fn (): bool => static::canViewAny())
             ->requiresConfirmation()
             ->visible(fn (Addon $record): bool => $record->status === Addon::STATUS_ACTIVE)
             ->action(function (Addon $record): void {
+                abort_unless(static::canViewAny(), 403);
                 app(AddonLifecycleService::class)->deactivate($record, Auth::user());
                 Notification::make()->title('Add-on deactivated')->success()->send();
             });
@@ -163,7 +167,9 @@ class AddonResource extends Resource
         return Actions\Action::make('health')
             ->label('Health check')
             ->icon('heroicon-o-shield-check')
+            ->authorize(fn (): bool => static::canViewAny())
             ->action(function (Addon $record): void {
+                abort_unless(static::canViewAny(), 403);
                 app(AddonLifecycleService::class)->health($record, Auth::user());
                 Notification::make()->title('Health check completed')->success()->send();
             });
@@ -175,11 +181,13 @@ class AddonResource extends Resource
             ->label('Uninstall')
             ->icon('heroicon-o-trash')
             ->color('danger')
+            ->authorize(fn (): bool => static::canViewAny())
             ->requiresConfirmation()
             ->modalHeading('Uninstall add-on?')
             ->modalDescription('This removes add-on files and deactivates the add-on. Package database records and host wallet transaction records are preserved.')
             ->visible(fn (Addon $record): bool => $record->status !== Addon::STATUS_UNINSTALLED)
             ->action(function (Addon $record): void {
+                abort_unless(static::canViewAny(), 403);
                 app(AddonLifecycleService::class)->uninstall($record, Auth::user(), removeFiles: true);
                 Notification::make()->title('Add-on uninstalled')->success()->send();
             });

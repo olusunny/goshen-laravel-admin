@@ -1,0 +1,11 @@
+{
+  "candidate_sha256": "38b16b166114e59d3b4e193b0beafde65c487fccbe73767ee6ad5ebfc7ed3954",
+  "reviewer": "User / project owner",
+  "approved_on": "2026-10-16",
+  "preserve_source_wording": true,
+  "acknowledge_source_warnings": true,
+  "accept_number_corrections": [
+    "mfm-p0833-l036:printed_number"
+  ],
+  "authorization": "User reply: Use 1115 and preserve the PDF wording (Recommended)."
+}

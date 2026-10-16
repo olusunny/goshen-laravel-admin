@@ -22,7 +22,6 @@ use App\Models\DonationAccountCategory;
 use App\Models\DonationCategory;
 use App\Models\FcmToken;
 use App\Models\GalleryImage;
-use App\Models\Hymn;
 use App\Models\InboxMessage;
 use App\Models\MediaItem;
 use App\Models\MobileUser;
@@ -135,7 +134,7 @@ class CompatibilityController extends Controller
             'fundraising_enabled' => $settingEnabled('fundraising_enabled'),
             'prayer_points_enabled' => $settingEnabled('prayer_points_enabled'),
             'interactive_prayer_wall_enabled' => $settingEnabled('interactive_prayer_wall_enabled'),
-            'hymns_enabled' => $settingEnabled('hymns_enabled'),
+            'hymns_enabled' => app(\App\Services\Hymns\HymnAddon::class)->status()['enabled'],
             'devotionals_enabled' => $settingEnabled('devotionals_enabled'),
             'verse_of_day_enabled' => $verseOfDayEnabled,
             'transportation_arrangements_enabled' => $settingEnabled('transportation_arrangements_enabled'),
@@ -452,13 +451,7 @@ class CompatibilityController extends Controller
 
     public function hymns(Request $request)
     {
-        $data = $this->payload($request);
-        $query = Hymn::where('is_published', true)->latest();
-        if (! empty($data['query'])) {
-            $query->where('title', 'like', "%{$data['query']}%");
-        }
-
-        return $this->paginated('hymns', $query, (int) ($data['page'] ?? 0));
+        return app(PublicHymnController::class)->legacy($this->payload($request));
     }
 
     public function bibleVersions()

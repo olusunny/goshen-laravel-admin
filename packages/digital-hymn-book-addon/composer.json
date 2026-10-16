@@ -1,0 +1,8 @@
+{
+  "name": "church-tools/digital-hymn-book-addon",
+  "description": "Installable Digital Hymn Book services for the Goshen Laravel host.",
+  "type": "library",
+  "license": "proprietary",
+  "require": { "php": "^8.4", "illuminate/support": "^12.0", "illuminate/database": "^12.0", "filament/filament": "^5.8" },
+  "autoload": { "psr-4": { "ChurchTools\\DigitalHymnBook\\": "src/" } }
+}
